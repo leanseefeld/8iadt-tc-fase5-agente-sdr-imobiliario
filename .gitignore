@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+.next/
+out/
+dist/
+build/
+
+# Test and coverage
+coverage/
+*.lcov
+
+# Environment — never commit real secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local data volumes
+.docker/
+postgres-data/
+pgdata/
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Tooling caches
+.turbo/
+.vercel/
+*.tsbuildinfo
+
+# Agent local state — skills and shared settings ARE committed, personal ones are not
+.claude/settings.local.json
+.cursor/settings.local.json

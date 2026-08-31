@@ -1,0 +1,171 @@
+# Restrições de implantação
+
+Registro exigido pela constituição: **todo componente que não roda em contêiner
+local — ou que roda com ressalva — precisa estar documentado aqui**, com o motivo,
+o contorno adotado localmente e o caminho equivalente na nuvem.
+
+A regra do projeto é `docker compose up` como única forma suportada de executar o
+sistema. Cada entrada abaixo é uma exceção consciente a essa regra, não um
+esquecimento.
+
+---
+
+## 1. oMLX — inferência local
+
+**Status:** roda apenas no host. Não containerizável.
+
+O oMLX é uma aplicação nativa de macOS construída sobre o MLX, que usa o Metal e a
+memória unificada do Apple Silicon. Contêineres Linux não têm acesso ao Metal, então
+**não existe forma de rodar o oMLX dentro do Docker** — nem nesta máquina, nem em
+nenhuma outra.
+
+### Contorno local
+
+O contêiner acessa o servidor no host. Duas complicações reais, verificadas nesta
+máquina em 30/08/2026:
+
+**a) O oMLX escuta apenas em loopback.**
+
+```
+TCP 127.0.0.1:8990 (LISTEN)
+```
+
+Estando preso a `127.0.0.1`, o serviço **não é alcançável por
+`host.docker.internal:8990`** a partir de um contêiner — o Docker Desktop encaminha
+para a interface do host, e a porta não está publicada nela. As saídas possíveis,
+em ordem de preferência:
+
+1. Configurar o oMLX para escutar em `0.0.0.0` nas preferências do aplicativo, se a
+   versão instalada oferecer a opção *(a verificar antes do item 1 do backlog)*
+2. Encaminhar a porta no host, expondo-a numa interface alcançável:
+   ```bash
+   socat TCP-LISTEN:8991,fork,reuseaddr TCP:127.0.0.1:8990
+   ```
+   e apontar `PROVIDER_BASE_URL` para `http://host.docker.internal:8991/v1`
+3. Usar um provedor hospedado durante o desenvolvimento
+
+**b) O endpoint exige chave de API.**
+
+```console
+$ curl -s http://localhost:8990/v1/models
+{"error":{"message":"API key required","type":"authentication_error"}}
+```
+
+`PROVIDER_API_KEY` não é placeholder: precisa do valor configurado no oMLX, mesmo
+sendo um servidor local.
+
+### Caminho na nuvem
+
+Trocar `PROVIDER_BASE_URL` e `MODEL_ID` para qualquer endpoint compatível com
+OpenAI. **Nenhuma linha de código muda** — é exatamente o que o princípio VI da
+constituição garante.
+
+---
+
+## 2. Capacidade dos modelos locais
+
+**Status:** roda, com ressalva de qualidade.
+
+Os modelos disponíveis no oMLX desta máquina (`gemma-4-e4b`, `gemma-4-12B`,
+`Qwen2.5-Coder-14B`, `Llama-3.2-3B`, `Qwen3.6-27B`) variam bastante em
+confiabilidade de *tool calling* multi-turno em português. Modelos quantizados em
+4 bits erram argumentos de função, repetem perguntas já respondidas e às vezes
+abandonam o formato estruturado no meio da conversa.
+
+**Mitigações, já embutidas na arquitetura:**
+
+- Princípio V — a slot machine é determinística. O modelo extrai; quem decide o que
+  perguntar é código. Um modelo esquecido não quebra a qualificação.
+- Princípio VI — trocar para um modelo hospedado na demonstração custa duas
+  variáveis de ambiente.
+
+**Consequência prática:** desenvolver com modelo local e **validar a demonstração
+com o modelo que será usado nela**. Não assumir que a qualidade se transfere.
+
+---
+
+## 3. Servidor de desenvolvimento Next.js dentro do Docker no macOS
+
+**Status:** roda, com custo de ergonomia.
+
+O *file watching* sobre bind mounts do Docker Desktop no macOS é lento e pode
+perder eventos, o que se traduz em hot reload que não dispara.
+
+**Contorno:**
+
+- `node_modules` e `.next` em **volumes nomeados**, nunca em bind mount — além do
+  watching, evita conflito entre binários compilados no host e no contêiner
+- Se o reload continuar falhando, habilitar polling
+  (`WATCHPACK_POLLING=true`), aceitando o custo de CPU
+
+Este é o único ponto em que a regra de Docker-first cobra preço real de
+desenvolvimento. Fica registrado para ser tratado no item 1 do backlog, em vez de
+descoberto durante ele.
+
+---
+
+## 4. Langfuse self-hosted
+
+**Status:** containerizável, porém pesado.
+
+A stack oficial do Langfuse v3 sobe seis serviços: web, worker, Postgres,
+ClickHouse, Redis e MinIO. A documentação recomenda cerca de 4 núcleos e 16 GiB.
+
+O problema não é rodar — é rodar **junto com inferência local**, que já consome boa
+parte da memória unificada da máquina.
+
+**Contorno:** subir o Langfuse por *profile* do Compose, desligado por padrão:
+
+```bash
+docker compose --profile observability up
+```
+
+A aplicação precisa funcionar normalmente com o Langfuse ausente — o princípio VII
+já exige telemetria *fire-and-forget*, então isso é teste de conformidade, não
+concessão.
+
+**Alternativa:** Langfuse Cloud, que elimina os seis contêineres. Qual das duas
+formas será usada na demonstração está em
+[`../decisoes-pendentes.md`](../decisoes-pendentes.md).
+
+---
+
+## 5. Webhook do Telegram
+
+**Status:** adiado. Restrição registrada por antecipação.
+
+A Bot API do Telegram entrega mensagens por webhook, o que exige **URL pública com
+HTTPS** — indisponível para um serviço em `localhost`.
+
+**Contorno local:** modo *long polling*, em que o processo consulta a API em vez de
+receber chamadas, ou um túnel público. A interface do `ChannelAdapter` é idêntica
+nos dois modos; muda apenas como as mensagens chegam até ela.
+
+**Na nuvem:** webhook de verdade, sem contorno.
+
+Registrado agora porque **molda a interface do adapter**, ainda que a implementação
+esteja adiada (item 13 do backlog).
+
+---
+
+## 6. WhatsApp Cloud API
+
+**Status:** fora de escopo.
+
+A API oficial da Meta é paga por conversa e exige verificação de negócio —
+inviável no prazo e no orçamento de uma POC. Alternativas não oficiais
+(Evolution API, Baileys) violam os termos da Meta e expõem a risco de banimento;
+são citáveis como opção conhecida, não usáveis na demonstração.
+
+**O que entregamos no lugar:** a interface `ChannelAdapter`. O argumento de
+arquitetura é que o WhatsApp é *uma implementação*, não uma reescrita — e isso
+demonstra mais competência de projeto do que teria demonstrado a integração paga.
+
+---
+
+## Como usar este registro
+
+Ao escrever uma spec que dependa de qualquer componente acima, **leia a entrada
+correspondente antes de planejar**. Ao descobrir uma nova restrição durante a
+implementação, acrescente uma entrada aqui no mesmo commit — o registro só tem
+valor se estiver completo.

@@ -69,11 +69,7 @@ caminho de escala em [`docs/arquitetura/visao-geral.md`](docs/arquitetura/visao-
 
 ## Como executar
 
-> **Ainda não disponível.** O `docker-compose.yml` e o `Dockerfile` são entregues
-> pelo item 1 do [backlog](specs/BACKLOG.md). Esta seção será preenchida por aquela
-> spec.
-
-**Pré-requisitos previstos:**
+**Pré-requisitos:**
 
 - Docker e Docker Compose — **única exigência obrigatória**
 - [oMLX](https://omlx.ai/) rodando no host, para inferência local em Apple Silicon.
@@ -82,8 +78,57 @@ caminho de escala em [`docs/arquitetura/visao-geral.md`](docs/arquitetura/visao-
   Alternativa: qualquer endpoint compatível com OpenAI, configurado por variável de
   ambiente.
 
-A meta é que um desenvolvedor em qualquer sistema operacional clone o repositório e
-execute `docker compose up` sem instalar mais nada.
+```bash
+cp .env.example .env
+```
+
+Preencha `PROVIDER_API_KEY` com a chave configurada no oMLX — é o único valor que
+um clone limpo não consegue preencher sozinho. Todo o resto já vem com padrão
+funcional. Depois:
+
+```bash
+docker compose up
+```
+
+| Serviço | Endereço |
+|---|---|
+| Aplicação | http://localhost:3100 |
+| Saúde da aplicação | http://localhost:3100/api/health · `/api/health/ready` |
+| Saúde do worker | http://localhost:3101/health · `/health/ready` |
+| Postgres | `localhost:55432` |
+
+As portas evitam de propósito as mais disputadas (3000, 5432, 8000, 8001, 80) para
+o projeto conviver com outros na mesma máquina. Para movê-las, altere `APP_PORT`,
+`WORKER_HEALTH_PORT` ou `DB_PORT` no `.env` — nada mais precisa mudar.
+
+**Verificar se o contêiner alcança o modelo:**
+
+```bash
+docker compose exec app npm run doctor
+```
+
+Responde *alcançável*, *falha de autenticação* ou *inalcançável* — três resultados
+distintos, para que um problema de rede não seja confundido com uma chave errada.
+
+**Testes e verificações:**
+
+```bash
+docker compose exec app npm test
+```
+
+```bash
+docker compose exec app npm run lint
+```
+
+A imagem de produção é construída fora do Compose, sem os volumes de
+desenvolvimento:
+
+```bash
+docker build --target runner -t sdr-imobiliario .
+```
+
+O roteiro completo de validação — um comando por critério de aceite — está em
+[`specs/001-walking-skeleton/quickstart.md`](specs/001-walking-skeleton/quickstart.md).
 
 ---
 

@@ -1,0 +1,36 @@
+{
+  "name": "sdr-imobiliario",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0 -p ${APP_PORT:-3000}",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0 -p ${APP_PORT:-3000}",
+    "start:worker": "node src/worker/index.ts",
+    "doctor": "node scripts/doctor.ts",
+    "lint": "eslint .",
+    "test": "node --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.2",
+    "next": "16.3.4",
+    "pg": "^8.13.1",
+    "pino": "10.3.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.11.10",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.19.0"
+  }
+}

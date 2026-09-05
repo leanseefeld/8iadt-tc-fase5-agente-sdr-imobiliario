@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+npm-debug.log*
+coverage
+specs
+docs
+reference
+.claude
+.cursor
+.specify

@@ -132,6 +132,8 @@ recording the decision in `docs/arquitetura/adr/decisoes.md`.
 | Data access | Drizzle ORM, migrations committed |
 | Async work | Postgres `followup_jobs` + append-only `events` outbox |
 | Observability | Langfuse |
+| Testing | Node's built-in runner (`node:test`), no framework |
+| Linting | ESLint flat config with `typescript-eslint` |
 | Runtime services | `app`, `worker`, `db` — **no Redis** |
 
 Asynchronous work is polled with `SELECT ... FOR UPDATE SKIP LOCKED`. All
@@ -184,4 +186,4 @@ concrete second case is speculative generality, with two deliberate exceptions
 recorded in the decision log: `ChannelAdapter` and `JobQueue`, which exist because
 they are the seams the architecture argument rests on.
 
-**Version**: 1.0.0 | **Ratified**: 2026-08-30 | **Last Amended**: 2026-08-30
+**Version**: 1.1.0 | **Ratified**: 2026-08-30 | **Last Amended**: 2026-09-05

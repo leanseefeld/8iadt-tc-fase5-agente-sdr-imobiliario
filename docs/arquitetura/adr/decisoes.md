@@ -8,7 +8,8 @@ eight files to keep in sync. Further decisions append as new sections.
 **Language note:** this file is in English, grouped with the constitution and the
 specs as an agent-facing artifact. The rest of `docs/` is in Portuguese.
 
-**Status of all records below: accepted, 2026-08-30.**
+**Status: all records below are accepted. Records 1 to 8 were taken on
+2026-08-30; later records carry their own date.**
 
 > These decisions stand on their own. None of them exists to "override"
 > `reference/`, which is non-normative ideation and was never a competing
@@ -193,3 +194,43 @@ on quantized local models (see
 [`../restricoes-de-implantacao.md`](../restricoes-de-implantacao.md)). The cost is
 being limited to the OpenAI-compatible surface — no provider-specific features. For
 this project that is not a real limitation.
+
+---
+
+## 9. Node's built-in test runner; ESLint with typescript-eslint
+
+**Accepted 2026-09-05**, during backlog item 1. Amends the constitution's
+technology stack table, which previously had no row for either concern.
+
+**Context.** The walking skeleton needed tests for the configuration schema and
+the environment contract, and a way to enforce the dependency rule
+(`app → services → db`, `domain → nothing`) as something stronger than a
+convention. Neither testing nor linting appeared in the stack table, so both were
+about to become de-facto choices made by whoever wrote the first test — exactly
+the drift the table exists to prevent.
+
+**Decision.** Tests run on Node's built-in runner, `node --test`, with no test
+framework. Linting is ESLint's flat config with `typescript-eslint` supplying the
+parser only — not its rule presets. The dependency rule lives there as
+`no-restricted-imports` zones matching both the `@/*` alias and relative forms.
+
+**Alternatives considered.** Vitest is the conventional answer and would arrive
+with watch mode, mocking, coverage and a browser-adjacent environment. For a suite
+that is presently twenty-seven assertions over pure functions, it buys a
+dependency, a config file and a second module resolver to keep aligned with
+`tsconfig.json`. Jest carries the same cost with worse ESM ergonomics. On the lint
+side, `eslint-config-next` was considered and rejected for this slice: its flat
+config export has moved between releases, and nothing in the slice needed a rule
+it provides. Adopting either later is a normal change, not a migration — the tests
+are plain assertions and would run unmodified under Vitest.
+
+**Consequences.** Zero test dependencies, no test config file, and the suite runs
+identically inside the container and out. `node --test` is weaker where the
+project is heading: no built-in mocking beyond `node:test`'s own `mock`, no
+snapshot testing, and no watch ergonomics worth the name. The moment that bites —
+most likely item 2's database fixtures or item 4's prompt-shaped assertions — is
+the moment to revisit this record rather than quietly adding a framework beside
+it. Skipping `eslint-config-next` means no Next-specific lint rules; the rule that
+actually protects the architecture is ours, and it is verified by deliberately
+introducing a forbidden import and watching lint fail.
+

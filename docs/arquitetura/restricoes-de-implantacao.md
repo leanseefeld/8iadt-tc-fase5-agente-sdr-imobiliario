@@ -88,6 +88,12 @@ Trocar `PROVIDER_BASE_URL` e `MODEL_ID` para qualquer endpoint compatível com
 OpenAI. **Nenhuma linha de código muda** — é exatamente o que o princípio VI da
 constituição garante.
 
+**Demonstração (decidido em 05/09/2026, ADR 16):** GPT-5 via Azure OpenAI, pelo
+endpoint compatível `https://<recurso>.openai.azure.com/openai/v1`. Se esse
+endpoint exigir cabeçalho de autenticação diferente de `Authorization: Bearer`,
+a chave opcional `PROVIDER_AUTH_HEADER` é a terceira variável permitida. Validar
+manualmente antes do pitch; os testes de integração rodam só no modelo local.
+
 ---
 
 ## 2. Capacidade dos modelos locais
@@ -134,27 +140,28 @@ descoberto durante ele.
 
 ## 4. Langfuse self-hosted
 
-**Status:** containerizável, porém pesado.
+**Status:** containerizável, com teto de memória. **Decidido em 05/09/2026** (ADR 13).
 
-A stack oficial do Langfuse v3 sobe seis serviços: web, worker, Postgres,
-ClickHouse, Redis e MinIO. A documentação recomenda cerca de 4 núcleos e 16 GiB.
+A stack oficial do Langfuse v3 tem seis serviços: web, worker, Postgres,
+ClickHouse, Redis e MinIO, com recomendação de ~16 GiB. A VM do Docker nesta
+máquina tem 7,7 GiB e ainda precisa acomodar `app`, `worker` e `db`.
 
-O problema não é rodar — é rodar **junto com inferência local**, que já consome boa
-parte da memória unificada da máquina.
+**Contorno adotado:**
 
-**Contorno:** subir o Langfuse por *profile* do Compose, desligado por padrão:
+- Profile do Compose, desligado por padrão: `docker compose --profile observability up`
+- O Postgres do Langfuse é um **segundo banco no contêiner `db` já existente**
+  (`langfuse`), criado por script de inicialização — um contêiner a menos
+- Limites de memória por serviço (`mem_limit`) somando **≤ 6 GiB**: ClickHouse é
+  o maior e é configurado com `max_server_memory_usage` e sem cache de marcas
+  grande; web e worker do Langfuse com `NODE_OPTIONS=--max-old-space-size`
+  contido; Redis com `maxmemory`; MinIO no mínimo
+- Latência de consulta na interface do Langfuse é irrelevante; o que importa é
+  ingestão sem perda, garantida pelo exportador OTel em lote
 
-```bash
-docker compose --profile observability up
-```
-
-A aplicação precisa funcionar normalmente com o Langfuse ausente — o princípio VII
-já exige telemetria *fire-and-forget*, então isso é teste de conformidade, não
-concessão.
-
-**Alternativa:** Langfuse Cloud, que elimina os seis contêineres. Qual das duas
-formas será usada na demonstração está em
-[`../decisoes-pendentes.md`](../decisoes-pendentes.md).
+A aplicação funciona normalmente com o Langfuse ausente — princípio VII. Os
+valores concretos dos limites vivem no `docker-compose.yml` e são ajustados pela
+spec 004. Se o teto se mostrar apertado, Langfuse Cloud é a saída: duas
+variáveis de ambiente.
 
 ---
 

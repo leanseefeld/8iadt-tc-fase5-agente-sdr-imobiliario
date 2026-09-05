@@ -20,20 +20,18 @@ this table answers "where are we" without anyone reading git.
 
 ## Core
 
+Items 2 to 12 of the original list were regrouped into five specs on 2026-09-05
+(ADR 17). The original item numbers survive in the *Scope* column so the
+traceability to the challenge statement is unchanged.
+
 | # | Status | Slice | Scope | Requisito coberto |
 |---|---|---|---|---|
 | 1 | ✅ Done | **Walking skeleton** | Next.js app, Dockerfile, `docker-compose.yml` (`app`, `worker`, `db`), health endpoints on both processes, env config, JSON structured logging, worker entrypoint. Resolved the oMLX networking question — see [`001-walking-skeleton`](001-walking-skeleton/spec.md). | Arquitetura: organização, escalabilidade, componentização |
-| 2 | — | **Domain model** | Drizzle schema — `leads`, `conversations`, `messages`, `properties`, `appointments`, `events`, `followup_jobs` — migrations, and a seed of ~100 coherent fictional properties plus brokers and users. | Integração com base simulada de imóveis |
-| 3 | — | **Authentication** | Login screen, seeded users, broker-vs-manager scoping. *Resolves open decision 2.* | Diferencial: segurança |
-| 4 | — | **Orchestrator** | Intent classification (purchase / rental / investment / undefined), deterministic slot machine per intent, provider factory, web `ChannelAdapter`, conversation persistence. **Authors the Langfuse span contract** — the observability document that was deliberately not written during setup. | Atendimento conversacional · qualificação de leads · continuidade da conversa · Cenários 1 e 2 |
-| 5 | — | **Chat widget** | Public chat UI: message bubbles, artificial typing delay, opt-in banner on open, explicit fallback when the agent doesn't know, handoff state. | Conversa natural · fluxo humanizado · UX: interface, clareza, usabilidade |
-| 6 | — | **Property search tool** | `searchProperties` tool over the seeded catalog, filter refinement across turns, inline property cards in the conversation. | Integração com base simulada de imóveis · qualidade das respostas |
-| 7 | — | **Summary and scoring** | AI-generated broker summary and lead temperature score, computed asynchronously through the worker. *Resolves open decisions 1 and 5.* | Resumo inteligente |
-| 8 | — | **Leads dashboard** | Metrics header (first-response time, qualification rate, scheduling rate, leads recovered by follow-up), filterable list with the AI preview line, lead drawer with summary → qualification data → transcript → timeline. | Dashboard mínimo de acompanhamento |
-| 9 | — | **Handoff** | Assume conversation (pauses the agent), manual reply through the same thread, return to agent. Visible to the lead. | Priorização de leads · UX |
-| 10 | — | **Scheduling** | Concrete slot proposals rather than open questions, confirmation in the chat, agenda screen grouped by day. | Agendamento de reuniões e visitas |
-| 11 | — | **Follow-up sweep** | Worker job: eligibility window, attempt cap, growing intervals, `doNotContact` opt-out, context carried from the summary rather than the full transcript. **Do not cut this one** — it is a graded scenario and the strongest moment in the demo. | **Cenário 3 — follow-up automático** · memória conversacional |
-| 12 | — | **Catalog screen** | Read-only property grid with basic filters. Proves the agent's suggestions are real records in the database, not hallucinations. | Credibilidade da demonstração · UX |
+| 002 | — | **Data model, seed and catalog** | *(items 2 + 12)* Drizzle schema per [`modelo-de-dados.md`](../docs/arquitetura/modelo-de-dados.md) with `agencyId` on every table, migrations, seed of 100 coherent São Paulo properties plus agency, users and three demo leads, and the read-only catalog screen with basic filters. | Integração com base simulada de imóveis · credibilidade da demonstração |
+| 003 | — | **Authentication and app shell** | *(item 3)* Login screen, signed session cookie, seeded users, broker-vs-manager scoping, the authenticated layout with navigation (Leads · Agenda · Catálogo) that later specs fill. *Resolves open decision 2.* | Diferencial: segurança · UX |
+| 004 | — | **Conversation** | *(items 4 + 5 + 6)* Orchestrator with native tool calling under the deterministic slot machine, intent capture, provider factory, web `ChannelAdapter`, conversation persistence, `searchProperties` tool with inline property cards, public chat widget (streaming, typing delay, opt-in banner, fallback, handoff badge), Langfuse span contract and the observability Compose profile. | Atendimento conversacional · qualificação · continuidade · Cenários 1 e 2 · integração com base de imóveis · UX |
+| 005 | — | **Broker surface** | *(items 7 + 8 + 9)* Deterministic score, async summary and preview line via the events outbox, leads dashboard with metrics header and filters, lead drawer (summary → qualification → transcript → timeline), handoff: assume, reply manually, return to agent. *Resolves open decisions 1 and 5.* | Resumo inteligente · dashboard mínimo · priorização de leads |
+| 006 | — | **Scheduling and follow-up** | *(items 10 + 11)* Concrete slot proposals, confirmation in chat, agenda screen grouped by day, and the worker follow-up sweep: eligibility window, attempt cap, growing intervals, `doNotContact`, context from the summary, demo trigger button. **Do not cut this one** — it is a graded scenario and the strongest moment in the demo. | Agendamento · **Cenário 3 — follow-up automático** · memória conversacional |
 
 ## Deferred — differentiators, only if time remains
 

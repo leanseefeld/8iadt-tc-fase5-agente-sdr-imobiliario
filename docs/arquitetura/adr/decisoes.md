@@ -234,3 +234,147 @@ it. Skipping `eslint-config-next` means no Next-specific lint rules; the rule th
 actually protects the architecture is ours, and it is verified by deliberately
 introducing a forbidden import and watching lint fail.
 
+
+---
+
+## 10. Agency as tenant from the first migration
+
+**Accepted 2026-09-05.**
+
+**Context.** The pitch claims an architecture that scales to many agencies. The
+ideation material has no tenant concept, and retrofitting one after the schema
+exists means touching every query.
+
+**Decision.** An `agencies` table, and an `agencyId` foreign key on every
+business table (`users`, `leads`, `conversations`, `properties`, `appointments`,
+`events`, `followup_jobs`). Every service query is scoped by it. The seed creates
+one agency; the public chat resolves it from the widget's route. No per-tenant
+configuration, no tenant switching UI.
+
+**Alternatives considered.** Single tenant with a roadmap sentence. Cheaper by one
+column per table, and exactly the kind of "we'll add it later" that never happens.
+
+**Consequences.** One extra column and one extra `where` clause everywhere, and a
+row-level scoping story that is true rather than aspirational. Cross-tenant
+isolation is enforced in services, not in Postgres RLS — a future hardening.
+
+## 11. Deterministic lead score
+
+**Accepted 2026-09-05.** Resolves pending decisions 1 and 5.
+
+**Context.** The score has two consumers — the "qualified" badge and the handoff
+trigger — and the jury will ask how it is computed.
+
+**Decision.** A pure function in `domain/` over the slot state, 0 to 100,
+recomputed on every turn. Weights and thresholds are documented in
+`docs/arquitetura/modelo-de-dados.md` §Score and are the single source. Bands:
+cold below 40, warm 40 to 69, hot 70 and above. Handoff triggers are
+deterministic: the lead asks for a person; two consecutive fallbacks; or hot with
+contact details known. The model never assigns or adjusts the score.
+
+**Alternatives considered.** Model-assigned (richer, unpredictable, refreshes
+only when the summary runs) and hybrid (deterministic base plus a model bonus).
+Both trade auditability for nuance a POC cannot demonstrate.
+
+**Consequences.** Testable without a model, explainable in one slide, and the
+same on a 4-bit local model and a frontier model. Soft signals the model notices
+go into the summary's preview line, where a broker can read them, not into the
+number.
+
+## 12. Hand-rolled signed session cookie
+
+**Accepted 2026-09-05.** Resolves pending decision 2.
+
+**Decision.** Seeded users with hashed passwords, an HMAC-signed session cookie
+built on `AUTH_SECRET`, a route-group guard for `(app)/*`, two roles: `broker`
+sees assigned leads, `salesManager` sees the agency's leads and can reassign.
+No public sign-up, no password reset, no Auth.js.
+
+**Alternatives considered.** Auth.js credentials provider — more conventional and
+OAuth-ready, at the cost of configuration that buys nothing for seeded users.
+
+**Consequences.** Roughly a hundred lines with no dependency beyond a hashing
+library. Moving to OAuth later means replacing that module, not the guard.
+
+## 13. Langfuse self-hosted under a memory cap
+
+**Accepted 2026-09-05.** Resolves pending decision 3.
+
+**Decision.** Langfuse v3 runs from a Compose profile (`observability`), off by
+default. Memory limits per service sum to **at most 6 GiB**. Langfuse's Postgres
+is a second database in the project's existing `db` container. Query latency in
+the Langfuse UI is irrelevant; ingestion must not drop spans. Tracing uses the
+AI SDK's OpenTelemetry telemetry with the Langfuse OTel exporter, so a Langfuse
+outage costs nothing but dropped batches.
+
+**Alternatives considered.** Langfuse Cloud (zero containers, breaks the all-local
+promise and needs network during the pitch); stdout-only traces (weakest story).
+
+**Consequences.** The all-local demo holds. The cap is enforced in Compose, and
+the constraints register documents the tuning. If the cap proves too tight,
+Cloud is a two-variable change.
+
+## 14. Native tool calling under a deterministic slot machine
+
+**Accepted 2026-09-05.**
+
+**Context.** Principle V says code decides what to ask next. That leaves open
+whether the model calls tools itself or code drives them. Both JSON structured
+output and native tool calling were verified on the local e4b model on
+2026-09-05.
+
+**Decision.** Native AI SDK tool calling. Tools: `updateSlots` (structured slot
+extraction), `searchProperties`, `proposeViewingSlots`, `bookAppointment`,
+`requestHandoff`, `optOut`. Before each model call, code computes the slot state,
+the score and **the single next question**, and injects them into the system
+prompt. The model phrases; code decides. `updateSlots` results are validated
+against the Zod slot schema and a filled slot is never overwritten with null.
+
+**Alternatives considered.** Two calls per turn (extract JSON, then reply) is more
+robust on 4-bit models and costs a second round trip; a provider-dependent branch
+violates principle VI.
+
+**Consequences.** One model round trip per turn on a frontier model. On the local
+model, a tool call the model skips is recovered by code: if the lead's message
+answers the pending question and no `updateSlots` call arrived, a fallback
+extraction call runs. That fallback is the only concession to the local model.
+
+## 15. Follow-up constants and the demo trigger
+
+**Accepted 2026-09-05.** Resolves pending decision 4.
+
+**Decision.** Window 09:00 to 20:00 in `America/Sao_Paulo`, fixed for the POC.
+Three attempts with growing intervals. The first delay is configured in
+**minutes** (`FOLLOWUP_FIRST_DELAY_MINUTES`, replacing the hours key) so a demo
+can show it live, plus a "Disparar follow-up agora" action in the lead drawer
+that reschedules the pending job for now. The worker still sends it.
+
+**Consequences.** The mechanism is demonstrated, not faked. A seeded stale
+conversation exists too, so the dashboard has a recovered lead on first boot.
+
+## 16. Local e4b for development, Azure OpenAI for the demo
+
+**Accepted 2026-09-05.**
+
+**Decision.** `gemma-4-e4b-it-OptiQ-4bit` on oMLX is the development and
+integration-test model. The demo runs GPT-5 on Azure OpenAI through its
+OpenAI-compatible `/openai/v1` endpoint, which keeps the swap to
+`PROVIDER_BASE_URL`, `PROVIDER_API_KEY` and `MODEL_ID`. If that endpoint needs a
+different auth header, an optional `PROVIDER_AUTH_HEADER` key is the permitted
+third variable — recorded here so it is not a silent deviation from principle VI.
+
+**Consequences.** Every prompt must work on both. Integration tests run against
+the local model only; the hosted swap is validated by hand before the pitch.
+
+## 17. Backlog regrouped into five specs
+
+**Accepted 2026-09-05.**
+
+**Decision.** Backlog items 2 to 12 are regrouped into five specs, each with its
+own branch and analyze gate: 002 data model, seed and catalog; 003 auth and app
+shell; 004 conversation (orchestrator, chat widget, property search); 005 broker
+surface (summary, scoring, dashboard, handoff); 006 scheduling and follow-up.
+Deferred items 13 to 16 are unchanged.
+
+**Consequences.** Five spec documents instead of eleven, with the same
+traceability columns in `specs/BACKLOG.md`.

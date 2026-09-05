@@ -111,7 +111,7 @@ structure in [plan.md](plan.md#source-code-repository-root).
 **Independent Test**: `docker compose exec app npm run doctor` reports reachable; with the key cleared it reports an authentication failure, not a network failure.
 
 - [X] T032 [US3] Implement `scripts/doctor.ts` — `fetch` `/v1/models` using `PROVIDER_BASE_URL` and `PROVIDER_API_KEY`, reporting reachable, authentication-failed and unreachable as three distinct outcomes with distinct exit codes
-- [ ] T033 [US3] **Partly done — needs your oMLX key.** Verify SC-008 and FR-015 — run `doctor` inside the container against a working provider, then with a wrong key, then with oMLX stopped
+- [X] T033 [US3] Verify SC-008 and FR-015 — run `doctor` inside the container against a working provider, then with a wrong key, then with oMLX stopped
 - [X] T034 [US3] Confirm SC-003 and FR-033 — with oMLX stopped and no observability configuration present, both processes still start and still report **ready**, since neither readiness depends on the provider and nothing is wired to a telemetry backend
 - [X] T035 [US3] Record the verified route in `docs/arquitetura/restricoes-de-implantacao.md` §1 with the date and the observed result
 
@@ -223,10 +223,11 @@ Recommend narrowing SC-004 to application-emitted records. Not done unilaterally
 it is a success criterion, and weakening one silently at the end of implementation
 is exactly the drift the workflow exists to prevent.
 
-**T033 is unfinished by design.** The provider diagnostic proved the container
-reaches the host and distinguishes the failure modes, but "reachable" needs the
-real `PROVIDER_API_KEY`, which only you have. Set it in `.env` and run
-`docker compose exec app npm run doctor`.
+**T033 closed on 05/09/2026.** Verified by the developer with the real
+`PROVIDER_API_KEY`: `npm run doctor` lists the available models when everything is
+set correctly, and reports authentication failure and unreachability as distinct
+outcomes. SC-008 and FR-015 are satisfied against a live provider, not a
+placeholder.
 
 **Two tasks landed slightly out of order.** `src/db/client.ts` (T022) was written
 during US1 because `src/worker/index.ts` drains the pool on shutdown, and writing

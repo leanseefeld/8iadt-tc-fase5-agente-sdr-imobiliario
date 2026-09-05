@@ -21,28 +21,55 @@ nenhuma outra.
 
 ### Contorno local
 
-O contêiner acessa o servidor no host. Duas complicações reais, verificadas nesta
-máquina em 30/08/2026:
+O contêiner acessa o servidor no host.
 
-**a) O oMLX escuta apenas em loopback.**
+**a) A porta de escuta — resolvido em 31/08/2026.**
 
+O registro anterior desta seção dizia que o oMLX escutava apenas em loopback
+(`TCP 127.0.0.1:8990`), o que o tornava inalcançável por
+`host.docker.internal`. A pergunta em aberto era se a versão instalada oferecia a
+opção de mudar isso. **Oferece.** O aplicativo foi reconfigurado para escutar em
+`0.0.0.0`, em todas as interfaces:
+
+```console
+$ lsof -nP -iTCP -sTCP:LISTEN | grep 8990
+python3.1 ... TCP *:8990 (LISTEN)
 ```
-TCP 127.0.0.1:8990 (LISTEN)
+
+O contêiner alcança o servidor diretamente em `http://host.docker.internal:8990/v1`.
+Não é necessário encaminhar porta no host.
+
+**Verificado de dentro do contêiner em 01/09/2026.** O item 1 do backlog fechou
+esta questão com evidência, não com suposição:
+
+```console
+$ docker compose exec app npm run doctor
+provider: http://host.docker.internal:8990/v1/models
+model:    gemma4:12b
 ```
 
-Estando preso a `127.0.0.1`, o serviço **não é alcançável por
-`host.docker.internal:8990`** a partir de um contêiner — o Docker Desktop encaminha
-para a interface do host, e a porta não está publicada nela. As saídas possíveis,
-em ordem de preferência:
+O contêiner recebeu resposta HTTP do servidor no host — a rota funciona. O
+diagnóstico distingue três resultados: alcançável, falha de autenticação e
+inalcançável, de modo que uma chave errada nunca é confundida com um problema de
+rede. A verificação é sob demanda (`npm run doctor`), deliberadamente **fora** do
+*readiness*: o provedor indisponível não torna a aplicação incapaz de servir
+tráfego, e reprovar o *readiness* por causa dele tiraria de rotação um contêiner
+saudável.
 
-1. Configurar o oMLX para escutar em `0.0.0.0` nas preferências do aplicativo, se a
-   versão instalada oferecer a opção *(a verificar antes do item 1 do backlog)*
-2. Encaminhar a porta no host, expondo-a numa interface alcançável:
+**Contingência.** Isto é uma preferência do aplicativo, não uma propriedade dele:
+uma reinstalação ou uma atualização pode reverter para loopback. Se acontecer, o
+sintoma é falha de conexão a partir do contêiner enquanto `curl` no host funciona
+normalmente. Duas saídas, em ordem de preferência:
+
+1. Reconfigurar a preferência de escuta no aplicativo — é onde ela deveria estar
+2. Encaminhar a porta no host:
    ```bash
    socat TCP-LISTEN:8991,fork,reuseaddr TCP:127.0.0.1:8990
    ```
    e apontar `PROVIDER_BASE_URL` para `http://host.docker.internal:8991/v1`
-3. Usar um provedor hospedado durante o desenvolvimento
+
+Um provedor hospedado continua sendo a terceira saída, e não é um contorno — é o
+mesmo caminho da nuvem, descrito abaixo.
 
 **b) O endpoint exige chave de API.**
 
@@ -51,8 +78,9 @@ $ curl -s http://localhost:8990/v1/models
 {"error":{"message":"API key required","type":"authentication_error"}}
 ```
 
-`PROVIDER_API_KEY` não é placeholder: precisa do valor configurado no oMLX, mesmo
-sendo um servidor local.
+Verificado novamente em 31/08/2026: continua valendo. `PROVIDER_API_KEY` não é
+placeholder — precisa do valor configurado no oMLX, mesmo sendo um servidor local.
+É o único valor que um clone limpo não consegue preencher sozinho.
 
 ### Caminho na nuvem
 

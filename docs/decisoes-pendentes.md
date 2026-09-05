@@ -70,7 +70,12 @@ Auth.js com credentials provider, ou um cookie de sessão assinado escrito à m�
 
 ## 3. Hospedagem do Langfuse na demonstração
 
-**Resolver em:** antes da demonstração; afeta o item 1 do backlog
+**Resolver em:** spec do orquestrador (item 4 do backlog), junto com a taxonomia
+de spans — que é onde a escolha finalmente pesa. Adiado deliberadamente pela spec
+do item 1 ([`../specs/001-walking-skeleton/spec.md`](../specs/001-walking-skeleton/spec.md),
+FR-034): o esqueleto entrega apenas a costura *fire-and-forget*, selecionada por
+variável de ambiente, então adotar qualquer uma das duas formas depois não toca
+código de aplicação.
 **Prioridade:** média
 
 Self-hosted por *profile* do Compose, ou Langfuse Cloud?

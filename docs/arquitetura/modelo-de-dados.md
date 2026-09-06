@@ -216,3 +216,18 @@ Saúde), zona oeste (Pinheiros, Vila Madalena, Perdizes, Butantã), centro e zon
 norte (Santana), ~70 venda / ~30 aluguel, ~15 comerciais, preços coerentes com o
 bairro; e três leads de demonstração em estados distintos (quente com reunião
 marcada, morno em qualificação, frio parado há dois dias aguardando follow-up).
+
+---
+
+## 6. Contratos entre specs
+
+Assinaturas que mais de uma spec toca. Fixadas aqui em 06/09/2026 para que a
+primeira a implementar não decida sozinha.
+
+| Contrato | Forma | Dono | Consome |
+|---|---|---|---|
+| Registro de consumidores do worker (`src/jobs/consumers.ts`) | `type SweepConsumer = { name: string; run(ctx: { db: Database; now: Date; log: Logger }): Promise<void> }`; array exportado, iterado pelo loop do worker com try/catch por consumidor | 005 | 006 |
+| Tools de agendamento no registro do agente (`src/agent/tools/index.ts`) | `proposeMeeting()` e `bookMeeting({ optionIndex } \| { scheduledAt })`, declaradas como stubs em `scheduling.stub.ts` | 004 (stub) | 006 (implementa) |
+| Busca de imóveis (`services/properties.searchProperties(agencyId, criteria)`) | até 3, ranqueados; `criteria = { transaction, priceMax?, bedrooms?, neighborhoods? }` | 002 | 004 |
+| Escopo por papel (`scopeForUser(session)`) | `{ agencyId, assignedBrokerId }` para corretor, `{ agencyId }` para gerente | 003 | 005, 006 |
+| Transição de status após handoff | `handoff → scheduled` permitida quando uma visita é confirmada (decisão pendente de aval em 06/09/2026) | 005 | 006 |

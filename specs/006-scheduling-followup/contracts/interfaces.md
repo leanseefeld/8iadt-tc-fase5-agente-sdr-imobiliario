@@ -80,7 +80,7 @@ principle V, the model does not decide the meeting time or the retry message.
 
 ```ts
 // src/jobs/consumers.ts (created by whichever of 004/005/006 lands first)
-type SweepConsumer = { name: string; run(db: Database, now: Date): Promise<void> };
+type SweepConsumer = { name: string; run(ctx: { db: Database; now: Date; log: Logger }): Promise<void> };
 
 // src/jobs/followup.ts
 const followupConsumer: SweepConsumer = { name: 'followup', run: sweepFollowups };

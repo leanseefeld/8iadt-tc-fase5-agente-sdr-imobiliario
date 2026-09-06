@@ -225,7 +225,7 @@ Resolved by the author against `docs/` before planning; `docs/decisoes-pendentes
 - **Spec 004 owns the turn.** This slice implements the two tools its registry declares, the enqueue at the end
   of a turn and the cancellation on an inbound message; it does not change how a turn is orchestrated. **Spec 005
   owns the worker's consumer registry and the lead drawer**: this slice registers a consumer through
-  `register(consumer: { name, run(db, now) })` and adds one action to the drawer's actions row.
+  `register(consumer: { name, run(ctx) })` and adds one action to the drawer's actions row.
 - **Spec 002 owns the seed**, to which this slice adds the due pending attempt for the stale demonstration lead;
   **spec 003 owns the shell**, whose `/agenda` placeholder this replaces. The summary spec 005 generates
   asynchronously usually exists; a follow-up composed before it lands falls back to slot state.

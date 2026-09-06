@@ -27,7 +27,7 @@ Single project, `src/`/`tests/` at the repository root, per [plan.md](plan.md#so
 - [ ] T001 Add `FOLLOWUP_FIRST_DELAY_MINUTES` (replacing `FOLLOWUP_FIRST_DELAY_HOURS`) and `FOLLOWUP_BATCH_SIZE` to `src/core/config.ts` and `.env.example` in one commit — the Environment Contract gate
 - [ ] T002 [P] Write migration adding `followup_jobs_claim_idx` and `appointments_broker_busy_idx` per [data-model.md](data-model.md) §1, in `src/db/migrations/`
 - [ ] T003 [P] Confirm `src/agent/tools/index.ts` and `tools/scheduling.stub.ts` exist (spec 004); if not yet merged, create the minimal registry shape so T011 has somewhere to register
-- [ ] T004 [P] Confirm `src/jobs/consumers.ts` exists (spec 005); if not yet merged, create it with `type SweepConsumer = { name: string; run(db, now): Promise<void> }` and an empty registry
+- [ ] T004 [P] Confirm `src/jobs/consumers.ts` exists (spec 005); if not yet merged, create it with `type SweepConsumer = { name: string; run(ctx): Promise<void> }` and an empty registry
 ---
 
 ## Phase 2: Foundational
@@ -135,4 +135,4 @@ are stable, since a broker cannot look at what does not yet exist.
 
 - Solo project: `[P]` means "no ordering constraint," not "assign to someone else"
 - If a task needs a decision listed in `docs/decisoes-pendentes.md`, stop and ask
-- The registry signature note in plan.md (`run(db, now)` vs. `run(ctx)`) must be resolved by T004 or T018, whichever runs first — do not let it drift into two shapes
+- The registry signature note in plan.md (`run(ctx)` vs. `run(ctx)`) must be resolved by T004 or T018, whichever runs first — do not let it drift into two shapes

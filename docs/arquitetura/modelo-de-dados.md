@@ -71,7 +71,7 @@ A **temperatura** (`cold` · `warm` · `hot`) não é coluna: deriva do score em
 | id, conversationId | uuid | |
 | role | enum `lead` · `agent` · `broker` · `system` | |
 | content | text | |
-| metadata | jsonb | `propertyIds` exibidos, `toolCalls`, `isFollowUp`, `appointmentId` |
+| metadata | jsonb | chaves reservadas: `clientMessageId` (idempotência, 004), `guard` (guarda de código que reescreveu a resposta, 004), `propertyIds` exibidos (004), `toolCalls` (004), `isFollowUp` (006), `appointmentId` (006). Cada spec só escreve as suas. |
 | createdAt | timestamptz | índice `(conversationId, createdAt)` |
 
 ### properties

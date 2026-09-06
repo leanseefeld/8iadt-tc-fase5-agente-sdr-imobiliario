@@ -135,4 +135,4 @@ are stable, since a broker cannot look at what does not yet exist.
 
 - Solo project: `[P]` means "no ordering constraint," not "assign to someone else"
 - If a task needs a decision listed in `docs/decisoes-pendentes.md`, stop and ask
-- The registry signature note in plan.md (`run(ctx)` vs. `run(ctx)`) must be resolved by T004 or T018, whichever runs first — do not let it drift into two shapes
+- The registry signature is settled in `docs/arquitetura/modelo-de-dados.md` §6: `run(ctx: { db, now, log })`. T004 and T018 use it verbatim.

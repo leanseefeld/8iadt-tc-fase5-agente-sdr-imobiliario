@@ -55,7 +55,7 @@ worker consumer, one agenda screen, two Server Actions, one drawer action.
 | Needed | Owner | If absent when this lands |
 |---|---|---|
 | `tools/scheduling.stub.ts`, `tools/index.ts` registry | 004 | Create the registry with four stub tools; replace on merge. |
-| `jobs/consumers.ts` registry, sweep iterating it | 005 | Create it as spec.md fixes: `register({ name, run(ctx) })` — 005's plan says `run(ctx)`; reconcile at first implementer, not silently. |
+| `jobs/consumers.ts` registry, sweep iterating it | 005 | Create it per `modelo-de-dados.md` §6 (`run(ctx: { db, now, log })`) if 005 has not merged yet |
 | `services/events.ts`, `core/masking.ts` | 002/004 | Create the minimal helper needed. |
 | `scopeForUser` | 003 | Blocks the agenda screen only; propose/book need no session. |
 | `ChannelAdapter.send` | 004 | Blocks FR-015 only; domain and claim logic stand without it. |

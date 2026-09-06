@@ -171,8 +171,7 @@ with [quickstart.md](quickstart.md).
 
 A charting or date library. A generic filter or table abstraction over one list. A
 websocket or SSE channel. A summary retry ledger. Any notification. A
-`repositories/` layer. Optimistic UI — a `revalidatePath` round trip on a local
-Postgres is faster than the animation would be.
+`repositories/` layer. Optimistic UI — a `revalidatePath` round trip on a local Postgres is faster than the animation would be.
 
 ## Complexity Tracking
 

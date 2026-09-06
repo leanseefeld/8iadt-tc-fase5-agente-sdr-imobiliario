@@ -110,7 +110,7 @@ off the reply path, so a slow summariser costs the lead nothing.
 - **FR-003**: Crossing into qualified MUST record a qualification event exactly once per lead; later turns that remain qualified MUST NOT record it again.
 - **FR-004**: A handoff request MUST be recorded with its reason: the lead asked for a person, two consecutive failures to understand, or hot with contact known.
 - **FR-005**: The model MUST NOT assign, adjust or influence the score. Soft signals belong in the preview line, where a broker reads them.
-- **FR-006**: Lead status MUST move only along `new → qualifying → qualified → scheduled | handoff → won | lost`. The unresponsive state is set by spec 006; it is displayed here and never set here.
+- **FR-006**: Lead status MUST move only along `new → qualifying → qualified → scheduled`, plus `handoff`, reachable from `new`, `qualifying` or `qualified` alike — a lead can ask for a person or exhaust its fallbacks before qualifying finishes, and a broker can take one over at any stage. `scheduled` and `handoff` both lead only to `won | lost`. The unresponsive state is set by spec 006; it is displayed here and never set here.
 
 **Asynchronous summary**
 

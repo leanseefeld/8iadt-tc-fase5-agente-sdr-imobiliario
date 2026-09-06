@@ -136,7 +136,7 @@ stored summary plus the messages after `summaryUpdatedAt`, and truncates
 `previewLine` at the last word boundary under 90 characters.
 
 **5 · The registry.** `jobs/consumers.ts` declares `type SweepConsumer = { name:
-string; run(ctx): Promise<void> }` and exports an array. `worker/index.ts` iterates
+string; run(ctx: { db: Database; now: Date; log: Logger }): Promise<void> }` and exports an array. `worker/index.ts` iterates
 it, each consumer in its own `try`/`catch` under a child logger bound to its name,
 so one failure never stops another. Spec 006 appends `followup.ts` and edits no loop.
 

@@ -55,7 +55,7 @@ Single project, `src/`/`tests/` at the repository root, per [plan.md](plan.md#so
 - [ ] T011 [US1] Implement `src/agent/tools/scheduling.ts` — `proposeMeeting`, `bookMeeting`, replacing `tools/scheduling.stub.ts`, registered in `tools/index.ts` per [contracts/interfaces.md](contracts/interfaces.md) §3
 - [ ] T012 [US1] Wire the orchestrator's commit step to render the compact confirmation card from `bookMeeting`'s result — weekday, date, time, type, property code for a viewing
 - [ ] T013 [P] [US1] Write `tests/scheduling-service.test.ts` against Postgres — collision on a losing second booking, re-proposal replaces rather than accumulates, rotation counts differ by at most one across brokers
-- [ ] T014 [US1] Verify SC-001–SC-004 per [quickstart.md](quickstart.md) §1
+- [ ] T014 [US1] Verify SC-001, SC-002, SC-004 per [quickstart.md](quickstart.md) §1 — SC-003's agenda-load half is verified in T033 once the agenda exists
 
 **Checkpoint**: a qualified lead can be proposed times and booked; the agenda (once US3 lands) shows it.
 ---
@@ -70,9 +70,9 @@ Single project, `src/`/`tests/` at the repository root, per [plan.md](plan.md#so
 - [ ] T016 [US2] Implement `cancelFollowup(tx, conversationId)` in `src/services/followup.ts` — cancels every pending row, emits `followup.recovered` when one was already `sent`
 - [ ] T017 [US2] Wire spec 004's turn commit to call `scheduleFollowup` when a turn leaves the conversation waiting and `cancelFollowup` on every inbound lead message
 - [ ] T018 [US2] Implement `src/jobs/followup.ts` — claim via `for update skip locked` per [contracts/interfaces.md](contracts/interfaces.md) §4, registered in `jobs/consumers.ts`
-- [ ] T019 [US2] Implement the eligibility re-check in `src/jobs/followup.ts` (FR-012) — outside the window reschedules to `nextWindowOpening` untouched; any other failure cancels without sending
+- [ ] T019 [US2] Implement the eligibility re-check in `src/jobs/followup.ts` (FR-012), run once right after claiming — outside the window reschedules to `nextWindowOpening` untouched; any other failure cancels without sending
 - [ ] T020 [US2] Implement `src/agent/followup-writer.ts` — message from the stored summary (falling back to slot state), through `provider.ts`, masked via `core/masking.ts`, `functionId: 'followup'`
-- [ ] T021 [US2] Wire a successful send in `src/jobs/followup.ts` — store the agent message with `metadata.isFollowUp = true`, increment `followupAttempts`, emit `followup.sent`, schedule the next attempt at 3× the interval or set the lead `unresponsive` at the max
+- [ ] T021 [US2] In `src/jobs/followup.ts`, after `followup-writer.ts` composes, re-run the eligibility check once more (guards the edge case of a lead reply arriving mid-composition) before calling `ChannelAdapter.send`; on success store the agent message with `metadata.isFollowUp = true`, increment `followupAttempts`, emit `followup.sent`, schedule the next attempt at 3× the interval or set the lead `unresponsive` at the max; on a model or channel failure, leave the row `pending` at its original `scheduledFor`, consuming no attempt (FR-013)
 - [ ] T022 [P] [US2] Write `tests/followup-claim.test.ts` against Postgres — two concurrent claimers over 100 due rows, 100 processed, zero duplicated, zero lost (SC-005)
 - [ ] T023 [P] [US2] Write `tests/followup-eligibility.test.ts` against Postgres — window, opt-out and paused-conversation cases send nothing; one outside the window reschedules with its attempt number unchanged (SC-007)
 - [ ] T024 [P] [US2] Write `tests/followup-writer.integration.test.ts`, `INTEGRATION=1` against local oMLX — the message names the seeded neighborhood and price ceiling and ends with a question (SC-006)

@@ -26,9 +26,9 @@ Single project. `src/`, `tests/` at the repository root, per [plan.md](plan.md#s
 
 ## Phase 1: Setup
 
-- [ ] T001 Add `drizzle-kit@0.31.10` (dev) and `bcryptjs@3.0.3` + `@types/bcryptjs` to `package.json`; add `db:generate`, `db:migrate`, `db:seed` scripts
-- [ ] T002 [P] Create `drizzle.config.ts` at the repo root: schema `src/db/schema.ts`, migrations out `src/db/migrations`, dialect `postgresql`, credentials from `DATABASE_URL`
-- [ ] T003 [P] Create the `src/db/seed/` scaffold (`index.ts`, `properties.schema.ts` stubs) and `src/app/(app)/catalogo/` directory
+- [x] T001 Add `drizzle-kit@0.31.10` (dev) and `bcryptjs@3.0.3` + `@types/bcryptjs` to `package.json`; add `db:generate`, `db:migrate`, `db:seed` scripts
+- [x] T002 [P] Create `drizzle.config.ts` at the repo root: schema `src/db/schema.ts`, migrations out `src/db/migrations`, dialect `postgresql`, credentials from `DATABASE_URL`
+- [x] T003 [P] Create the `src/db/seed/` scaffold (`index.ts`, `properties.schema.ts` stubs) and `src/app/(app)/catalogo/` directory
 
 ---
 

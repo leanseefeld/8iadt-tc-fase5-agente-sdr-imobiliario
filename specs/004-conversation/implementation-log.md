@@ -181,11 +181,23 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   `tooLong`, `consent`, `budget` (FR-019, FR-032); the pre-consent one is also
   T025's gate, because nothing at all is created for text typed before "Aceito".
 
+- T019/T020 — `src/agent/prompts/{system,fallback}.ts`, one commit because the
+  first decides what the second has to cover. `turnSystemPrompt` renders the slot
+  state in pt-BR words (never JSON), names the slots filled *this* turn so the
+  reply acknowledges before it asks, and quotes the one question `nextQuestion`
+  chose. `extractionSystemPrompt` is a separate, voiceless prompt for the
+  extraction call. Both are written in Portuguese: instructed in English this
+  model answers in English often enough that the language guard would eat the
+  reply. `fallback.ts` holds every sentence a lead can read that no model wrote —
+  the consent notice and the pre-consent template, budget and length notices,
+  the model-failure apology, the two handoff lines, the opt-out confirmation and
+  `guardedReply`, which is what goes out when a guard rejects the model's text.
+
 ## In flight
 - Nothing.
 
 ## Next step
-T019 — the pt-BR persona and turn prompt in `src/agent/prompts/system.ts`.
+T021 — the `updateSlots` tool in `src/agent/tools/update-slots.ts`.
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

@@ -67,10 +67,11 @@ Source of truth is `docs/arquitetura/modelo-de-dados.md` §1. This file is the D
 
 | Zone | Neighborhoods | Sale price (BRL) | Rent price (BRL/month) |
 |---|---|---|---|
-| Zona sul (premium) | Moema, Vila Mariana, Brooklin, Campo Belo, Saúde | 600,000 – 3,500,000 | 3,000 – 15,000 |
-| Zona oeste (premium) | Pinheiros, Vila Madalena, Perdizes, Butantã | 550,000 – 3,200,000 | 2,800 – 14,000 |
-| Centro | Centro | 250,000 – 900,000 | 1,500 – 5,000 |
-| Zona norte | Santana | 280,000 – 950,000 | 1,600 – 5,500 |
+| Zona sul | Moema, Vila Mariana, Brooklin, Campo Belo, Saúde, Itaim Bibi | 250,000 – 4,800,000 | 1,800 – 14,000 |
+| Zona oeste | Pinheiros, Vila Madalena, Perdizes, Butantã | 300,000 – 3,000,000 | 2,500 – 16,000 |
+| Centro | Centro | 200,000 – 1,000,000 | 1,500 – 5,000 |
+| Zona norte | Santana | 350,000 – 1,400,000 | 2,000 – 6,000 |
+| Zona leste | Tatuapé | 350,000 – 1,600,000 | 2,000 – 6,000 |
 
 `validateDataset()` fails a row whose `price` falls outside its zone's band for its `transaction`. Bands are wide on purpose — the 100 rows span every `type` (`apartment`/`house`/`commercial`/`land`), and a commercial or land listing legitimately sits at either edge; the rule catches a data-entry mistake (a Santana apartment priced like a Moema penthouse), not fine-grained realism.
 

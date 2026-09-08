@@ -53,7 +53,7 @@ test("catches a duplicate code", () => {
 });
 
 test("catches a neighborhood outside modelo-de-dados.md §5", () => {
-  const violations = validateDataset(fixtureFrom([{ neighborhood: "Itaim Bibi" }]));
+  const violations = validateDataset(fixtureFrom([{ neighborhood: "Guarulhos" }]));
   assert.ok(violations.some((v) => v.includes("not in a region named")));
 });
 

@@ -47,17 +47,22 @@ export type PropertyEntry = z.infer<typeof propertyEntrySchema>;
  * the seed's coherence pass check against.
  */
 export const ZONES: Record<string, { region: string; sale: [number, number]; rent: [number, number] }> = {
-  Moema: { region: "zona sul", sale: [600_000, 3_500_000], rent: [3_000, 15_000] },
-  "Vila Mariana": { region: "zona sul", sale: [600_000, 3_500_000], rent: [3_000, 15_000] },
-  Brooklin: { region: "zona sul", sale: [600_000, 3_500_000], rent: [3_000, 15_000] },
-  "Campo Belo": { region: "zona sul", sale: [600_000, 3_500_000], rent: [3_000, 15_000] },
-  Saúde: { region: "zona sul", sale: [600_000, 3_500_000], rent: [3_000, 15_000] },
-  Pinheiros: { region: "zona oeste", sale: [550_000, 3_200_000], rent: [2_800, 14_000] },
-  "Vila Madalena": { region: "zona oeste", sale: [550_000, 3_200_000], rent: [2_800, 14_000] },
-  Perdizes: { region: "zona oeste", sale: [550_000, 3_200_000], rent: [2_800, 14_000] },
-  Butantã: { region: "zona oeste", sale: [550_000, 3_200_000], rent: [2_800, 14_000] },
-  Centro: { region: "centro", sale: [250_000, 900_000], rent: [1_500, 5_000] },
-  Santana: { region: "zona norte", sale: [280_000, 950_000], rent: [1_600, 5_500] },
+  // Bands are absolute prices wide enough for every `type` in the zone (a 34 m²
+  // studio and a 300 m² house share a band); they catch a Santana apartment
+  // priced like a Moema penthouse, not fine-grained realism.
+  Moema: { region: "zona sul", sale: [250_000, 4_800_000], rent: [1_800, 14_000] },
+  "Vila Mariana": { region: "zona sul", sale: [250_000, 4_800_000], rent: [1_800, 14_000] },
+  Brooklin: { region: "zona sul", sale: [250_000, 4_800_000], rent: [1_800, 14_000] },
+  "Campo Belo": { region: "zona sul", sale: [250_000, 4_800_000], rent: [1_800, 14_000] },
+  Saúde: { region: "zona sul", sale: [250_000, 4_800_000], rent: [1_800, 14_000] },
+  "Itaim Bibi": { region: "zona sul", sale: [250_000, 4_800_000], rent: [1_800, 14_000] },
+  Pinheiros: { region: "zona oeste", sale: [300_000, 3_000_000], rent: [2_500, 16_000] },
+  "Vila Madalena": { region: "zona oeste", sale: [300_000, 3_000_000], rent: [2_500, 16_000] },
+  Perdizes: { region: "zona oeste", sale: [300_000, 3_000_000], rent: [2_500, 16_000] },
+  Butantã: { region: "zona oeste", sale: [300_000, 3_000_000], rent: [2_500, 16_000] },
+  Centro: { region: "centro", sale: [200_000, 1_000_000], rent: [1_500, 5_000] },
+  Santana: { region: "zona norte", sale: [350_000, 1_400_000], rent: [2_000, 6_000] },
+  Tatuapé: { region: "zona leste", sale: [350_000, 1_600_000], rent: [2_000, 6_000] },
 };
 
 /** Tolerance around the "~70/30" and "~15 commercial" targets (FR-011). */

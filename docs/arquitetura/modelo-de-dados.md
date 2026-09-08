@@ -226,8 +226,8 @@ As métricas do painel derivam daqui: tempo de primeira resposta
 Uma agência; três usuários (`ana@demo.com.br` corretora, `bruno@demo.com.br`
 corretor, `carla@demo.com.br` gerente; senha `demo1234`); **100 imóveis** em São
 Paulo distribuídos por zona sul (Moema, Vila Mariana, Brooklin, Campo Belo,
-Saúde), zona oeste (Pinheiros, Vila Madalena, Perdizes, Butantã), centro e zona
-norte (Santana), ~70 venda / ~30 aluguel, ~15 comerciais, preços coerentes com o
+Saúde, Itaim Bibi), zona oeste (Pinheiros, Vila Madalena, Perdizes, Butantã),
+centro, zona norte (Santana) e zona leste (Tatuapé), ~70 venda / ~30 aluguel, ~15 comerciais, preços coerentes com o
 bairro; e três leads de demonstração em estados distintos (quente com reunião
 marcada, morno em qualificação, frio parado há dois dias aguardando follow-up).
 

@@ -18,12 +18,13 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
 - T001 — `ai@7.0.93`, `@ai-sdk/openai-compatible@3.0.44`, `@ai-sdk/react@4.0.96`,
   `@langfuse/otel@5.11.0`, `@langfuse/tracing@5.11.0`, `@opentelemetry/sdk-trace-node@2.11.0`
   pinned exactly. All six versions verified to exist via `npm view` before installing.
+- T002 — `npm run test:integration` added; `npm test` still runs only `tests/*.test.ts`.
 
 ## In flight
 _(nothing)_
 
 ## Next step
-T002 — the `test:integration` script.
+T003 — the eleven config keys plus `.env.example`, in one commit.
 
 ## Gotchas discovered
 - Host has no Node; everything via `docker compose exec app …`.

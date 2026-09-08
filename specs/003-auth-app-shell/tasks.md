@@ -9,11 +9,22 @@ description: "Task list for authentication and the app shell"
 
 **Prerequisites**: [plan.md](plan.md), [spec.md](spec.md), [contracts/](contracts/), [data-model.md](data-model.md), [quickstart.md](quickstart.md)
 
-**Tests**: Included. `core/auth.ts` is pure and unit-tested with no database; `services/auth.ts`'s database-touching cases (`login`, `scopeForUser`, `reassignLead`) run under `INTEGRATION=1`, the project's standing convention for slow/DB-backed tests (no prior spec has used it yet — this is its first application).
+**Tests**: Included. `core/auth.ts` is pure and unit-tested with no database;
+`services/auth.ts`'s database-touching cases (`login`, `reassignLead`) run
+under `INTEGRATION=1`, the project's standing convention for DB-backed tests.
 
 **Organization**: By user story, per [spec.md](spec.md). Session signing and
 the `AUTH_SECRET` config change live in Foundational because every story
 needs a verifiable cookie before it can be tested at all.
+
+**Simplification pass (before implementation)**: spec 002 has merged, so every
+"blocked on 002 / write against a stand-in fixture" instruction is gone. The
+four separate verification tasks (T013, T015, T020, T021) collapse into one
+end-to-end verification task, since they run the same container and the same
+login cycle. A test task and its one-line implementation task are merged where
+splitting them only produced ceremony (`scopeForUser`). `bcryptjs` was already
+added by spec 002's seed, so Setup is empty and gone. The guard file is
+`src/proxy.ts`, not `src/middleware.ts` — see [plan.md](plan.md#source-code-repository-root).
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -21,25 +32,31 @@ needs a verifiable cookie before it can be tested at all.
 
 ---
 
-## Phase 1: Setup
-
-- [ ] T001 Add `bcryptjs@3.0.3` to `package.json` dependencies — the one new dependency this slice introduces, for `bcrypt.compare` in `login()`
-
----
-
-## Phase 2: Foundational
+## Phase 1: Foundational
 
 **Purpose**: a verifiable session cookie and the `AUTH_SECRET` config gate. Every story below depends on this.
 
 **⚠️ Blocks all user stories.**
 
-- [ ] T002 Write `tests/auth-core.test.ts` — table-driven: sign/verify round-trip preserves the payload; a tampered signature is rejected; an `expiresAt` in the past is rejected; a payload missing `userId`, `agencyId` or `role` is rejected
-- [ ] T003 Implement `src/core/auth.ts`: async `sign()`/`verify()` over `globalThis.crypto.subtle` HMAC-SHA256, async `getSession()`, sync `clearSessionCookie()`, and the `session` cookie constants (`httpOnly`, `sameSite=lax`, `secure` outside development, 7-day `maxAge`) — signatures per [contracts/session-cookie.md](contracts/session-cookie.md) (satisfies T002)
-- [ ] T004 Move `AUTH_SECRET` from optional to required in `src/core/config.ts` — drop `.optional()`, add it to `REQUIRED_KEYS`
-- [ ] T005 Update `tests/config.test.ts` in the same commit as T004: add `AUTH_SECRET` to the `valid` fixture, remove it from the "optional keys nothing reads yet" list — `REQUIRED_KEYS`'s existing table-driven loop then covers its rejection cases automatically. Environment Contract gate (spec 001): T004 and T005 must land together.
-- [ ] T006 [P] Update the `AUTH_SECRET` comment in `.env.example` to state it is now required; confirm `tests/env-example.test.ts` still passes unmodified
+- [ ] T001 Write `tests/auth-core.test.ts` — table-driven: sign/verify round-trip preserves the payload; a tampered signature is rejected; an `expiresAt` in the past is rejected; a payload missing `userId`, `agencyId` or `role` is rejected
+- [ ] T002 Implement `src/core/auth.ts`: async `sign()`/`verify()` over `globalThis.crypto.subtle` HMAC-SHA256, async `getSession()`, `clearSessionCookie()`, and the `session` cookie constants (`httpOnly`, `sameSite=lax`, `secure` outside development, 7-day `maxAge`) — per [contracts/session-cookie.md](contracts/session-cookie.md) (satisfies T001)
+- [ ] T003 Move `AUTH_SECRET` from optional to required in `src/core/config.ts` (drop `.optional()`, add to `REQUIRED_KEYS`), update `tests/config.test.ts` (add it to the `valid` fixture, drop it from the "optional keys" list) and the `.env.example` comment — one commit, Environment Contract gate (spec 001)
 
 **Checkpoint**: `core/auth.ts` signs and verifies; `AUTH_SECRET`'s absence stops boot.
+
+---
+
+## Phase 2: User Story 3 — Role scoping and reassignment (P2)
+
+**Goal / Independent Test**: `scopeForUser()` and `reassignLead()` are correct
+and reusable by specs 005/006. Ordered before the UI because the login the
+shell calls lives in the same file.
+
+- [ ] T004 [US3] Implement `login(email, password, sourceIp)` in `src/services/auth.ts`: look up the `users` row by e-mail, `bcrypt.compare` against `passwordHash`, return the session payload or `null` — indistinguishable outcome between "no such user" and "wrong password" (FR-002); on `null`, log at `warn` with the attempted e-mail and `sourceIp`, never the password (FR-016)
+- [ ] T005 [US3] Implement `scopeForUser(session)` and `reassignLead(session, leadId, newBrokerId)` in `src/services/auth.ts` per [contracts/scope-for-user.md](contracts/scope-for-user.md): scoping is a pure `{ agencyId, defaultOwnLeadsOnly }`; reassignment rejects a non-`salesManager` session, validates the target is a same-agency `broker`, writes `leads.assignedBrokerId` and records the `lead.reassigned` event itself
+- [ ] T006 [US3] Write `tests/auth-service.test.ts`: `scopeForUser` unit cases run always; `login` and `reassignLead` cases run under `INTEGRATION=1` against the seeded users and leads, per [quickstart.md](quickstart.md) step 3
+
+**Checkpoint**: the scoping rule later specs depend on is implemented and tested.
 
 ---
 
@@ -47,13 +64,12 @@ needs a verifiable cookie before it can be tested at all.
 
 **Goal / Independent Test**: submit `ana@demo.com.br` / `demo1234` at `/login`, confirm redirect to `/leads` with the top bar populated; "sair" ends the session.
 
-- [ ] T007 [US1] Implement `login(email, password, sourceIp)` in `src/services/auth.ts`: look up the matching seeded `users` row by e-mail, `bcrypt.compare` against `passwordHash`, return the session payload or `null` — no distinguishable outcome between "no such user" and "wrong password" (FR-002); on `null`, log at `warn` with the attempted e-mail and `sourceIp`, never the password (FR-016). **Blocked on spec 002's schema module**; write against a local fixture user object until it lands, then swap the import.
-- [ ] T008 [US1] Implement `src/app/login/actions.ts`: `loginAction` reads the request's source IP, calls `login()`, signs and sets the cookie via `core/auth.ts` on success, logs the login with the new `userId`, redirects to `/leads`; returns the one generic pt-BR failure message otherwise (FR-002, FR-006, FR-018)
-- [ ] T009 [US1] Implement `src/app/login/page.tsx`: e-mail/password form, pt-BR copy, no sign-up or reset controls; if `getSession()` is already valid, redirect to `/leads` before rendering (FR-005, FR-007)
-- [ ] T010 [US1] Implement `src/app/(app)/layout.tsx`: top bar with product name, nav to Leads/Agenda/Catálogo, `getSession()`'s name and a role badge ("corretor"/"gerente comercial"), and a `logoutAction` that logs the logout with the session's `userId`, calls `clearSessionCookie()`, then redirects to `/login` (FR-018)
-- [ ] T011 [P] [US1] Implement placeholder pages `src/app/(app)/leads/page.tsx` and `src/app/(app)/agenda/page.tsx` — one static pt-BR line each ("em construção")
-- [ ] T012 [US1] Implement `src/app/(app)/catalogo/page.tsx` rendering spec 002's catalog screen inside the shell. **Blocked on spec 002's catalog component landing.**
-- [ ] T013 [US1] Verify SC-001, SC-005 and SC-007 per [quickstart.md](quickstart.md) steps 1 and 4 — correct login reaches `/leads` with the top bar populated; wrong password and unknown e-mail produce byte-identical failure text; after "sair," the next request to an authenticated page redirects to `/login` with no manual cookie clearing
+- [ ] T007 [US1] Define the shared palette in `src/app/globals.css` and point `src/app/(app)/catalogo/catalogo.module.css` at it — the shell and the login screen must not invent a second set of colours
+- [ ] T008 [US1] Implement `src/app/login/actions.ts`: `loginAction` reads the source IP, calls `login()`, signs and sets the cookie via `core/auth.ts`, logs the login with the new `userId`, redirects to `/leads`; returns the one generic pt-BR failure message otherwise (FR-002, FR-018)
+- [ ] T009 [US1] Implement `src/app/login/page.tsx` + its CSS Module: e-mail (autofocused) and password (visibility toggle) fields, one primary button, inline generic error, pt-BR, no sign-up or reset controls; redirect to `/leads` when `getSession()` is already valid (FR-005, FR-007)
+- [ ] T010 [US1] Implement `src/app/(app)/layout.tsx` + its CSS Module: top bar with product name, nav to Leads/Agenda/Catálogo with the current section visibly selected, the user's name and a role badge ("corretor"/"gerente comercial"), and "sair" as a secondary control calling a `logoutAction` that logs the logout with the session's `userId`, clears the cookie, then redirects to `/login` (FR-013, FR-018)
+- [ ] T011 [P] [US1] Implement placeholder pages `src/app/(app)/leads/page.tsx` and `src/app/(app)/agenda/page.tsx` — one static pt-BR line each (FR-014)
+- [ ] T012 [US1] Confirm `/catalogo` renders unchanged inside the shell — it moves under the guard by virtue of the route group, not by a rewrite (FR-015)
 
 **Checkpoint**: a seeded user can log in, see the shell, and log out. Nothing guards the routes yet.
 
@@ -63,62 +79,29 @@ needs a verifiable cookie before it can be tested at all.
 
 **Goal / Independent Test**: with no cookie, request `/leads`, `/agenda`, `/catalogo` — each redirects to `/login`; the public chat responds normally.
 
-- [ ] T014 [US2] Implement `src/middleware.ts`: matcher on `/leads/:path*`, `/agenda/:path*`, `/catalogo/:path*`; `await`s `core/auth.ts`'s `verify()` on the `session` cookie, redirects to `/login` on `null`, passes through otherwise; logs the redirect decision with no `userId` when none is known (FR-018 for this file)
-- [ ] T015 [US2] Verify SC-002 and SC-003 per [quickstart.md](quickstart.md) step 2 — absent, tampered and expired cookies all redirect; the public chat route is unaffected
+- [ ] T013 [US2] Implement `src/proxy.ts`: matcher on `/leads/:path*`, `/agenda/:path*`, `/catalogo/:path*`; `await`s `core/auth.ts`'s `verify()` on the `session` cookie, redirects to `/login` on `null`, passes through otherwise; logs nothing that would carry a `userId` it does not have (FR-008, FR-009, FR-018)
 
 **Checkpoint**: US1 + US2 together are the deployable MVP — login, shell, and enforcement.
 
 ---
 
-## Phase 5: User Story 3 — Every role sees the whole agency; managers reassign leads (P2)
+## Phase 5: Verification
 
-**Goal / Independent Test**: `scopeForUser()` and `reassignLead()` are correct and reusable by specs 005/006 — apply the scoping helper with each role against the seeded leads; call `reassignLead` as each role.
-
-- [ ] T016 [P] [US3] Write unit tests for `scopeForUser()` in `tests/auth-service.test.ts` — broker and salesManager sessions both produce `{ agencyId, defaultOwnLeadsOnly }`, `true` for broker and `false` for salesManager; no database needed, it is a pure function
-- [ ] T017 [US3] Implement `scopeForUser(session)` in `src/services/auth.ts` per [contracts/scope-for-user.md](contracts/scope-for-user.md) (satisfies T016)
-- [ ] T018 [US3] Implement `reassignLead(session, leadId, newBrokerId)` in `src/services/auth.ts`: rejects a non-`salesManager` session with no effect; validates the target is a same-agency `broker` before writing `leads.assignedBrokerId`; on success records a `lead.reassigned` event (`actorType: "user"`, `actorUserId = session.userId`, `payload { fromBrokerId, toBrokerId }`) per [contracts/scope-for-user.md](contracts/scope-for-user.md). **Blocked on spec 002's `users`/`leads` schema.**
-- [ ] T019 [US3] Write `INTEGRATION=1` cases in `tests/auth-service.test.ts` against the seeded leads: broker/manager scoping both return every agency lead with the documented `defaultOwnLeadsOnly`; `reassignLead` succeeds for a manager (and records the event) and is rejected for a broker (no event), per [quickstart.md](quickstart.md) step 3
-
-**Checkpoint**: the scoping rule later specs depend on is implemented and tested, with no dashboard yet to expose it.
-
----
-
-## Phase 6: Polish
-
-- [ ] T020 [P] Run `npm run lint` — confirm `src/services/auth.ts` is the only module under this slice importing `users`/`leads`, and no `app/**` file imports `db/` or `drizzle-orm` directly
-- [ ] T021 Run [quickstart.md](quickstart.md) steps 5–6 end to end inside the container: `AUTH_SECRET` removal stops both processes naming it within 10 s (SC-009); a full login → authenticated request → logout → anonymous request cycle shows `userId` present only where FR-018 (as amended) requires it (SC-008)
-- [ ] T022 Confirm `docker build --target build .` still succeeds — the only type-checking gate, per spec 001's implementation notes
+- [ ] T014 Run the suites and the lint zone inside the container: `npm test`, `INTEGRATION=1 npm test`, `npm run lint` — the last confirms no `app/**` file imports `db/` or `drizzle-orm` directly
+- [ ] T015 Run [quickstart.md](quickstart.md) end to end with `curl`: login sets the cookie and reaches `/leads` (SC-001); wrong password and unknown e-mail give byte-identical text (SC-005); `/catalogo` renders inside the shell; "sair" then `/leads` redirects to `/login` (SC-007); a tampered and an absent cookie both redirect (SC-002); the public chat path is untouched by the guard (SC-003); log lines carry `userId` only where FR-018 requires it (SC-008)
+- [ ] T016 Confirm `AUTH_SECRET` removal stops the worker within 10 s naming the variable (SC-009), and that `docker build --target build .` still type-checks
 
 ---
 
 ## Dependencies & Execution Order
 
-### Phases
+Foundational → US3 → US1 → US2 → Verification.
 
-Setup → Foundational → US1 → US2 → US3 → Polish.
-
-- **US2 needs US1's login** to have something to guard; `middleware.ts` itself is independent and could be written in parallel, tested only once US1 lands.
-- **US3 needs Foundational only** — `scopeForUser` and `reassignLead` share a file with `login()` but not its UI tasks. Ordered after US1/US2 by spec priority, not a hard dependency.
-- **T012 and T018 are blocked on spec 002.** Everything else does not wait on it.
-
-### Parallel opportunities
-
-- Foundational: T006 alongside T004/T005
-- US1: T011 independent of T007–T010, T012
-- US3: T016 alongside T017; T019 after both
-- Polish: T020 alongside anything
-
----
-
-## Implementation Strategy
-
-**MVP is Setup + Foundational + US1 + US2** — the guard is real and a seeded
-user can use the shell, the two P1 stories that make this slice worth
-merging alone. US3 is worth finishing before specs 005/006 start but blocks
-neither.
+- **US3 before US1** only because `login()` shares `services/auth.ts` with the
+  scoping helpers; by spec priority US1 is first and US3 could follow the UI.
+- **US2 needs US1's `/login`** to have somewhere to redirect to.
 
 ## Notes
 
 - Solo project: `[P]` means "no ordering constraint," not "assign to someone else"
-- Blocked-on-002 tasks: attempt last in their phase; do everything else first if 002 has not merged yet
 - If a task needs a decision listed in `docs/decisoes-pendentes.md`, stop

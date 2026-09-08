@@ -7,7 +7,7 @@
 ## Summary
 
 A hand-rolled, stateless session: an HMAC-SHA256-signed cookie over
-`AUTH_SECRET`, verified by one Next.js middleware guard in front of the
+`AUTH_SECRET`, verified by one Next.js guard (`src/proxy.ts`) in front of the
 `(app)` route group. `services/auth.ts` owns `login()`, `scopeForUser()` and
 `reassignLead()`; `core/auth.ts` owns signing, verification and
 `getSession()`. The authenticated shell — top bar, nav, `/leads`, `/agenda`,
@@ -32,12 +32,12 @@ each choice is inline below, where the decision lives.
 
 **Primary Dependencies**: `bcryptjs` 3.0.3 (password comparison only — spec 002
 owns hashing at seed time) — new. Everything else already in `package.json`:
-`zod` for config, Next.js middleware and Server Actions for the guard and
-forms, and Web Crypto's `globalThis.crypto.subtle.sign`/`.verify` (both
-`Promise`-returning) for HMAC-SHA256 — chosen over `node:crypto`'s
-synchronous `createHmac` because Next.js middleware may run on the edge
-runtime, which has Web Crypto but not `node:crypto`; one primitive in
-`core/auth.ts` serves both the middleware and the Node-side services.
+`zod` for config, the Next.js request guard and Server Actions for the
+guard and forms, and Web Crypto's `globalThis.crypto.subtle.sign`/`.verify`
+(both `Promise`-returning) for HMAC-SHA256, per
+[contracts/session-cookie.md](contracts/session-cookie.md). One primitive in
+`core/auth.ts` serves the guard and the Node-side services alike, with no
+runtime assumption to get wrong.
 
 **Storage**: PostgreSQL via spec 002's `users` and `leads` tables (consumed,
 not owned). No new table — a session is a cookie, not a row.
@@ -62,7 +62,8 @@ failed-login `warn` log line.
 
 **Scale/Scope**: ~7 new source files, ~100 lines across `core/auth.ts` and
 `services/auth.ts` combined, plus the shell UI (layout, three pages, login
-form).
+form). If either module grows well past that, the slice has taken on
+something that is not in it.
 
 ## Constitution Check
 
@@ -73,7 +74,7 @@ form).
 | I | Document Authority | Cites `docs/` and ADR 12 only; `reference/` used only for the login screen's minimalism, already load-bearing in ADR 12. | Inspection |
 | II | Language Boundaries | Code and this plan in English; login copy and role badge text in pt-BR. | Inspection |
 | III | Modular Monolith | No process-local state — the login rate limit (the one exception this plan used to carry) is dropped per ADR 19. | Inspection |
-| IV | One Data Path | `services/auth.ts` is the only module touching `users`/`leads` for this slice; the middleware and layout call `core/auth.ts` and `services/`, never `db/`. | ESLint zone (existing) |
+| IV | One Data Path | `services/auth.ts` is the only module touching `users`/`leads` for this slice; the guard and layout call `core/auth.ts` and `services/`, never `db/`. | ESLint zone (existing) |
 | V | Deterministic Slot Machine | Not applicable — no agent in this slice. | — |
 | VI | Provider Independence | Not applicable — no model call in this slice. | — |
 | VII | Observability | Not applicable — no LLM call. Failed logins use the existing structured logger, not Langfuse. | Inspection |
@@ -138,7 +139,7 @@ src/
 │   └── auth.ts                  # sign(), verify(), getSession(), cookie constants
 ├── services/
 │   └── auth.ts                  # login(), scopeForUser(), reassignLead()
-├── middleware.ts                # guards (app) paths; redirects to /login
+├── proxy.ts                     # guards (app) paths; redirects to /login
 ├── app/
 │   ├── login/
 │   │   ├── page.tsx             # form, pt-BR, redirects if already authenticated
@@ -157,19 +158,18 @@ tests/
 
 **Structure Decision**: matches `docs/arquitetura/visao-geral.md` §3 exactly —
 `login/` sits outside both route groups, `(app)` gains its first real pages,
-`(public)` is untouched. `middleware.ts` at `src/` root is Next.js's fixed
-location for App Router middleware; there is no alternative placement to
-choose between.
+`(public)` is untouched. The request guard lives at `src/proxy.ts`: Next.js
+16 deprecated the `middleware.ts` convention and renamed it to `proxy.ts`
+(same API, Node.js runtime by default — verified in
+`node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/proxy.md`).
+`contracts/session-cookie.md` still names `src/middleware.ts`; that line
+needs a one-word amendment, which this plan may not make.
 
-## Coordination with spec 002 (concurrent)
+## Spec 002 has merged
 
-This slice imports the `users` table and its `broker`/`salesManager` enum
-from spec 002's schema module, and renders spec 002's catalog screen inside
-`/catalogo`. Both are specified in `modelo-de-dados.md` but neither's exact
-export path exists in this branch yet. Tasks that touch either seam are
-ordered last and marked blocked-on-002; `services/auth.ts`'s pure logic
-(signing, scoping math) is developed and unit-tested against an in-memory
-stand-in first, so the slice is not idle while 002 lands.
+`users`, `leads`, `events` and the catalog screen all exist on this branch.
+Nothing in this slice is blocked; `/catalogo` moves under the guarded shell
+unchanged, and `services/auth.ts` imports spec 002's schema directly.
 
 ## Complexity Tracking
 

@@ -38,9 +38,9 @@ added by spec 002's seed, so Setup is empty and gone. The guard file is
 
 **⚠️ Blocks all user stories.**
 
-- [ ] T001 Write `tests/auth-core.test.ts` — table-driven: sign/verify round-trip preserves the payload; a tampered signature is rejected; an `expiresAt` in the past is rejected; a payload missing `userId`, `agencyId` or `role` is rejected
-- [ ] T002 Implement `src/core/auth.ts`: async `sign()`/`verify()` over `globalThis.crypto.subtle` HMAC-SHA256, async `getSession()`, `clearSessionCookie()`, and the `session` cookie constants (`httpOnly`, `sameSite=lax`, `secure` outside development, 7-day `maxAge`) — per [contracts/session-cookie.md](contracts/session-cookie.md) (satisfies T001)
-- [ ] T003 Move `AUTH_SECRET` from optional to required in `src/core/config.ts` (drop `.optional()`, add to `REQUIRED_KEYS`), update `tests/config.test.ts` (add it to the `valid` fixture, drop it from the "optional keys" list) and the `.env.example` comment — one commit, Environment Contract gate (spec 001)
+- [x] T001 Write `tests/auth-core.test.ts` — table-driven: sign/verify round-trip preserves the payload; a tampered signature is rejected; an `expiresAt` in the past is rejected; a payload missing `userId`, `agencyId` or `role` is rejected
+- [x] T002 Implement `src/core/auth.ts`: async `sign()`/`verify()` over `globalThis.crypto.subtle` HMAC-SHA256, async `getSession()`, `clearSessionCookie()`, and the `session` cookie constants (`httpOnly`, `sameSite=lax`, `secure` outside development, 7-day `maxAge`) — per [contracts/session-cookie.md](contracts/session-cookie.md) (satisfies T001)
+- [x] T003 Move `AUTH_SECRET` from optional to required in `src/core/config.ts` (drop `.optional()`, add to `REQUIRED_KEYS`), update `tests/config.test.ts` (add it to the `valid` fixture, drop it from the "optional keys" list) and the `.env.example` comment — one commit, Environment Contract gate (spec 001)
 
 **Checkpoint**: `core/auth.ts` signs and verifies; `AUTH_SECRET`'s absence stops boot.
 

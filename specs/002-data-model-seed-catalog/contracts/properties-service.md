@@ -6,6 +6,7 @@ The only module under `services/` this spec adds. Both functions are the sole pa
 
 ```ts
 interface PropertyFilters {
+  code?: string;            // prefix match, case-insensitive; indexed, answers in the tens of ms (constitution X)
   transaction?: "sale" | "rent";
   neighborhood?: string;   // exact match
   region?: string;         // exact match; neighborhood and region may combine (AND)
@@ -21,6 +22,7 @@ function listProperties(
 ```
 
 - Always scoped to `agencyId` and `isActive = true` (FR-025, clarification 4).
+- `code` combines with every other filter (AND); it is the one field a broker types mid-conversation to confirm a suggested property is real, so it must never wait on a full-text index — a `LIKE 'MOE-%'`-shaped prefix match against the existing (`agencyId`,`code`) unique index is enough at this row count.
 - `ORDER BY price ASC, id ASC` (clarification 5) — stable across pages regardless of which filters are active.
 - `page` beyond the last page returns `items: []`, `total` unchanged — not an error (Edge Cases).
 - `total` is the count matching `filters` before pagination, for the UI's page count.

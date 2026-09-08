@@ -384,7 +384,10 @@ async function seedLeads(agencyId: string, brokerId: string): Promise<void> {
     let previousLeadMessageId: string | null = null;
     let lastInsertedId: string | null = null;
     for (const message of demo.messages) {
-      const [inserted] = await db
+      // Annotated, not inferred: `previousLeadMessageId` is narrowed by the
+      // assignment three lines below, so inferring `inserted` from a `.values()`
+      // that reads it is a cycle TypeScript refuses (TS7022).
+      const [inserted]: Array<{ id: string }> = await db
         .insert(messages)
         .values({
           conversationId: conversation.id,

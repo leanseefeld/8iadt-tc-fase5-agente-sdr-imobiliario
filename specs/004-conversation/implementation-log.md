@@ -7,7 +7,7 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
 
 | Group | Tasks | Exit gate | Status |
 |---|---|---|---|
-| A | T001–T013 (setup, pure core) | `npm test` green with no DB and no model | pending |
+| A | T001–T013 (setup, pure core) | `npm test` green with no DB and no model | in flight |
 | B | T014–T027 (turn service, orchestrator, consumer) | one real turn persists against oMLX via the service layer | pending |
 | C | T028–T037 (channel, notifier, SSE, widget) | widget screenshot; SC-005 reload check | pending |
 | D | T038–T047 (search tool, cards, handoff, opt-out, budget) | SC-004, SC-006, SC-007 by hand | pending |
@@ -15,13 +15,15 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
 | F | T054–T058 (scenario tests, lint, build, README) | both suites green, build green | pending |
 
 ## Done
-_(nothing yet)_
+- T001 — `ai@7.0.93`, `@ai-sdk/openai-compatible@3.0.44`, `@ai-sdk/react@4.0.96`,
+  `@langfuse/otel@5.11.0`, `@langfuse/tracing@5.11.0`, `@opentelemetry/sdk-trace-node@2.11.0`
+  pinned exactly. All six versions verified to exist via `npm view` before installing.
 
 ## In flight
 _(nothing)_
 
 ## Next step
-Start group A at T001.
+T002 — the `test:integration` script.
 
 ## Gotchas discovered
 - Host has no Node; everything via `docker compose exec app …`.

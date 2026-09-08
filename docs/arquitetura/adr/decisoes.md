@@ -378,3 +378,21 @@ Deferred items 13 to 16 are unchanged.
 
 **Consequences.** Five spec documents instead of eleven, with the same
 traceability columns in `specs/BACKLOG.md`.
+
+## 18. User experience discipline as a constitution principle
+
+**Accepted 2026-09-08.** Amends the constitution to version 1.2.0.
+
+**Context.** The product is graded on interface, clarity and usability, and the
+screens are written by coding agents that default to whatever is easiest to
+render. Nothing in the constitution said what a good screen is.
+
+**Decision.** Principle X: before creating or editing UI, name the user, their
+task and the smoothest interaction; build for that; keep an explicit information
+hierarchy and a visual hierarchy that encodes it; always feed back processing,
+lost connections and empty states. Mirrored in `AGENTS.md` so it is read even by
+agents that never open the constitution.
+
+**Consequences.** Plans for UI slices carry a short "who, what, how" paragraph
+per screen, and reviews can reject a screen for flat hierarchy or missing
+feedback rather than only for broken code.

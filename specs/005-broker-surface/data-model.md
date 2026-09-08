@@ -9,23 +9,25 @@ reads, and the two indexes it adds.
 | Table.column | Written by | Rule |
 |---|---|---|
 | `leads.score` | `services/qualification.ts`, per turn | `scoreLead(intent, slots)`, 0–100 |
-| `leads.status` | qualification, and the panel's status select | Only along the FR-006 transitions |
+| `leads.status` | qualification, and the panel's status select | Only along the FR-007 pipeline transitions |
 | `leads.assignedBrokerId` | takeover (when null) and manager reassignment | A takeover never overwrites a non-null value |
-| `conversations.status` | takeover / return | `active ⇄ paused`; `paused` means a broker holds it |
+| `conversations.status` · `heldByUserId` | takeover / return | `active ⇄ paused`; `paused` with `heldByUserId` set means a broker holds it, null means *Aguardando corretor* |
 | `conversations.summary` · `previewLine` · `summaryUpdatedAt` | `jobs/summarize.ts` | Written together, in one statement |
 | `messages` (`role='broker'`) | broker reply | `metadata.userId` names the author |
 | `events.processedAt` | `jobs/summarize.ts` | Set on the turn events a summary consumed |
 
 ## Events this slice appends
 
-All five already exist in the catalog (§4); none is invented.
+All seven already exist in the catalog (§4); none is invented.
 
 | type | payload | when |
 |---|---|---|
 | `lead.qualified` | `{ score }` | The first turn on which the lead becomes qualified |
-| `handoff.requested` | `{ reason: 'asked' \| 'fallback' \| 'score' }` | The rule fires, or 004 reports the lead asked / two fallbacks |
-| `conversation.assumed` | `{ userId }` | A broker takes over |
+| `handoff.requested` | `{ reason: 'asked' \| 'fallback' }` | The rule fires, or 004 reports the lead asked / two fallbacks |
+| `conversation.assumed` | `{ userId }` | A broker takes over, any pipeline stage |
 | `conversation.returned` | `{ userId }` | A broker hands back |
+| `lead.status_changed` | `{ from, to }` | A broker changes the pipeline stage from the panel |
+| `lead.reassigned` | `{ fromBrokerId, toBrokerId }` | A sales manager reassigns |
 | `summary.updated` | `{}` | A summary is stored |
 
 ## Read models
@@ -34,9 +36,10 @@ Not tables — the shapes services return. Full field lists in
 [`contracts/surfaces.md`](contracts/surfaces.md).
 
 - **LeadRow** — one list row: id, temperature, name, intent, the compact
-  qualification line, preview line, last lead message time, follow-up state, and
-  whether it is *Aguardando corretor* (`leads.status='handoff'` with the
-  conversation still `active`).
+  qualification line, preview line, last lead message time, the conversation chip,
+  the stage chip, and the live dot. *Aguardando corretor* is
+  `conversations.status='paused'` with `heldByUserId` null — independent of the
+  lead's pipeline stage.
 - **LeadDetail** — the panel: lead, conversation, full message list, event list.
 - **FunnelMetrics** — four numbers: median first-response seconds, qualification
   rate, confirmed appointments, leads recovered. Any of them may legitimately be
@@ -61,4 +64,5 @@ grows; the second serves the list's scope and ordering (SC-003).
   above. The data model says explicitly it is not a column.
 - **Qualified** — every script slot but `name`/`contact` filled. `leads.status`
   records that it happened; the verdict itself is recomputed.
-- **Aguardando corretor** — a pair of statuses, per the spec's clarification.
+- **Aguardando corretor** — `conversations.status='paused'` with `heldByUserId`
+  null, independent of `leads.status`. Per the spec's clarification.

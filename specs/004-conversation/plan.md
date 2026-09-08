@@ -44,6 +44,7 @@ Five decisions shape the build.
 | `proposeMeeting` call | Called here, stub result | 006 implements the tool; 004 calls it for the hot-lead and investment endings (FR-040/041) and phrases whatever the stub returns. |
 | `src/core/notifier.ts` | Built here, Postgres-only | The `Notifier` interface behind SSE delivery (ADR 19); `visao-geral.md` §8 documents the scale limits 006's follow-up sender inherits. |
 | `src/jobs/consumers.ts` registry | Created here if absent | `modelo-de-dados.md` §6 assigns ownership to 005, but 004 needs `unanswered-turns` before 005 lands — it creates the file if missing and 005 adds to it. |
+| `lead.status_changed` event | Emitted here for `new → qualifying → qualified` | `modelo-de-dados.md` §4 attributes it to 005/006 (broker, visit outcomes); ADR 19 makes the agent the owner of stage moves up to `scheduled`, so 004 emits its share (FR-051) and 005/006 emit theirs. |
 | One migration in this slice | Allowed | A unique index over `messages.metadata->>'clientMessageId'` for idempotency. No column, no table — the data model is untouched. |
 
 ## Technical Context

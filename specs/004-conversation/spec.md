@@ -155,7 +155,7 @@ latency, retries and errors — personal data masked.
 
 - **FR-015**: Inbound messages MUST be normalised through a channel interface and outbound messages MUST leave through the same interface, so a second channel is a new implementation and nothing else.
 - **FR-016**: The public chat MUST be reachable at a per-agency public URL; that agency MUST scope every query in the turn, and an unknown URL MUST produce a not-found response rather than a conversation against another agency's data.
-- **FR-017**: The reply MUST reach the widget over the SSE connection of FR-045 as sentence-sized `chunk` events followed by a final `message` event, in units no larger than a sentence so that FR-012's guards can act before text is seen, and the first `chunk` MUST be preceded by a deliberate pause of 300–800 ms when the model would otherwise answer faster than that.
+- **FR-017**: The reply MUST reach the widget over the SSE connection of FR-047 as sentence-sized `chunk` events followed by a final `message` event, in units no larger than a sentence so that FR-012's guards can act before text is seen, and the first `chunk` MUST be preceded by a deliberate pause of 300–800 ms when the model would otherwise answer faster than that.
 - **FR-018**: The widget's first agent message, on open, MUST be the consent notice stating the purpose of the data collection, with an "Aceito" button; accepting MUST record consent with its timestamp.
 - **FR-019**: Lead text sent before consent is recorded MUST receive a fixed pt-BR template reply — no model call — and MUST NOT be persisted as a conversation turn; the qualification script MUST NOT begin until consent is recorded.
 - **FR-020**: The widget MUST hold an anonymous session identifier that survives a reload and maps to one lead per agency, so a returning lead resumes the same conversation with its history.
@@ -248,4 +248,4 @@ defined in [`modelo-de-dados.md`](../../docs/arquitetura/modelo-de-dados.md) —
 
 - The broker side of handoff, the summary, the preview line and the dashboard — spec 005. Viewing times, booking, the agenda and the follow-up sweep — spec 006, whose tools are declared stubs here.
 - Any second channel. The interface has exactly one implementation, which the constitution permits by name.
-- Evaluation harnesses, model-output scoring, observability dashboards beyond the trace itself, and any authentication on the public chat.
+- Evaluation harnesses, model-output scoring, observability dashboards beyond the trace itself, and any login-style authentication on the public chat. The SSE stream's "signed widget session" (FR-047) is the anonymous session id of FR-020 signed so a lead cannot read another conversation by guessing its id — a scoping guard, not an account.

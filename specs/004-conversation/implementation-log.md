@@ -25,12 +25,18 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   `CHAT_TYPING_DELAY_MS` parses to `{ minMs, maxMs }`, and `MODEL_MAX_OUTPUT_TOKENS`
   is optional in the schema and defaulted in `loadConfig` (600, or 2000 with
   `MODEL_THINKING`) because its default depends on another key.
+- T004 — `tests/slots.test.ts`, 24 tests: SCRIPT order per intent, first-empty-slot
+  selection (including a filled slot skipped mid-script), the consent gate on
+  `name`/`contact`, `neighborhoods: []` vs `null`, the five `mergeSlots` rules plus
+  unknown-key dropping and `MergeResult.filled` ordering, and `isQualified`. Written
+  against `src/domain/slots.ts`, which does not exist yet (T007) — the suite is red
+  on `ERR_MODULE_NOT_FOUND` until T007–T010 land.
 
 ## In flight
 _(nothing)_
 
 ## Next step
-T004–T006 — the three domain test files, written before their subjects.
+T005–T006 — the remaining two domain test files, written before their subjects.
 
 ## Gotchas discovered
 - Host has no Node; everything via `docker compose exec app …`.

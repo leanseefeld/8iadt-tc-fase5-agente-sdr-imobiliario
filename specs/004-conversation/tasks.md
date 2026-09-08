@@ -22,7 +22,7 @@ description: "Task list for the conversation slice"
 
 **⚠️ Blocks every user story.** Nothing here touches a model, a database or React.
 
-- [ ] T004 [P] Write `tests/slots.test.ts` — script order per intent, first-empty-slot selection, and the five merge rules in [data-model.md](data-model.md) §2
+- [x] T004 [P] Write `tests/slots.test.ts` — script order per intent, first-empty-slot selection, and the five merge rules in [data-model.md](data-model.md) §2
 - [ ] T005 [P] Write `tests/score.test.ts` — the weight table and the three bands from `modelo-de-dados.md` §3, including the `qualified` boundary
 - [ ] T006 [P] Write `tests/reply-guards.test.ts` — an English reply, three questions, a second question that refines neither the pending nor the next slot, a price or a percentage no search returned, and leaked tool syntax are each rejected; a refining second question ("Quantos quartos? E suíte?") is accepted
 - [ ] T007 Implement the slot schema, script order, `mergeSlots` and `nextQuestion` (slot key plus pt-BR question text) in `src/domain/slots.ts`

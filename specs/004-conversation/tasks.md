@@ -16,7 +16,7 @@ description: "Task list for the conversation slice"
 
 - [x] T001 Add `ai@7.0.93`, `@ai-sdk/openai-compatible@3.0.44`, `@ai-sdk/react@4.0.96`, `@langfuse/otel@5.11.0`, `@langfuse/tracing@5.11.0` and `@opentelemetry/sdk-trace-node` as exact pins in `package.json`
 - [x] T002 Add the `test:integration` script (`INTEGRATION=1 node --test tests/integration/*.test.ts`) to `package.json`, leaving `npm test` on the fast suites
-- [ ] T003 [P] Add the eleven new keys from [contracts/config.md](contracts/config.md) to `src/core/config.ts` and to `.env.example` **in the same commit**, and change the `MODEL_ID` default to `gemma-4-e4b-it-OptiQ-4bit`
+- [x] T003 [P] Add the eleven new keys from [contracts/config.md](contracts/config.md) to `src/core/config.ts` and to `.env.example` **in the same commit**, and change the `MODEL_ID` default to `gemma-4-e4b-it-OptiQ-4bit`
 
 ## Phase 2: Foundational — the pure core
 

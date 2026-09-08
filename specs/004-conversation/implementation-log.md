@@ -19,12 +19,18 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   `@langfuse/otel@5.11.0`, `@langfuse/tracing@5.11.0`, `@opentelemetry/sdk-trace-node@2.11.0`
   pinned exactly. All six versions verified to exist via `npm view` before installing.
 - T002 — `npm run test:integration` added; `npm test` still runs only `tests/*.test.ts`.
+- T003 — the eleven keys of `contracts/config.md` in `src/core/config.ts` and
+  `.env.example`, one commit. `MODEL_ID` now defaults to `gemma-4-e4b-it-OptiQ-4bit`
+  in `.env.example` and is set in `.env`. Two shapes worth knowing:
+  `CHAT_TYPING_DELAY_MS` parses to `{ minMs, maxMs }`, and `MODEL_MAX_OUTPUT_TOKENS`
+  is optional in the schema and defaulted in `loadConfig` (600, or 2000 with
+  `MODEL_THINKING`) because its default depends on another key.
 
 ## In flight
 _(nothing)_
 
 ## Next step
-T003 — the eleven config keys plus `.env.example`, in one commit.
+T004–T006 — the three domain test files, written before their subjects.
 
 ## Gotchas discovered
 - Host has no Node; everything via `docker compose exec app …`.

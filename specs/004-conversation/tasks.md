@@ -25,7 +25,7 @@ description: "Task list for the conversation slice"
 - [x] T004 [P] Write `tests/slots.test.ts` — script order per intent, first-empty-slot selection, and the five merge rules in [data-model.md](data-model.md) §2
 - [x] T005 [P] Write `tests/score.test.ts` — the weight table and the three bands from `modelo-de-dados.md` §3, including the `qualified` boundary
 - [x] T006 [P] Write `tests/reply-guards.test.ts` — an English reply, three questions, a second question that refines neither the pending nor the next slot, a price or a percentage no search returned, and leaked tool syntax are each rejected; a refining second question ("Quantos quartos? E suíte?") is accepted
-- [ ] T007 Implement the slot schema, script order, `mergeSlots` and `nextQuestion` (slot key plus pt-BR question text) in `src/domain/slots.ts`
+- [x] T007 Implement the slot schema, script order, `mergeSlots` and `nextQuestion` (slot key plus pt-BR question text) in `src/domain/slots.ts`
 - [ ] T008 [P] Implement `scoreLead` and `temperature` in `src/domain/score.ts`
 - [ ] T009 [P] Implement the sentence-level guards in `src/domain/reply-guards.ts`: Portuguese by stopword ratio, a question-count check allowing a refining second question, a currency-and-percentage scan against an allowed set, tool-syntax scrubber
 - [ ] T010 [P] Implement `handoffDecision` in `src/domain/handoff.ts` — `asked`, `fallback`, or none; a hot score is deliberately not a trigger (ADR 19)

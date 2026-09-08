@@ -53,12 +53,19 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   `ERR_MODULE_NOT_FOUND` until T007–T010 land. Group A (T004–T013) is now fully
   written on the test side; T007–T013 remain to turn it green.
 
+- T007 — `src/domain/slots.ts`: `slotsSchema` (the one code form of the slot state,
+  from which the `updateSlots` tool schema will be derived), `SCRIPT`, `QUESTIONS`
+  (pt-BR, one per askable), `upcomingSlots`/`nextQuestion`, `mergeSlots` with the five
+  rules, `isQualified`/`qualifyingSlots`, and `SLOT_TOPIC_WORDS`/`questionTopics`,
+  which `reply-guards.ts` uses to judge a second question. All 24 T004 tests green.
+  An explicit `undefined` value is treated exactly like `null` (rule 1), which settles
+  the second ambiguity noted below.
+
 ## In flight
 _(nothing)_
 
 ## Next step
-T007 — implement `src/domain/slots.ts` (script, `mergeSlots`, `nextQuestion`),
-the first of the four pure-core modules the T004–T006 suites are waiting on.
+T008 — `src/domain/score.ts` (`scoreLead`, `temperature`).
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

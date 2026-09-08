@@ -76,11 +76,19 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   `R$ 850.000`, `850 mil`, `1,2 milhão`, `7%`), `questionCount`. All 17 T006 tests
   green; whole suite 123 passing, 0 failing.
 
+- T010 — `src/domain/handoff.ts`: `handoffDecision` (`asked` outranks `fallback`,
+  which fires at a streak of 2) and `shouldProposeMeeting` (viewing for a finished
+  hot `purchase`/`rental` script with a contact, call for a finished `investment`
+  one). Both live in one file so a future trigger cannot be added without reading
+  ADR 19's exclusion. `tests/handoff.test.ts` added — plan.md lists it and no task
+  did. Note: a finished investment script always scores at least 70, so FR-041's
+  point is the KIND of meeting, not a second score threshold.
+
 ## In flight
 _(nothing)_
 
 ## Next step
-T010 — `src/domain/handoff.ts` (`handoffDecision`, `shouldProposeMeeting`).
+T011 — `maskPII` in `src/core/security.ts` with `tests/masking.test.ts`.
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

@@ -12,7 +12,7 @@ in-memory shapes, the columns it writes, and the one index it creates.
 | `leads` | `name`, `phone`, `email`, `intent`, `status`, `score`, `consentAt`, `doNotContact` | Every turn; contact fields only after `consentAt` |
 | `conversations` | `slots`, `status`, `fallbackStreak`, `lastLeadMessageAt`, `lastAgentMessageAt` | Every turn |
 | `messages` | `role`, `content`, `metadata` | Two rows per turn: the lead's and the agent's |
-| `events` | `type`, `payload` | Per the catalog below |
+| `events` | `type`, `payload`, `actorType`, `actorUserId`, `traceId` | Per the catalog below |
 | `properties` | — read only | `searchProperties` |
 
 `messages.metadata` carries, additively to the shapes already listed in the data
@@ -61,14 +61,18 @@ intent question and nothing else.
 | score 0–100 | `scoreLead(intent, slots)` | data model §3 weights |
 | temperature | `temperature(score)` | cold < 40 · warm 40–69 · hot ≥ 70 |
 | `qualified` | all script slots except `name`/`contact` filled | data model §3 |
-| handoff | `handoffDecision(...)` → `asked` · `fallback` · `score` · none | ADR 11 |
+| handoff | `shouldHandoff(...)` → `asked` · `fallback` · none | ADR 19 |
+| propose meeting | `shouldProposeMeeting(score, slots)` → hot with contact known; calls `proposeMeeting`, never pauses | ADR 19 |
 
 ## 4. Events emitted here
 
 `lead.created` `{ channel }` · `lead.consented` `{}` · `intent.identified`
 `{ intent }` · `slot.filled` `{ slot, value }` (value masked for `name`/`contact`) ·
 `conversation.turn` `{ messageId }` · `properties.suggested` `{ propertyIds }` ·
-`handoff.requested` `{ reason }` · `lead.opted_out` `{}`.
+`handoff.requested` `{ reason: asked · fallback }` · `lead.opted_out` `{}` ·
+`lead.status_changed` `{ from, to }` for the agent-driven stages up to `scheduled`.
+Every event written here carries `actorType: agent`, `actorUserId: null` and the
+Langfuse `traceId` of the turn (data model §1, `events`).
 
 `handoff.requested` is attributed to spec 005 in the data model's catalog; 004 owns
 the three triggers, so it emits and 005 consumes. Recorded in

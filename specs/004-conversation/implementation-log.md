@@ -105,11 +105,20 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   null/undefined/Date pass-through; a cyclic object; and masking-twice stability for
   both `maskText` and `maskPII`. Whole suite 156 passing, 0 failing, 4 skipped.
 
+- T012 — `maskPII` wired into `src/core/logging.ts` two ways: `formatters.log`
+  masks the merged record (objects, arrays, nested payloads) and a `hooks.logMethod`
+  masks string arguments, because `formatters.log` never sees the message itself.
+  Verified by hand: `log.info({ leadName, contact, nested: { email } }, "lead
+  11987654321 respondeu")` prints `C*** D***`, `(11) *****-**21`, `j***@gmail.com`
+  and a masked number inside `msg`. No unit test — pino writes through sonic-boom
+  to fd 1, so capturing it would need a destination parameter this logger does not
+  take, and the rule itself is covered by `tests/masking.test.ts`.
+
 ## In flight
 _(nothing)_
 
 ## Next step
-T011 — `maskPII` in `src/core/security.ts` with `tests/masking.test.ts`.
+T013 — `src/agent/provider.ts`, the only importer of the provider SDK.
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

@@ -30,7 +30,7 @@ description: "Task list for the conversation slice"
 - [x] T009 [P] Implement the sentence-level guards in `src/domain/reply-guards.ts`: Portuguese by stopword ratio, a question-count check allowing a refining second question, a currency-and-percentage scan against an allowed set, tool-syntax scrubber
 - [x] T010 [P] Implement `handoffDecision` in `src/domain/handoff.ts` — `asked`, `fallback`, or none; a hot score is deliberately not a trigger (ADR 19)
 - [x] T011 [P] Implement `maskPII` in `src/core/security.ts` and write `tests/masking.test.ts` covering phone, e-mail, name and free text
-- [ ] T012 Wire `maskPII` into `src/core/logging.ts` as the serializer, so the rule has one definition and two sinks
+- [x] T012 Wire `maskPII` into `src/core/logging.ts` as the serializer, so the rule has one definition and two sinks
 - [ ] T013 Implement `src/agent/provider.ts` — the only importer of `@ai-sdk/openai-compatible`, honouring `PROVIDER_AUTH_HEADER`, `MODEL_TIMEOUT_MS`, `MODEL_MAX_RETRIES`, `MODEL_MAX_OUTPUT_TOKENS`, and injecting `chat_template_kwargs: { enable_thinking: true }` when `MODEL_THINKING` is true
 
 **Checkpoint**: `npm test` passes with no database and no model running.

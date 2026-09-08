@@ -1,0 +1,95 @@
+/*
+ * A single sticky top-bar row: nav in the middle, identity + "sair" set
+ * apart on the right (Constitution X — "sair" is deliberately lighter than
+ * the three links). Colours from `src/app/globals.css`'s shared palette.
+ */
+
+.shell {
+  min-height: 100vh;
+}
+
+.topBar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 1.5rem;
+  height: 3.5rem;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.nav {
+  display: flex;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.navLink {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.92rem;
+  font-weight: 600;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.5rem;
+}
+
+.navLink:hover {
+  background: var(--hover);
+}
+
+/* The selected state must read at a glance, not just on hover. */
+.navLinkActive {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.userName {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.roleBadge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+}
+
+.logoutButton {
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.4rem 0.3rem;
+  margin-left: 0.4rem;
+}
+
+.logoutButton:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.content {
+  min-height: calc(100vh - 3.5rem);
+}

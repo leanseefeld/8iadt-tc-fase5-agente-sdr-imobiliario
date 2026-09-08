@@ -54,6 +54,22 @@ export async function login(
   return newSession({ userId: user.id, agencyId: user.agencyId, role: user.role });
 }
 
+/**
+ * The shell's top bar needs the user's name; the session cookie carries only
+ * ids and the role, deliberately (data-model.md), so the one screen that
+ * displays a name pays for one lookup. `null` when the row is gone — the
+ * caller treats that as unauthenticated rather than rendering a nameless bar.
+ */
+export async function getSessionUser(
+  session: SessionPayload,
+): Promise<{ name: string; role: SessionPayload["role"] } | null> {
+  const [user] = await getDb()
+    .select({ name: users.name, role: users.role })
+    .from(users)
+    .where(and(eq(users.id, session.userId), eq(users.agencyId, session.agencyId)));
+  return user ?? null;
+}
+
 export interface LeadScope {
   agencyId: string;
   /**

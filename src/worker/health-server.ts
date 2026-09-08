@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import { liveness, readiness, type CheckResult } from "../core/health.ts";
-import { checkDatabase } from "../services/health.ts";
+import { checkDatabase, checkMigrations } from "../services/health.ts";
 import { createLogger } from "../core/logging.ts";
 
 /**
@@ -56,7 +56,11 @@ export function startHealthServer(options: HealthServerOptions): Server {
 
     if (path === "/health/ready") {
       void (async () => {
-        const report = readiness("worker", [await checkDatabase(), checkSweep(options)]);
+        const report = readiness("worker", [
+          await checkDatabase(),
+          await checkMigrations(),
+          checkSweep(options),
+        ]);
         send(report.status === "ready" ? 200 : 503, report);
       })();
       return;

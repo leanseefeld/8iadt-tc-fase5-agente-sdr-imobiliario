@@ -48,8 +48,11 @@ export const configSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   WATCHPACK_POLLING: flag,
 
-  // Declared, validated, not yet consumed. Items 3, 4 and 11 tighten these.
-  AUTH_SECRET: z.string().min(1).optional(),
+  // Signs the session cookie (spec 003). Required: without it nothing can
+  // authenticate, so failing at boot beats failing at the first login.
+  AUTH_SECRET: z.string().min(1),
+
+  // Declared, validated, not yet consumed. Items 4 and 11 tighten these.
   LANGFUSE_PUBLIC_KEY: z.string().min(1).optional(),
   LANGFUSE_SECRET_KEY: z.string().min(1).optional(),
   LANGFUSE_BASE_URL: z.url().optional(),
@@ -70,6 +73,7 @@ export const REQUIRED_KEYS = [
   "PROVIDER_API_KEY",
   "MODEL_ID",
   "DATABASE_URL",
+  "AUTH_SECRET",
 ] as const;
 
 /**

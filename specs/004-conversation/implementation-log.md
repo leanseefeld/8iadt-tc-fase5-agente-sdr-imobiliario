@@ -142,6 +142,19 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   what makes a paused conversation produce no further agent turn (FR-028), and
   the stale cutoff is `MODEL_TIMEOUT_MS × 2` (FR-046).
 
+- T017 — `commitTurn`: one transaction writing the agent message (with
+  `repliesToMessageId` = the last unanswered lead message, FR-044), the slots,
+  the lead fields, the events of data-model §4 and a closing `pg_notify`. Four
+  decisions worth keeping: the claim is released *inside* the same transaction,
+  so a crash cannot strand it; the lead's `name`/`phone`/`email` are only ever
+  written, never nulled, because merge rule 1 means an absent slot is "unchanged";
+  `nextLeadStatus` is forward-only and refuses to move a lead already past
+  `qualified` (ADR 19 §7 gives those stages to the broker); and `MESSAGE_CHANNEL`
+  = `conversation_message`, payload `{ conversationId, agencyId, messageId }` —
+  ids only, which is the contract group C's `core/notifier.ts` listens on.
+  Opt-out closes the conversation, a handoff pauses it, everything else leaves
+  the status alone.
+
 - T013 — `src/agent/provider.ts`, the only importer of `@ai-sdk/openai-compatible`.
   `getModel()` builds the model lazily; `modelCall()` returns the spreadable
   defaults (`model`, `maxOutputTokens`, `maxRetries`, `timeout`) so a call site
@@ -157,7 +170,7 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
 _(nothing)_
 
 ## Next step
-T017 — `commitTurn` in `src/services/conversation.ts`.
+T018 — duplicate detection (`recordLeadMessage`) in `src/services/conversation.ts`.
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

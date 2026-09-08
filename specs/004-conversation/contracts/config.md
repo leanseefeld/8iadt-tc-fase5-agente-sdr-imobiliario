@@ -11,12 +11,23 @@ table **in the same commit** — the standing Environment Contract gate from 001
 | Key | Required | Default | Read by | Meaning |
 |---|---|---|---|---|
 | `PROVIDER_AUTH_HEADER` | no | — | `agent/provider.ts` | Header name to carry the API key when the endpoint does not accept `Authorization: Bearer`. The third variable ADR 16 permits; absent means Bearer. |
-| `CHAT_HISTORY_WINDOW` | no | `12` | `services/conversation.ts` | Messages of history sent to the model. Older context is the slot state, and later the summary. |
-| `CHAT_RATE_LIMIT_PER_MINUTE` | no | `20` | `services/conversation.ts` | Lead messages accepted per conversation per minute. Counted in SQL, so it holds across replicas. |
-| `CHAT_POLL_INTERVAL_MS` | no | `5000` | chat widget | How often the widget re-reads history while the conversation is paused for a broker. |
-| `TYPING_DELAY_MIN_MS` | no | `300` | `channels/web.ts` | Lower bound of the artificial pause before the first token. |
-| `TYPING_DELAY_MAX_MS` | no | `800` | `channels/web.ts` | Upper bound of the same pause. Set both to `0` to disable it in tests. |
+| `MODEL_THINKING` | no | `false` | `agent/provider.ts` | When true, injects `chat_template_kwargs: { enable_thinking: true }` into the request body (verified on oMLX 08/09/2026); `reasoning_content` never reaches the widget, only the trace. |
+| `MODEL_MAX_OUTPUT_TOKENS` | no | `600` (`2000` with thinking) | `agent/provider.ts` | Output token ceiling per call, including reasoning tokens. |
+| `MODEL_HISTORY_WINDOW` | no | `12` | `services/conversation.ts` | Messages of history sent to the model. Older context is the slot state, and later the summary. |
+| `CHAT_DEBOUNCE_MS` | no | `3000` | `services/conversation.ts` | Silence after the last lead message before a turn claims the conversation — what coalesces a burst into one reply. |
+| `CHAT_MESSAGE_BUDGET` | no | `60` | `services/conversation.ts` | Lead messages accepted per session within `CHAT_BUDGET_WINDOW_MINUTES`. Counted in SQL, so it holds across replicas. |
+| `CHAT_BUDGET_WINDOW_MINUTES` | no | `30` | `services/conversation.ts` | Rolling window `CHAT_MESSAGE_BUDGET` is counted over. |
+| `CHAT_MAX_MESSAGE_CHARS` | no | `1000` | `services/conversation.ts` | Longest single lead message accepted; longer gets the template reply of `contracts/chat-api.md` §2. |
+| `CHAT_TYPING_DELAY_MS` | no | `300–800` | `channels/web.ts` | Artificial pause range before the first `chunk` event. Set to `0–0` to disable it in tests. |
+| `SSE_PULSE_INTERVAL_MS` | no | `15000` | `app/api/chat/[conversationId]/events/route.ts` | Keep-alive pulse on the SSE stream; two missed pulses trip the widget's "Conexão perdida" state. |
 | `LANGFUSE_UI_PORT` | no | `3102` | `docker-compose.yml` | Host port the Langfuse UI is published on. Compose-only, declared here because the schema is the authoritative key set — the same reason `DB_PORT` is declared. |
+
+`CHAT_HISTORY_WINDOW`, `CHAT_RATE_LIMIT_PER_MINUTE`, `CHAT_POLL_INTERVAL_MS`,
+`TYPING_DELAY_MIN_MS` and `TYPING_DELAY_MAX_MS` from the pre-review draft of this
+contract are gone: debounced coalescing and SSE replaced polling and a per-minute
+counter. Every key above is already a row in `docs/arquitetura/configuracoes.md`
+(added there in the same commit as `visao-geral.md` §8 and §9) — this table names
+which module reads each one, that document is the canonical default and scope.
 
 ## Keys that change meaning
 

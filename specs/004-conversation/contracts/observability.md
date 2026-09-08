@@ -17,6 +17,8 @@ registered at all** — the cheapest possible form of "absent changes nothing".
 | Name | `conversation.turn` |
 | Started by | `services/conversation.ts`, around the whole turn |
 | Ends | after the transaction commits, whatever the outcome |
+| Langfuse session id | `conversation.id` |
+| Langfuse user id | masked lead id (principle VIII — never the raw uuid alone) |
 
 **Attributes** (every span in the trace inherits them):
 
@@ -29,8 +31,8 @@ registered at all** — the cheapest possible form of "absent changes nothing".
 | `turn.intent` | `purchase` \| `undefined` | as computed *before* the turn |
 | `turn.pending_slot` | `bedrooms` | the slot the deterministic question targets |
 | `turn.score` | `55` | recomputed value at the end of the turn |
-| `turn.stage` | `qualifying` \| `qualified` \| `handoff` | |
-| `turn.outcome` | `replied` \| `fallback` \| `handoff` \| `opted_out` \| `rate_limited` \| `replayed` | one value, always set |
+| `turn.stage` | `new` \| `qualifying` \| `qualified` | the lead's pipeline stage (`modelo-de-dados.md` §7) — `handoff` is never a value here, it is an outcome, not a stage |
+| `turn.outcome` | `replied` \| `fallback` \| `handoff` \| `meeting_proposed` \| `opted_out` \| `budget_exceeded` \| `replayed` | one value, always set |
 
 ## 2. Child spans
 
@@ -75,7 +77,15 @@ span. Principle VII's stated non-goal — no evals, no scoring harness — holds
 | Keys unset | No provider registered, no spans created, no overhead. |
 | Shutdown | The exporter is flushed with a bounded timeout on `SIGTERM`; a failed flush does not delay shutdown. |
 
-## 6. Verifying it
+## 6. Events carry the trace
+
+Every row this slice writes to `events` sets `actorType = 'agent'`, `actorUserId =
+null`, and `traceId` to this turn's Langfuse trace id — the timeline in the lead's
+file links straight to the trace from any event, not only from the message. This
+holds whether or not a tracer is registered: `traceId` is simply `null` when
+Langfuse is unconfigured, same as any other absent value (FR-050).
+
+## 7. Verifying it
 
 SC-011 is the acceptance: one conversation, one trace per turn, model and tool spans
 present, and zero unmasked names, phones or e-mail addresses across every trace and

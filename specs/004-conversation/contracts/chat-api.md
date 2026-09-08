@@ -26,60 +26,83 @@ interface OutboundMessage {
 }
 
 interface ChannelAdapter {
-  receive(raw: unknown): InboundMessage;                 // normalise, or throw
-  send(message: OutboundMessage): Promise<Response>;     // web: the streamed response
+  receive(raw: unknown): InboundMessage;              // normalise, or throw
+  send(message: OutboundMessage): Promise<void>;      // persist + notify; see below
 }
 ```
 
-`send` returns the transport's own result so the web adapter can stream. The worker
-(spec 006) will call the same `send` and get back an appended agent message rather
-than a stream — same interface, different implementation, which is the whole point.
+Delivery is no longer `send`'s job. `commitTurn` already writes the message and ends
+its transaction with `NOTIFY` (`visao-geral.md` §8); the web adapter's `send` is a
+thin wrapper around that, and the live widget is reached by the separate SSE stream
+below, not by the return value of `send`. The worker (spec 006) calls the same
+`send` for a follow-up message — same interface, same effect, no stream to return
+either way, which is the whole point of moving delivery off the request/response
+cycle.
 
 ## 2. POST /api/chat
 
-Runs one turn and streams the reply. Request:
+Stores the lead message and returns — it does **not** run a turn inline. Request:
 
 ```json
 { "agencySlug": "imobiliaria-demo", "sessionId": "…", "clientMessageId": "…",
   "text": "Estou procurando apartamento na zona sul", "consent": false }
 ```
 
-`consent: true` is sent once, on the turn where the lead accepts the banner.
-
-**Response**: `200`, an AI SDK UI message stream. Alongside the text the stream
-carries the turn's data parts: the property cards to render and the paused flag.
-Nothing else the widget needs is fetched separately.
+`consent: true` is sent once, on the message where the lead taps "Aceito".
 
 **Status codes**
 
 | Code | When | Body |
 |---|---|---|
-| 200 | Turn ran, or the same `clientMessageId` was already answered — the stored reply is replayed | stream |
-| 400 | Malformed body, missing `sessionId` or `clientMessageId` | `{ error }` |
+| 200 | Consent not yet recorded, or the session's `CHAT_MESSAGE_BUDGET` or `CHAT_MAX_MESSAGE_CHARS` was exceeded — a fixed pt-BR template reply, no model call, nothing persisted | `{ text }` |
+| 202 | Lead message stored. A turn follows `CHAT_DEBOUNCE_MS` later if the conversation is `active`; a `paused` conversation stores the message and produces no agent turn | `{ conversationId }` |
+| 400 | Malformed body — missing `sessionId` or `clientMessageId` | `{ error }` |
 | 404 | Unknown `agencySlug` | `{ error }` |
-| 409 | Conversation is paused for a broker; no agent turn is produced | `{ error, paused: true }` |
-| 429 | Per-session rate limit exceeded; nothing was persisted | `{ error }` with pt-BR copy |
 
-A model failure is **not** an error code: the turn returns 200 with the generic
-pt-BR fallback text, because a conversation that dies silently is worse than one
-that apologises (FR-014).
+A model failure is **not** an error code here either: the async turn simply
+delivers the generic pt-BR fallback text over the SSE stream like any other reply,
+because a conversation that dies silently is worse than one that apologises
+(FR-014). Repeating a `clientMessageId` is a no-op — FR-035's unique index, not a
+read-then-write race — and still answers `202`.
 
 ## 3. GET /api/chat?agencySlug=…&sessionId=…
 
-History for a session. Used on widget mount (L14 resume) and polled while paused.
+History for a session. Used once, on widget mount (L14 resume); live updates come
+from the SSE stream below, not from calling this again.
 
 ```json
 { "conversationId": "…", "status": "active" | "paused" | "closed",
   "consented": true,
   "messages": [ { "id": "…", "role": "lead" | "agent" | "broker",
-                  "content": "…", "propertyIds": ["…"], "createdAt": "…" } ] }
+                  "content": "…", "propertyIds": ["…"],
+                  "repliesToMessageId": "…", "createdAt": "…" } ] }
 ```
 
 `404` for an unknown agency. An unknown session id is `200` with an empty message
 list and `conversationId: null` — a first visit is not an error, and no lead row is
 created by a read.
 
-## 4. Property card payload
+## 4. GET /api/chat/[conversationId]/events
+
+The SSE stream (`visao-geral.md` §8), authorised by the signed widget session — the
+`conversationId` in the URL is not itself trusted, the session is. One connection,
+kept open, replayable from `Last-Event-ID` on reconnect.
+
+| Event | Payload | When |
+|---|---|---|
+| `chunk` | `{ text }` | Sentence-sized pieces of the reply as the guards clear them |
+| `message` | `{ id, role, content, propertyIds?, repliesToMessageId?, createdAt }` | The turn's final, persisted agent (or broker) message |
+| `pulse` | `{}` | Every `SSE_PULSE_INTERVAL_MS`, keep-alive |
+| `goodbye` | `{}` | On `SIGTERM`, before the server closes the stream |
+
+Two missed pulses and the widget shows "Conexão perdida. Reconectando…" and disables
+the composer; `EventSource` reconnects on its own, and the server replays from
+`Last-Event-ID` by re-reading the database — the notification is only a wake-up, the
+row is the truth. A `message` event whose `repliesToMessageId` is not the lead's most
+recent message means newer lead messages exist; the widget quotes the first line of
+the message named by `repliesToMessageId` at the top of the bubble.
+
+## 5. Property card payload
 
 The fields a card renders, taken from the search result and never from model prose:
 

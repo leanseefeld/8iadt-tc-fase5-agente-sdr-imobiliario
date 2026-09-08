@@ -36,7 +36,7 @@ Single project. `src/`, `tests/` at the repository root, per [plan.md](plan.md#s
 
 **⚠️ Blocks all user stories** — nothing below can be exercised against a real database until this lands.
 
-- [ ] T004 Define every enum and all nine tables in `src/db/schema.ts` per [data-model.md](data-model.md) — uuid PKs, `agencyId` FKs, the uniqueness constraints and indexes from FR-003/FR-020
+- [ ] T004 Define every enum and all nine tables in `src/db/schema.ts` per [data-model.md](data-model.md) — uuid PKs, `agencyId` FKs, `users.specializations`/`availability`, `leads.status` (`new…visited/won/lost`, no `handoff`/`unresponsive`), `conversations.heldByUserId`/`followupState`/`processingSince`, `messages.repliesToMessageId`, `events.actorType`/`actorUserId`/`traceId`, the uniqueness constraints and indexes from FR-003/FR-020 plus `events` (`conversationId`,`createdAt`) and (`agencyId`,`type`,`createdAt`)
 - [ ] T005 Run `drizzle-kit generate`; review and commit the resulting migration under `src/db/migrations/`, `meta/_journal.json` included
 - [ ] T006 [P] Implement `src/db/migrate.ts` — one-shot runner over `drizzle-orm/node-postgres/migrator`'s `migrate()`, logs the applied count, exits 0/1
 - [ ] T007 Add a `migrate` service to `docker-compose.yml` (same image, `command: node src/db/migrate.ts`, `depends_on: db: condition: service_healthy`); add `migrate: condition: service_completed_successfully` to `app`'s and `worker`'s `depends_on`
@@ -65,10 +65,10 @@ Single project. `src/`, `tests/` at the repository root, per [plan.md](plan.md#s
 
 - [ ] T013 [P] [US2] Write `src/db/seed/properties.schema.ts` — a zod schema per dataset entry plus `validateDataset(entries)` checking region/zone match, ~70/30 sale/rent, ~15 commercial, `estimatedRent` non-null iff `sale`
 - [ ] T014 [P] [US2] Write `tests/properties-dataset.test.ts` — unit tests for `validateDataset()` against small inline fixtures, one per violation
-- [ ] T015 [US2] Implement `src/db/seed/index.ts`: upsert the agency by `slug`; upsert the three users by (`agencyId`,`email`) with `bcrypt.hash("demo1234", 10)`, `ON CONFLICT DO NOTHING`
-- [ ] T016 [US2] Extend the seed to load and validate `src/db/seed/properties.json`, failing loudly per FR-013, then upsert by (`agencyId`,`code`) `ON CONFLICT DO UPDATE`
-- [ ] T017 [US2] Extend the seed to create the three demo leads (`externalId` `seed-hot`/`seed-warm`/`seed-cold`) with conversations, messages, events and — hot only — one `appointments` row, per [data-model.md](data-model.md)'s seed data shape; skip the whole block per lead if it already exists
-- [ ] T018 [US2] Confirm `src/db/seed/properties.json` (100 rows, produced by a separate workstream per spec's Out of Scope) exists and passes `validateDataset()`; if absent, block on it rather than authoring the dataset here
+- [ ] T015 [US2] Implement `src/db/seed/index.ts`: upsert the agency by `slug`; upsert the three users by (`agencyId`,`email`) with `bcrypt.hash("demo1234", 10)`, Ana's/Bruno's `specializations` and Mon–Fri 09:00–18:00 `availability`, Carla's empty `specializations`/`availability`, `ON CONFLICT DO NOTHING`
+- [ ] T016 [US2] Extend the seed to load and validate `src/db/seed/properties.json` (already produced by the orchestrator's generator, per spec.md's Assumptions), failing loudly per FR-013, then upsert by (`agencyId`,`code`) `ON CONFLICT DO UPDATE`
+- [ ] T017 [US2] Extend the seed to create the three demo leads (`externalId` `seed-hot`/`seed-warm`/`seed-cold`) with conversations (`status`/`followupState` per [data-model.md](data-model.md)'s axes table), messages, `events` carrying `actorType` (`agent`/`system`, `actorUserId` null) and — hot only — one confirmed future `appointments` row; skip the whole block per lead if it already exists
+- [ ] T018 [US2] Confirm `src/db/seed/properties.json` (100 rows, already produced by the orchestrator's deterministic generator) exists and passes `validateDataset()`; if absent, block rather than authoring the dataset here
 - [ ] T019 [P] [US2] Write `tests/seed.test.ts` (`INTEGRATION=1`) — run twice, assert identical counts (1/3/100/3) and bcrypt-only password storage
 - [ ] T020 [US2] Verify SC-002 and SC-003 per [quickstart.md](quickstart.md)
 
@@ -80,9 +80,9 @@ Single project. `src/`, `tests/` at the repository root, per [plan.md](plan.md#s
 
 **Goal / Independent Test**: `/catalogo` renders a paginated, filterable grid of active properties; with the seed applied, confirm 24 cards, each filter narrows the grid, paging preserves filters.
 
-- [ ] T021 [US3] Implement `listProperties(agencyId, filters, page)` in `src/services/properties.ts` — scoped by `agencyId`+`isActive`, filter clauses per [contracts/properties-service.md](contracts/properties-service.md), `ORDER BY price ASC, id ASC`, `LIMIT 24`, plus a total count
-- [ ] T022 [P] [US3] Implement `src/app/(app)/catalogo/PropertyCard.tsx` and `catalogo.module.css` — photo, BRL price via `Intl.NumberFormat("pt-BR", {style:"currency",currency:"BRL"})`, bedrooms, area, neighborhood
-- [ ] T023 [P] [US3] Implement `src/app/(app)/catalogo/FilterBar.tsx` — client component updating `searchParams` for transaction, neighborhood/region, max price, min bedrooms
+- [ ] T021 [US3] Implement `listProperties(agencyId, filters, page)` in `src/services/properties.ts` — scoped by `agencyId`+`isActive`, filter clauses per [contracts/properties-service.md](contracts/properties-service.md) including `code` prefix match, `ORDER BY price ASC, id ASC`, `LIMIT 24`, plus a total count
+- [ ] T022 [P] [US3] Implement `src/app/(app)/catalogo/PropertyCard.tsx` and `catalogo.module.css` — `code` given the most visual weight alongside price (constitution X), photo, BRL price via `Intl.NumberFormat("pt-BR", {style:"currency",currency:"BRL"})`, bedrooms, area, neighborhood
+- [ ] T023 [P] [US3] Implement `src/app/(app)/catalogo/FilterBar.tsx` — client component updating `searchParams`; `code` search first and instant (no debounce beyond the input's own change event), then transaction, neighborhood/region, max price, min bedrooms
 - [ ] T024 [US3] Implement `src/app/(app)/catalogo/page.tsx` — Server Component reading `searchParams`, calling `listProperties`, rendering `FilterBar` + grid + pagination, no session guard (FR-017)
 - [ ] T025 [P] [US3] Write `tests/properties-service.test.ts` (`INTEGRATION=1`) — `listProperties`: filtered, zero-result, and paging-stability cases
 - [ ] T026 [US3] Verify SC-004 per [quickstart.md](quickstart.md)

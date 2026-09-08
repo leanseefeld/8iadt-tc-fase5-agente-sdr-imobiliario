@@ -43,7 +43,7 @@ Passes iff every one of the 100 rows in `src/db/seed/properties.json` satisfies 
 
 ### SC-004 · Catalog filters and pagination
 
-Open `/catalogo?maxPrice=1`. Grid renders empty, no error. Open `/catalogo` with no filters — 24 cards, page 2 (`?page=2`) shows the next 24 in the same order.
+Open `/catalogo?maxPrice=1`. Grid renders empty, no error. Open `/catalogo` with no filters — 24 cards, page 2 (`?page=2`) shows the next 24 in the same order. Open `/catalogo?code=MOE` — the grid narrows instantly to properties whose `code` starts with `MOE`, and `code` is printed on every remaining card (constitution X).
 
 ### SC-005 · Search returns ranked matches
 

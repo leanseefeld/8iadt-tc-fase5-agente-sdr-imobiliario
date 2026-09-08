@@ -84,6 +84,27 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   did. Note: a finished investment script always scores at least 70, so FR-041's
   point is the KIND of meeting, not a second score threshold.
 
+- T011 — `src/core/security.ts`: `maskText` (a single string; scrubs embedded
+  e-mails and phone numbers, leaves everything else alone) and `maskPII` (recursive,
+  key-aware masking of arbitrary structures — depth-capped at 8, cycle-guarded,
+  never throws). Phone detection is digit-budget-based: two area-code digits plus a
+  4-or-5 block plus a 4 block sums to exactly 10 or 11 (12 or 13 only with a literal
+  `55` country-code prefix), which is what keeps a `R$ 850.000` price, a four-digit
+  year and a CEP's 3+3 split from ever matching, no separate allow/deny list needed.
+  Output is normalized to one shape — `(DDD) ****-**XX` / `(DDD) *****-**XX` —
+  regardless of whether the input had parens, dashes, spaces or `+55`. Name masking
+  is a fixed `first-letter + ***` per word (not length-preserving — the brief's own
+  `Camila Duarte` → `C*** D***` example only has 3 stars regardless of word length),
+  which is also what makes masking idempotent: a masked name/e-mail/phone does not
+  parse as an unmasked one, so re-masking is a no-op. Key matching for the
+  name/phone/email/contact rule is a case-insensitive suffix check, so `leadName`
+  and `contactPhone` are caught without an explicit list. `tests/masking.test.ts`,
+  24 tests: each of the four phone formats plus a 10-digit landline; the price/year/CEP
+  non-matches; a bare and an embedded e-mail; `name` and `leadName` keys; `contact`
+  holding a phone and holding an e-mail; nested object and array; numbers/booleans/
+  null/undefined/Date pass-through; a cyclic object; and masking-twice stability for
+  both `maskText` and `maskPII`. Whole suite 156 passing, 0 failing, 4 skipped.
+
 ## In flight
 _(nothing)_
 

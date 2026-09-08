@@ -7,6 +7,7 @@ const valid: Record<string, string> = {
   PROVIDER_API_KEY: "a-key",
   MODEL_ID: "gemma4:12b",
   DATABASE_URL: "postgresql://sdr:sdr@db:5432/sdr",
+  AUTH_SECRET: "a-signing-secret",
 };
 
 test("accepts an environment carrying only the required keys", () => {
@@ -61,7 +62,7 @@ for (const [key, value] of malformed) {
 }
 
 test("optional keys nothing reads yet are still declared", () => {
-  for (const key of ["AUTH_SECRET", "LANGFUSE_PUBLIC_KEY", "FOLLOWUP_MAX_ATTEMPTS"]) {
+  for (const key of ["LANGFUSE_PUBLIC_KEY", "FOLLOWUP_MAX_ATTEMPTS"]) {
     assert.ok(configKeys.includes(key), `${key} missing from the schema`);
   }
 });

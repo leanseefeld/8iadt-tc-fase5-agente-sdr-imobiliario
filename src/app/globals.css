@@ -1,0 +1,37 @@
+/*
+ * The one palette for the app: the catalog defined these values first
+ * (`(app)/catalogo/catalogo.module.css`), this file only lifts them into
+ * custom properties so the login screen and the shell can share them instead
+ * of inventing a second set of colours (spec 003, T007).
+ */
+
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --text: #1c1c1a;
+  --muted: #6b6b64;
+  --border: #e5e5e0;
+  --field-border: #d9d9d3;
+  --hover: #f0f0eb;
+  --accent: #b45309;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17171a;
+    --surface: #201f22;
+    --text: #eeeeea;
+    --muted: #a8a8a0;
+    --border: #322f33;
+    --field-border: #3a373b;
+    --hover: #2a282c;
+    --accent: #b45309;
+  }
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}

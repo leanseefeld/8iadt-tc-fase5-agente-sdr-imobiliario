@@ -61,11 +61,18 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   An explicit `undefined` value is treated exactly like `null` (rule 1), which settles
   the second ambiguity noted below.
 
+- T008 — `src/domain/score.ts`: `scoreLead` and `temperature`, weights exactly as
+  `modelo-de-dados.md` §3. All 14 T005 tests green, including the cap case: the
+  `+15` high-commitment row is ONE row with two ways to earn it (immediate urgency,
+  or a decided investor at `ticket >= 1_000_000`), while `urgency = soon`'s `+5` is a
+  separate row — so they can stack and the total is clamped to 100. That resolves the
+  first ambiguity noted below in the T005 author's favour.
+
 ## In flight
 _(nothing)_
 
 ## Next step
-T008 — `src/domain/score.ts` (`scoreLead`, `temperature`).
+T009 — `src/domain/reply-guards.ts`, the sentence-level output guards.
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

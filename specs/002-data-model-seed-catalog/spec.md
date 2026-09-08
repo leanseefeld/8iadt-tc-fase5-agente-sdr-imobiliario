@@ -106,16 +106,16 @@ The documented start command, against a database that has never seen this schema
 **Seed**
 
 - **FR-008**: `npm run db:seed` MUST be idempotent: any number of runs MUST leave exactly one agency, three users, 100 properties, three leads with conversations, messages and events.
-- **FR-009**: MUST create agency "Imobiliária Demo", slug `demo`, and three users per modelo-de-dados.md §5, password stored only as a bcrypt hash of `demo1234`.
+- **FR-009**: MUST create agency "Imobiliária Demo", slug `demo`, and three users per modelo-de-dados.md §5, each broker's `specializations` and Mon–Fri 09:00–18:00 `availability` set per data-model.md's seed data shape (ADR 19), password stored only as a bcrypt hash of `demo1234`.
 - **FR-010**: MUST load exactly 100 properties from committed `src/db/seed/properties.json`, failing with a specific error if missing, malformed, or not exactly 100 entries.
 - **FR-011**: The dataset MUST distribute ~70 `sale`/30 `rent` and ~15 `commercial`, every neighborhood in a region named in modelo-de-dados.md §5, every price within that neighborhood's documented price band (concrete ranges in data-model.md's Seed data shape section — exact figures are a dataset-validation detail, not a business rule this spec fixes); every `sale` row non-null `estimatedRent`, every `rent` row null.
 - **FR-012**: Each property's `imageUrl` MUST be a `picsum.photos` URL deterministically derived from its `code`.
-- **FR-013**: MUST create three demo leads per modelo-de-dados.md §5 — hot with a scheduled appointment, warm mid-qualification, cold with a conversation silent two days — each with a conversation, messages and a plausible `events` trail.
+- **FR-013**: MUST create three demo leads per modelo-de-dados.md §5 — hot (`leads.status='scheduled'`, `conversations.status='active'`, `followupState='none'`, one confirmed future appointment), warm (`qualifying`/`active`/`none`, mid-qualification), cold (`qualifying`/`active`/`pending`, `lastLeadMessageAt` two days past) — each with a conversation, messages and a plausible `events` trail whose rows carry `actorType` (`agent`/`system`) with `actorUserId` null.
 
 **Catalog**
 
-- **FR-014**: MUST expose `/catalogo`: a responsive grid of the agency's active properties, cards showing photo, BRL price, bedrooms, area, neighborhood.
-- **FR-015**: The route MUST offer combinable filters — transaction, neighborhood/region, max price, min bedrooms — reflected in the URL.
+- **FR-014**: MUST expose `/catalogo`: a responsive grid of the agency's active properties, cards showing `code`, photo, BRL price, bedrooms, area, neighborhood — `code` printed on every card, not only on a detail view (constitution X: the broker's task here is confirming a suggested property is real).
+- **FR-015**: The route MUST offer combinable filters — `code` (instant, exact or prefix match), transaction, neighborhood/region, max price, min bedrooms — reflected in the URL.
 - **FR-016**: MUST paginate at 24 per page, sorted price ascending then `id` ascending, so paging never repeats or skips a row.
 - **FR-017**: MUST be reachable with no session and implement no guard of its own — spec 003 wraps `(app)/*`, this route included.
 
@@ -145,7 +145,7 @@ Column detail lives in modelo-de-dados.md §1, implemented verbatim: `Agency` (t
 
 ## Assumptions
 
-- `properties.json`'s literal contents are generated separately; this spec is the contract that content must satisfy.
+- `properties.json`'s literal contents are generated separately; this spec is the contract that content must satisfy. That 100-row dataset is already produced — a deterministic generator, run and validated by the orchestrator — and lands in `src/db/seed/properties.json` at implementation time; `validateDataset()` (FR-010) still runs over it before any insert, exactly as it would over any other candidate dataset.
 - Cross-tenant isolation is enforced in `services/` per ADR 10; no row-level security added.
 - "One active conversation per lead" (§5) is enforced by the seed and later write paths, not a database constraint — the model document lists none, and adding one uninvited risks disagreeing with spec 004's write pattern.
 - The hot lead's "reunião marcada" needs one `appointments` row; seeding it is a static fact, not the scheduling flow, which stays spec 006's.
@@ -157,4 +157,4 @@ Column detail lives in modelo-de-dados.md §1, implemented verbatim: `Agency` (t
 - The orchestrator, slot machine, chat widget and the call site invoking `searchProperties` — backlog item 4. This spec ships the service function.
 - Score computation, summaries, the leads dashboard — backlog item 5.
 - The scheduling UI, follow-up worker sweep, any `followup_jobs` row — backlog item 6. The table exists; nothing populates or drains it here.
-- Generating the actual 100 rows of `src/db/seed/properties.json` — a separate agent's task, against the rules this spec fixes.
+- Generating the actual 100 rows of `src/db/seed/properties.json` — already done by the orchestrator's deterministic generator, against the rules this spec fixes; this spec only validates and consumes it.

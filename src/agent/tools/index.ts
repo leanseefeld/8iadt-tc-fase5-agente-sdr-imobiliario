@@ -1,6 +1,6 @@
 import type { ToolSet } from "ai";
 import { updateSlots } from "./update-slots.ts";
-import { bookMeeting, proposeMeeting } from "./scheduling.stub.ts";
+import { bookMeeting, proposeMeeting, runProposeMeeting } from "./scheduling.stub.ts";
 
 /**
  * The tool registry — the one list of what the agent can do.
@@ -34,6 +34,6 @@ export function conversationTools(): ToolSet {
   return { updateSlots, proposeMeeting, bookMeeting };
 }
 
-export { updateSlots, proposeMeeting, bookMeeting };
+export { updateSlots, proposeMeeting, bookMeeting, runProposeMeeting };
 export { normalizeExtraction, updateSlotsInputSchema } from "./update-slots.ts";
 export type { SchedulingResult } from "./scheduling.stub.ts";

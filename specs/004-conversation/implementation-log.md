@@ -228,11 +228,49 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   apartamento na zona sul" as `purchase`), without which the model guessed
   `investment`.
 
+- T024/T025 — `src/agent/orchestrator.ts` and `tests/integration/turn.test.ts`.
+  **The turn is two model calls, not one, and that is the decision to know about.**
+  US1 scenario 1 says the question a turn asks is the first still-empty slot
+  *after* the lead's message has been read, so the question cannot be computed
+  before the extraction — a single call would phrase against the state the turn
+  started in and re-ask what the lead just answered. plan.md's "one round trip per
+  turn" is therefore wrong and was simplified in the same commit. The four phases
+  are: extract (`updateSlots`, `toolChoice: required`, nothing streamed) → merge in
+  code (`mergeSlots`, then `recoverSlot` for the pending slot only) → compute
+  (score, stage, handoff, meeting, the ONE next question) → phrase (streamed, **no
+  tools at all**, guarded per sentence). The phrasing call gets no tools because
+  this model, given one, picks it instead of writing the sentence.
+  `drain()` only releases a sentence once the buffer ends on its terminator, so a
+  guard never judges half a sentence; approved sentences go straight to a
+  `ReplySink` (group C attaches SSE to it, `collectingSink()` is the test's). When
+  a guard rejects, the stream stops there: nothing approved yet means
+  `guardedReply(question)`, something approved but no question asked means the
+  deterministic question is sent as one more chunk. A model failure means
+  `MODEL_FAILURE_REPLY`, and the turn still commits, so the lead is answered and
+  the conversation stays usable (FR-014). `allowedAmounts` is built from
+  `figuresIn()` over the lead's own words plus the stored `priceMax`/`ticket` —
+  a figure the lead wrote is a figure the agent may repeat. The consent gate is
+  in two places on purpose: `recordLeadMessage` refuses pre-consent text, and
+  `runTurn` refuses it again, because the worker's consumer reaches a turn without
+  passing through the route handler. `commitTurn` now masks tool *arguments*
+  rather than the whole tool call — `maskPII` is key-aware and was writing `u***`
+  where `updateSlots` belonged.
+- **Exit gate for group B passed.** `docker compose exec -e INTEGRATION=1 app node
+  --test tests/integration/turn.test.ts` — 15/15, ~2.5–7 s per run. The turn stores
+  "Estou procurando apartamento na zona sul", identifies `purchase`, captures
+  `zona sul`, asks the `priceMax` question, writes the agent message with
+  `repliesToMessageId` on the lead message, and emits `lead.created`,
+  `intent.identified` and `conversation.turn` with `actorType: agent`. Observed
+  reply: *"Que bacana que você está focada na Zona Sul! Para eu te ajudar melhor,
+  qual faixa de preço você tem em mente? 😊"*, with
+  `toolCalls: [updateSlots {neighborhoods}, recoverSlot {intent}]` — both halves of
+  ADR 14 doing their job in one turn.
+
 ## In flight
 - Nothing.
 
 ## Next step
-T024 — `src/agent/orchestrator.ts`, one turn end to end.
+T026 — `unanswered-turns` in `src/jobs/consumers.ts`.
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

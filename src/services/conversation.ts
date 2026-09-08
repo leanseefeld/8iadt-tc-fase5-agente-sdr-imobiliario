@@ -590,15 +590,23 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
         role: "agent",
         content: input.reply,
         repliesToMessageId,
-        metadata: maskPII({
+        metadata: {
           ...(input.propertyIds !== undefined && input.propertyIds.length > 0
             ? { propertyIds: input.propertyIds }
             : {}),
           ...(input.guard != null ? { guard: input.guard } : {}),
+          // Masked one level down, not as a whole: `maskPII` is key-aware and a
+          // tool's `name` is the tool's, not a person's — masking the object
+          // would write `u***` where `updateSlots` belongs.
           ...(input.toolCalls !== undefined && input.toolCalls.length > 0
-            ? { toolCalls: input.toolCalls }
+            ? {
+                toolCalls: input.toolCalls.map((call) => ({
+                  name: call.name,
+                  arguments: maskPII(call.arguments),
+                })),
+              }
             : {}),
-        }) as Record<string, unknown>,
+        },
         createdAt: now,
       })
       .returning({ id: messages.id });

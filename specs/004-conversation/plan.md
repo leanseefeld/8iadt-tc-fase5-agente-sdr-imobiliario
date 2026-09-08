@@ -54,7 +54,7 @@ Five decisions shape the build.
 - **Storage**: PostgreSQL 17, schema from spec 002; this slice adds one index.
 - **Testing**: `node:test`. Unit tests over `domain/` run in `npm test`; scenario tests against the local model and the real database run under `npm run test:integration` with `INTEGRATION=1`, because they take minutes.
 - **Target Platform**: Linux containers, provider on the host or hosted (ADR 16), everything driven through `docker compose exec app …`.
-- **Performance Goals**: first visible token 300–800 ms after send when the model is faster than that; one model round trip per turn, two when the local model skips the extraction tool (ADR 14).
+- **Performance Goals**: first visible token 300–800 ms after send when the model is faster than that; two model round trips per turn — extraction then phrasing — plus a third only when the extraction tool missed the pending slot and `recovery.ts` runs (ADR 14). The split is not an optimisation that got away: US1 scenario 1 requires the question to be the first slot still empty *after* the lead's message is read, so it cannot be computed before the extraction.
 - **Constraints / Scope**: no Redis in the application stack, no process-local state, every query scoped by `agencyId`, observability capped at 6 GiB (ADR 13). ~33 new files: two route groups (chat, chat events), one service, one orchestrator, five tools, five pure modules, one notifier, one worker consumer.
 
 ## Constitution Check
@@ -167,11 +167,15 @@ commit reads. `tools/index.ts` is the registry, where the scheduling stubs
 (`proposeMeeting`, `bookMeeting`) are declared with their schemas and a
 "not yet available" result until 006 fills them in.
 
-**5 · Orchestrator.** Load, compute, prompt, stream, guard, commit. The system prompt
-carries the persona, the slot state, the one next question, the consent state and the
-refusal rule; tool calling is the AI SDK's own. If no `updateSlots` arrived and the
-lead's message plausibly answered the pending slot, `recovery.ts` runs one
-`generateObject` for that slot alone. Handoff, opt-out, the hot-lead and investment
+**5 · Orchestrator.** Load, extract, merge, compute, phrase, guard, commit — in that
+order, and as two model calls rather than one. The extraction call has `updateSlots`
+and no voice; the phrasing call has the persona, the slot state, the one next
+question, the consent state and the refusal rule, and **no tools at all**, because a
+4-bit model handed a tool and asked for a sentence picks the tool. Between them the
+merge happens in code, which is what lets the question be the first slot still empty
+*after* the lead's message. If no `updateSlots` arrived and the lead's message
+plausibly answered the pending slot, `recovery.ts` runs one `generateObject` for that
+slot alone. Handoff, opt-out, the hot-lead and investment
 `proposeMeeting` calls, and the consent gate are all decided in code after the tools
 resolve, never by the model.
 

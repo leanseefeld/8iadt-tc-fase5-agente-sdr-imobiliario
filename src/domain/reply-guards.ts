@@ -161,6 +161,17 @@ function percentagesIn(normalized: string): number[] {
   return percentages;
 }
 
+/**
+ * Every money amount and percentage a piece of text states, in the same forms
+ * the guard reads them back. The orchestrator uses it on the lead's own messages
+ * to build `allowedAmounts`: a figure the lead wrote is a figure the agent may
+ * repeat, and the whole guard turns on that distinction.
+ */
+export function figuresIn(text: string): { amounts: number[]; percentages: number[] } {
+  const normalized = normalize(text);
+  return { amounts: amountsIn(normalized), percentages: percentagesIn(normalized) };
+}
+
 function checkFigures(sentence: string, context: GuardContext): GuardVerdict {
   const normalized = normalize(sentence);
 

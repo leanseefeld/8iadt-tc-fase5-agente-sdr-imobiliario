@@ -28,12 +28,21 @@ const NOT_AVAILABLE: SchedulingResult = {
   message: "A agenda ainda não está ligada. Combine o retorno sem confirmar horário.",
 };
 
+/**
+ * The tool's body, callable without a tool runtime. FR-040/041 are deterministic
+ * conditions, so the orchestrator invokes this directly rather than hoping the
+ * model picks the tool; the tool below is the same body, for when the model does.
+ */
+export function runProposeMeeting(): SchedulingResult {
+  return NOT_AVAILABLE;
+}
+
 /** §6: `proposeMeeting()` — no arguments. The kind is decided in code (ADR 19). */
 export const proposeMeeting = tool({
   description:
     "Oferece uma visita ou uma conversa com um especialista. Chame quando o roteiro terminar.",
   inputSchema: z.object({}),
-  execute: (): SchedulingResult => NOT_AVAILABLE,
+  execute: runProposeMeeting,
 });
 
 /** §6: `bookMeeting({ optionIndex } | { scheduledAt })`. */

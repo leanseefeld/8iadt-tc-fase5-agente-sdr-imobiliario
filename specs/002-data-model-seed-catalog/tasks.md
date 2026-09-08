@@ -36,12 +36,12 @@ Single project. `src/`, `tests/` at the repository root, per [plan.md](plan.md#s
 
 **⚠️ Blocks all user stories** — nothing below can be exercised against a real database until this lands.
 
-- [ ] T004 Define every enum and all nine tables in `src/db/schema.ts` per [data-model.md](data-model.md) — uuid PKs, `agencyId` FKs, `users.specializations`/`availability`, `leads.status` (`new…visited/won/lost`, no `handoff`/`unresponsive`), `conversations.heldByUserId`/`followupState`/`processingSince`, `messages.repliesToMessageId`, `events.actorType`/`actorUserId`/`traceId`, the uniqueness constraints and indexes from FR-003/FR-020 plus `events` (`conversationId`,`createdAt`) and (`agencyId`,`type`,`createdAt`)
-- [ ] T005 Run `drizzle-kit generate`; review and commit the resulting migration under `src/db/migrations/`, `meta/_journal.json` included
-- [ ] T006 [P] Implement `src/db/migrate.ts` — one-shot runner over `drizzle-orm/node-postgres/migrator`'s `migrate()`, logs the applied count, exits 0/1
-- [ ] T007 Add a `migrate` service to `docker-compose.yml` (same image, `command: node src/db/migrate.ts`, `depends_on: db: condition: service_healthy`); add `migrate: condition: service_completed_successfully` to `app`'s and `worker`'s `depends_on`
-- [ ] T008 [P] Implement `checkMigrations()` in `src/services/health.ts` — read `src/db/migrations/meta/_journal.json`, compare against drizzle's migrations-tracking table, name any missing tag
-- [ ] T009 Wire `checkMigrations()` into `src/app/api/health/ready/route.ts` and `src/worker/health-server.ts`, alongside the existing database check (FR-007: additive only)
+- [x] T004 Define every enum and all nine tables in `src/db/schema.ts` per [data-model.md](data-model.md) — uuid PKs, `agencyId` FKs, `users.specializations`/`availability`, `leads.status` (`new…visited/won/lost`, no `handoff`/`unresponsive`), `conversations.heldByUserId`/`followupState`/`processingSince`, `messages.repliesToMessageId`, `events.actorType`/`actorUserId`/`traceId`, the uniqueness constraints and indexes from FR-003/FR-020 plus `events` (`conversationId`,`createdAt`) and (`agencyId`,`type`,`createdAt`)
+- [x] T005 Run `drizzle-kit generate`; review and commit the resulting migration under `src/db/migrations/`, `meta/_journal.json` included
+- [x] T006 [P] Implement `src/db/migrate.ts` — one-shot runner over `drizzle-orm/node-postgres/migrator`'s `migrate()`, logs the applied count, exits 0/1
+- [x] T007 Add a `migrate` service to `docker-compose.yml` (same image, `command: node src/db/migrate.ts`, `depends_on: db: condition: service_healthy`); add `migrate: condition: service_completed_successfully` to `app`'s and `worker`'s `depends_on`
+- [x] T008 [P] Implement `checkMigrations()` in `src/services/health.ts` — read `src/db/migrations/meta/_journal.json`, compare against drizzle's migrations-tracking table, name any missing tag
+- [x] T009 Wire `checkMigrations()` into `src/app/api/health/ready/route.ts` and `src/worker/health-server.ts`, alongside the existing database check (FR-007: additive only)
 
 **Checkpoint**: schema exists, one command migrates it, readiness proves it.
 
@@ -51,9 +51,9 @@ Single project. `src/`, `tests/` at the repository root, per [plan.md](plan.md#s
 
 **Goal / Independent Test**: fresh volume, `docker compose up`; both processes reach ready with a passing `migrations` check and no manual step; a killed migration keeps both from starting.
 
-- [ ] T010 [US1] Write `tests/migrate.test.ts` (`INTEGRATION=1`) — apply against a live db, assert `checkMigrations()` reports ready, assert a second run is a no-op
-- [ ] T011 [US1] Verify SC-001 and SC-006 per [quickstart.md](quickstart.md) — fresh volume reaches ready within 90 s; an unmigrated database reports not-ready naming `migrations`
-- [ ] T012 [US1] Verify SC-007 — `tests/health.test.ts` passes unmodified; every field spec 001 defined is still present
+- [x] T010 [US1] Write `tests/migrate.test.ts` (`INTEGRATION=1`) — apply against a live db, assert `checkMigrations()` reports ready, assert a second run is a no-op
+- [x] T011 [US1] Verify SC-001 and SC-006 per [quickstart.md](quickstart.md) — fresh volume reaches ready within 90 s; an unmigrated database reports not-ready naming `migrations`
+- [x] T012 [US1] Verify SC-007 — `tests/health.test.ts` passes unmodified; every field spec 001 defined is still present
 
 **Checkpoint**: US1 done.
 

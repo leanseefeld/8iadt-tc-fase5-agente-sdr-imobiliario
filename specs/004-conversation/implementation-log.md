@@ -68,11 +68,19 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   separate row — so they can stack and the total is clamped to 100. That resolves the
   first ambiguity noted below in the T005 author's favour.
 
+- T009 — `src/domain/reply-guards.ts`: `splitSentences` (a dot between digits is a
+  thousands separator, not a full stop), `createReplyGuard` (streaming, carries the
+  question count across chunks) and `checkReply`. Four checks per sentence in order:
+  `leakedSyntax`, `language` (pt vs en stopword hits; words common to both languages
+  are in neither list), `unbackedFigure` (BRL and percentages parsed from
+  `R$ 850.000`, `850 mil`, `1,2 milhão`, `7%`), `questionCount`. All 17 T006 tests
+  green; whole suite 123 passing, 0 failing.
+
 ## In flight
 _(nothing)_
 
 ## Next step
-T009 — `src/domain/reply-guards.ts`, the sentence-level output guards.
+T010 — `src/domain/handoff.ts` (`handoffDecision`, `shouldProposeMeeting`).
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

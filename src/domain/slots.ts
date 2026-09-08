@@ -103,7 +103,8 @@ export function normalize(text: string): string {
   return text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 }
 
-function words(text: string): string[] {
+/** Accent-stripped words. `R$` survives as one token, and `850.000` as another. */
+export function tokenize(text: string): string[] {
   return normalize(text)
     .replace(/[^\p{Letter}\p{Number}$@.-]+/gu, " ")
     .split(" ")
@@ -113,7 +114,7 @@ function words(text: string): string[] {
 
 /** The askables a sentence appears to be asking about; empty when nothing matches. */
 export function questionTopics(sentence: string): Askable[] {
-  const present = new Set(words(sentence));
+  const present = new Set(tokenize(sentence));
   const topics: Askable[] = [];
   for (const [askable, table] of Object.entries(SLOT_TOPIC_WORDS) as [Askable, readonly string[]][]) {
     if (table.some((word) => present.has(normalize(word)))) topics.push(askable);

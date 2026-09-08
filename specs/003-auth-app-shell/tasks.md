@@ -52,9 +52,9 @@ added by spec 002's seed, so Setup is empty and gone. The guard file is
 and reusable by specs 005/006. Ordered before the UI because the login the
 shell calls lives in the same file.
 
-- [ ] T004 [US3] Implement `login(email, password, sourceIp)` in `src/services/auth.ts`: look up the `users` row by e-mail, `bcrypt.compare` against `passwordHash`, return the session payload or `null` — indistinguishable outcome between "no such user" and "wrong password" (FR-002); on `null`, log at `warn` with the attempted e-mail and `sourceIp`, never the password (FR-016)
-- [ ] T005 [US3] Implement `scopeForUser(session)` and `reassignLead(session, leadId, newBrokerId)` in `src/services/auth.ts` per [contracts/scope-for-user.md](contracts/scope-for-user.md): scoping is a pure `{ agencyId, defaultOwnLeadsOnly }`; reassignment rejects a non-`salesManager` session, validates the target is a same-agency `broker`, writes `leads.assignedBrokerId` and records the `lead.reassigned` event itself
-- [ ] T006 [US3] Write `tests/auth-service.test.ts`: `scopeForUser` unit cases run always; `login` and `reassignLead` cases run under `INTEGRATION=1` against the seeded users and leads, per [quickstart.md](quickstart.md) step 3
+- [x] T004 [US3] Implement `login(email, password, sourceIp)` in `src/services/auth.ts`: look up the `users` row by e-mail, `bcrypt.compare` against `passwordHash`, return the session payload or `null` — indistinguishable outcome between "no such user" and "wrong password" (FR-002); on `null`, log at `warn` with the attempted e-mail and `sourceIp`, never the password (FR-016)
+- [x] T005 [US3] Implement `scopeForUser(session)` and `reassignLead(session, leadId, newBrokerId)` in `src/services/auth.ts` per [contracts/scope-for-user.md](contracts/scope-for-user.md): scoping is a pure `{ agencyId, defaultOwnLeadsOnly }`; reassignment rejects a non-`salesManager` session, validates the target is a same-agency `broker`, writes `leads.assignedBrokerId` and records the `lead.reassigned` event itself
+- [x] T006 [US3] Write `tests/auth-service.test.ts`: `scopeForUser` unit cases run always; `login` and `reassignLead` cases run under `INTEGRATION=1` against the seeded users and leads, per [quickstart.md](quickstart.md) step 3
 
 **Checkpoint**: the scoping rule later specs depend on is implemented and tested.
 

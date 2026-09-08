@@ -31,12 +31,21 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   unknown-key dropping and `MergeResult.filled` ordering, and `isQualified`. Written
   against `src/domain/slots.ts`, which does not exist yet (T007) — the suite is red
   on `ERR_MODULE_NOT_FOUND` until T007–T010 land.
+- T005 — `tests/score.test.ts`, 14 tests: the zero/intent-only baseline, each
+  qualifying slot's 15 points, `contact`'s 15, the `immediate`/`soon` urgency
+  bonuses, the investment bonus (`returnExpectation` filled and not `undecided`
+  with `ticket >= 1_000_000`) and its two negative cases, the 100 cap (forced by
+  stacking the `soon` and investment bonuses on a fully filled purchase lead — see
+  the ambiguity note below), the exact 100/85 fully-filled purchase/investment
+  scores, and the 39/40 and 69/70 temperature boundaries. Imports `EMPTY_SLOTS`
+  from `src/domain/slots.ts` too, so this suite is red on `ERR_MODULE_NOT_FOUND`
+  until both T007 and T008 land.
 
 ## In flight
 _(nothing)_
 
 ## Next step
-T005–T006 — the remaining two domain test files, written before their subjects.
+T006 — the last domain test file, written before its subject.
 
 ## Gotchas discovered
 - Host has no Node; everything via `docker compose exec app …`.

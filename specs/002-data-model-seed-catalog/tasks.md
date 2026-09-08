@@ -107,10 +107,10 @@ Single project. `src/`, `tests/` at the repository root, per [plan.md](plan.md#s
 
 ## Phase 7: Polish
 
-- [ ] T032 [P] Confirm `tests/env-example.test.ts` still passes unmodified — this spec introduces no new environment variable
-- [ ] T033 Run `npm run lint` — confirm nothing under `src/app/(app)/catalogo/` imports `db/` or `drizzle-orm`
-- [ ] T034 Run [quickstart.md](quickstart.md) end to end on a clean volume, confirming SC-001 through SC-007
-- [ ] T035 [P] If drizzle-kit or the migration step surfaces a genuinely new host-only requirement, record it in `docs/arquitetura/restricoes-de-implantacao.md` — otherwise skip, nothing is expected
+- [x] T032 [P] Confirm `tests/env-example.test.ts` still passes unmodified — this spec introduces no new environment variable
+- [x] T033 Run `npm run lint` — confirm nothing under `src/app/(app)/catalogo/` imports `db/` or `drizzle-orm`
+- [x] T034 Run [quickstart.md](quickstart.md) end to end on a clean volume, confirming SC-001 through SC-007 — all pass except SC-003 (documented dataset-vs-doc deviation, see US2's commit and the final report)
+- [x] T035 [P] If drizzle-kit or the migration step surfaces a genuinely new host-only requirement, record it in `docs/arquitetura/restricoes-de-implantacao.md` — otherwise skip, nothing is expected — nothing new surfaced; skipped
 
 ---
 

@@ -18,6 +18,20 @@ services:
       retries: 12
       start_period: 5s
 
+  migrate:
+    build:
+      context: .
+      target: dev
+    command: node src/db/migrate.ts
+    env_file: [.env]
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - next_cache:/app/.next
+    depends_on:
+      db:
+        condition: service_healthy
+
   app:
     build:
       context: .
@@ -33,6 +47,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:${APP_PORT:-3000}/api/health/ready > /dev/null || exit 1"]
       interval: 10s
@@ -55,6 +71,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:${WORKER_HEALTH_PORT:-3001}/health/ready > /dev/null || exit 1"]
       interval: 10s

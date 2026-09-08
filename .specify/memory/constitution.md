@@ -117,6 +117,23 @@ without destroying the event history. No secrets in the repository.
 - Rate limiting per session, and prompt-injection guardrails on lead input. A lead
   asking the agent to ignore its instructions gets a polite refusal, not a discount.
 
+### X. User Experience Discipline
+
+Before creating or changing any screen or component, the author stops and answers,
+in the plan or the task, three questions: who is on this screen, what they came to
+do, and what the one most reasonable interaction is that gets them there smoothly.
+The change is then made for that interaction, not for the convenience of the code.
+
+Every screen has a visible information hierarchy — the summary before the detail,
+the primary action distinguishable from the secondary ones at a glance — and a
+visual hierarchy that encodes it through size, weight, spacing and position rather
+than through decoration. A screen where everything has the same emphasis is a
+defect, and so is a control whose effect is not clear from its label.
+
+Interactive state is always fed back: something being processed says so, a lost
+connection says so, an empty list explains why it is empty. Where the reference
+sketches in `reference/` and this principle disagree, this principle wins.
+
 ## Technology Stack
 
 Fixed for this project. Changing any row requires amending this constitution and
@@ -186,4 +203,4 @@ concrete second case is speculative generality, with two deliberate exceptions
 recorded in the decision log: `ChannelAdapter` and `JobQueue`, which exist because
 they are the seams the architecture argument rests on.
 
-**Version**: 1.1.0 | **Ratified**: 2026-08-30 | **Last Amended**: 2026-09-05
+**Version**: 1.2.0 | **Ratified**: 2026-08-30 | **Last Amended**: 2026-09-08

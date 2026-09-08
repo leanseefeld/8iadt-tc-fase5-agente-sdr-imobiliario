@@ -28,6 +28,8 @@ Chaves primárias são `uuid` geradas no banco. Toda tabela de negócio carrega
 | name, email | text | `email` único por agência |
 | passwordHash | text | |
 | role | enum `broker` · `salesManager` | |
+| specializations | jsonb `intent[]` | intenções que o corretor atende (`purchase`, `rental`, `investment`); vazio no gerente |
+| availability | jsonb | disponibilidade por dia da semana: `{ mon: { enabled, start, end }, … }`; padrão seg–sex 09:00–18:00 na seed; editável na agenda |
 
 ### leads
 
@@ -38,7 +40,7 @@ Chaves primárias são `uuid` geradas no banco. Toda tabela de negócio carrega
 | channel | enum `web` · `telegram` | |
 | externalId | text | identidade no canal (sessão do widget); único por agência + canal |
 | intent | enum `purchase` · `rental` · `investment` · `undefined` | |
-| status | enum `new` · `qualifying` · `qualified` · `scheduled` · `handoff` · `won` · `lost` · `unresponsive` | |
+| status | enum `new` · `qualifying` · `qualified` · `scheduled` · `visited` · `won` · `lost` | **etapa do funil**, só avança; o corretor pode marcar `won`/`lost` de qualquer etapa. Ver §7 |
 | score | int, padrão 0 | ver §3 |
 | assignedBrokerId | uuid, nulo → users | |
 | consentAt | timestamptz, nulo | opt-in declarado na abertura |
@@ -54,7 +56,10 @@ A **temperatura** (`cold` · `warm` · `hot`) não é coluna: deriva do score em
 |---|---|---|
 | id, agencyId, leadId | uuid | uma conversa ativa por lead |
 | channel | enum | igual ao lead |
-| status | enum `active` · `paused` · `closed` | `paused` = corretor assumiu |
+| status | enum `active` · `paused` · `closed` | **estado da conversa**: `paused` = um humano precisa responder; `closed` = encerrada (won/lost/opt-out) |
+| heldByUserId | uuid, nulo → users | quem assumiu; nulo com `paused` = "Aguardando corretor" |
+| followupState | enum `none` · `pending` · `exhausted` | **estado do follow-up**; `exhausted` = tentativas esgotadas sem resposta |
+| processingSince | timestamptz, nulo | turno em andamento; garante um turno por conversa e permite coalescer mensagens |
 | slots | jsonb | estado da qualificação, ver §2 |
 | summary | text, nulo | resumo gerado pelo worker |
 | previewLine | text, nulo | frase-chave para a lista de leads |
@@ -71,7 +76,8 @@ A **temperatura** (`cold` · `warm` · `hot`) não é coluna: deriva do score em
 | id, conversationId | uuid | |
 | role | enum `lead` · `agent` · `broker` · `system` | |
 | content | text | |
-| metadata | jsonb | `propertyIds` exibidos, `toolCalls`, `isFollowUp`, `appointmentId` |
+| repliesToMessageId | uuid, nulo | mensagens `agent`: a última mensagem do lead que o turno leu. Se houver mensagens do lead posteriores, o widget cita a primeira linha dela no topo do balão |
+| metadata | jsonb | chaves reservadas: `clientMessageId` (idempotência, 004), `guard` (guarda de código que reescreveu a resposta, 004), `propertyIds` exibidos (004), `toolCalls` (004), `isFollowUp` (006), `appointmentId` (006). Cada spec só escreve as suas. |
 | createdAt | timestamptz | índice `(conversationId, createdAt)` |
 
 ### properties
@@ -112,6 +118,9 @@ A **temperatura** (`cold` · `warm` · `hot`) não é coluna: deriva do score em
 | id, agencyId | uuid | |
 | leadId, conversationId | uuid, nulos | |
 | type | text | catálogo em §4 |
+| actorType | enum `lead` · `user` · `agent` · `worker` · `system` | quem fez |
+| actorUserId | uuid, nulo → users | preenchido quando `actorType = user` |
+| traceId | text, nulo | id do trace no Langfuse quando `agent`/`worker` chamou o modelo; a linha do tempo linka para ele |
 | payload | jsonb | |
 | createdAt | timestamptz | |
 | processedAt | timestamptz, nulo | **outbox**: nulo até um consumidor do worker tratar |
@@ -176,8 +185,10 @@ Função pura `scoreLead(intent, slots)` em `domain/`, recalculada a cada turno.
 Teto 100. Faixas: **frio < 40**, **morno 40–69**, **quente ≥ 70**.
 
 - `qualified` = todos os slots do roteiro preenchidos (exceto `name`/`contact`).
-- Handoff automático = quente **e** `contact` preenchido — que coincide com o fim
-  do roteiro; o agente propõe a reunião e avisa que um corretor assume.
+- Quente **e** `contact` preenchido = hora de **propor a reunião** (006). Não é
+  handoff: o agente segue no comando. Handoff (conversa `paused`) só quando o lead
+  pede uma pessoa, após dois fallbacks seguidos, ou quando um corretor assume
+  pelo painel.
 
 ---
 
@@ -192,13 +203,16 @@ Teto 100. Faixas: **frio < 40**, **morno 40–69**, **quente ≥ 70**.
 | `conversation.turn` | `{ messageId }` | 004 — consumido pelo resumidor (005) |
 | `lead.qualified` | `{ score }` | 005 |
 | `properties.suggested` | `{ propertyIds }` | 004 |
-| `handoff.requested` | `{ reason: 'asked' · 'fallback' · 'score' }` | 005 |
+| `handoff.requested` | `{ reason: 'asked' · 'fallback' }` — sem `score`: quente com contato propõe reunião (ADR 19) | 004 (agente) · 005 (regra `shouldHandoff`) |
 | `conversation.assumed` / `conversation.returned` | `{ userId }` | 005 |
 | `summary.updated` | `{}` | 005 |
 | `appointment.proposed` / `appointment.confirmed` | `{ appointmentId }` | 006 |
 | `followup.scheduled` / `followup.sent` | `{ attempt }` | 006 |
 | `followup.recovered` | `{ attempt }` — lead respondeu após follow-up | 006 |
 | `lead.opted_out` | `{}` | 004 |
+| `lead.status_changed` | `{ from, to }` | 004 (agente até `scheduled`) · 005 (corretor) · 006 (visita) |
+| `lead.reassigned` | `{ fromBrokerId, toBrokerId }` | 005 |
+| `appointment.done` / `appointment.cancelled` | `{ appointmentId }` | 006 |
 
 As métricas do painel derivam daqui: tempo de primeira resposta
 (`lead.created` → primeira mensagem `agent`), taxa de qualificação
@@ -216,3 +230,73 @@ Saúde), zona oeste (Pinheiros, Vila Madalena, Perdizes, Butantã), centro e zon
 norte (Santana), ~70 venda / ~30 aluguel, ~15 comerciais, preços coerentes com o
 bairro; e três leads de demonstração em estados distintos (quente com reunião
 marcada, morno em qualificação, frio parado há dois dias aguardando follow-up).
+
+---
+
+## 6. Contratos entre specs
+
+Assinaturas que mais de uma spec toca. Fixadas aqui em 06/09/2026 para que a
+primeira a implementar não decida sozinha.
+
+| Contrato | Forma | Dono | Consome |
+|---|---|---|---|
+| Registro de consumidores do worker (`src/jobs/consumers.ts`) | `type SweepConsumer = { name: string; run(ctx: { db: Database; now: Date; log: Logger }): Promise<void> }`; array exportado, iterado pelo loop do worker com try/catch por consumidor | 005 | 006 |
+| Tools de agendamento no registro do agente (`src/agent/tools/index.ts`) | `proposeMeeting()` e `bookMeeting({ optionIndex } \| { scheduledAt })`, declaradas como stubs em `scheduling.stub.ts` | 004 (stub) | 006 (implementa) |
+| Busca de imóveis (`services/properties.searchProperties(agencyId, criteria)`) | até 3, ranqueados; `criteria = { transaction, priceMax?, bedrooms?, neighborhoods? }` | 002 | 004 |
+| Escopo por papel (`scopeForUser(session)`) | `{ agencyId, assignedBrokerId }` para corretor, `{ agencyId }` para gerente | 003 | 005, 006 |
+| Transição de status após handoff | `handoff → scheduled` permitida quando uma visita é confirmada (decisão pendente de aval em 06/09/2026) | 005 | 006 |
+
+---
+
+## 7. Três eixos de estado (decidido em 08/09/2026, ADR 19)
+
+Um lead nunca é descrito por um único status. São três eixos independentes:
+
+| Eixo | Coluna | Valores | Quem muda |
+|---|---|---|---|
+| Etapa do funil | `leads.status` | `new → qualifying → qualified → scheduled → visited → won \| lost` | agente (até `scheduled`), worker (nunca), corretor (`visited`, `won`, `lost`, de qualquer etapa) |
+| Estado da conversa | `conversations.status` + `heldByUserId` | `active` · `paused` (com ou sem `heldByUserId`) · `closed` | agente (`paused` sem holder = pediu corretor), corretor (assumir/devolver/encerrar) |
+| Follow-up | `conversations.followupState` | `none` · `pending` · `exhausted` | worker e o turno do agente |
+
+Leituras derivadas para o painel:
+
+| Rótulo | Regra |
+|---|---|
+| Agente respondendo | `active` e último turno do agente |
+| *Nome* no comando | `paused` com `heldByUserId` |
+| Aguardando corretor | `paused` sem `heldByUserId` |
+| Encerrada | `closed` |
+| Ao vivo | `lastLeadMessageAt` há menos de `DASHBOARD_LIVE_WINDOW_MINUTES` |
+| Sem resposta | `followupState = exhausted` |
+| Visita *dia hora* | `status = scheduled` com appointment confirmado futuro |
+
+O caminho feliz fica com o agente: qualifica, busca, propõe horários, confirma. O
+corretor assume quando quer, de qualquer etapa. `handoff` e `unresponsive`
+deixaram de existir como etapas.
+
+### Regras do follow-up automático
+
+Agenda-se uma tentativa **somente** quando todas valem, e revalida-se na hora de
+enviar:
+
+1. conversa `active` (não `paused`, não `closed`)
+2. a última mensagem é do agente e deixou algo em aberto — pergunta pendente ou
+   proposta de horário sem escolha — segundo a slot machine, não o texto
+3. o lead não tem appointment confirmado futuro
+4. `doNotContact = false`
+5. `followupAttempts < FOLLOWUP_MAX_ATTEMPTS`
+
+Qualquer mensagem do lead cancela a tentativa pendente e zera a contagem. Devolver
+a conversa ao agente reinicia o relógio. Visita concluída ou cancelada **não**
+reativa follow-up automático: é decisão do corretor, pela agenda.
+
+### Turnos coalescidos
+
+Um turno por conversa (`processingSince`). Mensagens do lead que chegam durante um
+turno são gravadas e respondidas juntas no turno seguinte. Antes de iniciar um
+turno, o servidor espera `CHAT_DEBOUNCE_MS` desde a última mensagem do lead, para
+que rajadas ("oi" / "quero um apê" / "em Moema") virem um turno só. Toda resposta
+do agente grava `repliesToMessageId`.
+
+As chaves de configuração citadas aqui vivem em
+[`configuracoes.md`](configuracoes.md).

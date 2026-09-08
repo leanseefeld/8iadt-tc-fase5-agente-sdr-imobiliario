@@ -64,12 +64,12 @@ shell calls lives in the same file.
 
 **Goal / Independent Test**: submit `ana@demo.com.br` / `demo1234` at `/login`, confirm redirect to `/leads` with the top bar populated; "sair" ends the session.
 
-- [ ] T007 [US1] Define the shared palette in `src/app/globals.css` and point `src/app/(app)/catalogo/catalogo.module.css` at it — the shell and the login screen must not invent a second set of colours
-- [ ] T008 [US1] Implement `src/app/login/actions.ts`: `loginAction` reads the source IP, calls `login()`, signs and sets the cookie via `core/auth.ts`, logs the login with the new `userId`, redirects to `/leads`; returns the one generic pt-BR failure message otherwise (FR-002, FR-018)
-- [ ] T009 [US1] Implement `src/app/login/page.tsx` + its CSS Module: e-mail (autofocused) and password (visibility toggle) fields, one primary button, inline generic error, pt-BR, no sign-up or reset controls; redirect to `/leads` when `getSession()` is already valid (FR-005, FR-007)
-- [ ] T010 [US1] Implement `src/app/(app)/layout.tsx` + its CSS Module: top bar with product name, nav to Leads/Agenda/Catálogo with the current section visibly selected, the user's name and a role badge ("corretor"/"gerente comercial"), and "sair" as a secondary control calling a `logoutAction` that logs the logout with the session's `userId`, clears the cookie, then redirects to `/login` (FR-013, FR-018)
-- [ ] T011 [P] [US1] Implement placeholder pages `src/app/(app)/leads/page.tsx` and `src/app/(app)/agenda/page.tsx` — one static pt-BR line each (FR-014)
-- [ ] T012 [US1] Confirm `/catalogo` renders unchanged inside the shell — it moves under the guard by virtue of the route group, not by a rewrite (FR-015)
+- [x] T007 [US1] Define the shared palette in `src/app/globals.css` and point `src/app/(app)/catalogo/catalogo.module.css` at it — the shell and the login screen must not invent a second set of colours
+- [x] T008 [US1] Implement `src/app/login/actions.ts`: `loginAction` reads the source IP, calls `login()`, signs and sets the cookie via `core/auth.ts`, logs the login with the new `userId`, redirects to `/leads`; returns the one generic pt-BR failure message otherwise (FR-002, FR-018)
+- [x] T009 [US1] Implement `src/app/login/page.tsx` + its CSS Module: e-mail (autofocused) and password (visibility toggle) fields, one primary button, inline generic error, pt-BR, no sign-up or reset controls; redirect to `/leads` when `getSession()` is already valid (FR-005, FR-007)
+- [x] T010 [US1] Implement `src/app/(app)/layout.tsx` + its CSS Module: top bar with product name, nav to Leads/Agenda/Catálogo with the current section visibly selected, the user's name and a role badge ("corretor"/"gerente comercial"), and "sair" as a secondary control calling a `logoutAction` that logs the logout with the session's `userId`, clears the cookie, then redirects to `/login` (FR-013, FR-018)
+- [x] T011 [P] [US1] Implement placeholder pages `src/app/(app)/leads/page.tsx` and `src/app/(app)/agenda/page.tsx` — one static pt-BR line each (FR-014)
+- [x] T012 [US1] Confirm `/catalogo` renders unchanged inside the shell — it moves under the guard by virtue of the route group, not by a rewrite (FR-015)
 
 **Checkpoint**: a seeded user can log in, see the shell, and log out. Nothing guards the routes yet.
 
@@ -79,7 +79,7 @@ shell calls lives in the same file.
 
 **Goal / Independent Test**: with no cookie, request `/leads`, `/agenda`, `/catalogo` — each redirects to `/login`; the public chat responds normally.
 
-- [ ] T013 [US2] Implement `src/proxy.ts`: matcher on `/leads/:path*`, `/agenda/:path*`, `/catalogo/:path*`; `await`s `core/auth.ts`'s `verify()` on the `session` cookie, redirects to `/login` on `null`, passes through otherwise; logs nothing that would carry a `userId` it does not have (FR-008, FR-009, FR-018)
+- [x] T013 [US2] Implement `src/proxy.ts`: matcher on `/leads/:path*`, `/agenda/:path*`, `/catalogo/:path*`; `await`s `core/auth.ts`'s `verify()` on the `session` cookie, redirects to `/login` on `null`, passes through otherwise; logs nothing that would carry a `userId` it does not have (FR-008, FR-009, FR-018)
 
 **Checkpoint**: US1 + US2 together are the deployable MVP — login, shell, and enforcement.
 
@@ -87,9 +87,9 @@ shell calls lives in the same file.
 
 ## Phase 5: Verification
 
-- [ ] T014 Run the suites and the lint zone inside the container: `npm test`, `INTEGRATION=1 npm test`, `npm run lint` — the last confirms no `app/**` file imports `db/` or `drizzle-orm` directly
-- [ ] T015 Run [quickstart.md](quickstart.md) end to end with `curl`: login sets the cookie and reaches `/leads` (SC-001); wrong password and unknown e-mail give byte-identical text (SC-005); `/catalogo` renders inside the shell; "sair" then `/leads` redirects to `/login` (SC-007); a tampered and an absent cookie both redirect (SC-002); the public chat path is untouched by the guard (SC-003); log lines carry `userId` only where FR-018 requires it (SC-008)
-- [ ] T016 Confirm `AUTH_SECRET` removal stops the worker within 10 s naming the variable (SC-009), and that `docker build --target build .` still type-checks
+- [x] T014 Run the suites and the lint zone inside the container: `npm test`, `INTEGRATION=1 npm test`, `npm run lint` — the last confirms no `app/**` file imports `db/` or `drizzle-orm` directly
+- [x] T015 Run [quickstart.md](quickstart.md) end to end with `curl`: login sets the cookie and reaches `/leads` (SC-001); wrong password and unknown e-mail give byte-identical text (SC-005); `/catalogo` renders inside the shell; "sair" then `/leads` redirects to `/login` (SC-007); a tampered and an absent cookie both redirect (SC-002); the public chat path is untouched by the guard (SC-003); log lines carry `userId` only where FR-018 requires it (SC-008)
+- [x] T016 Confirm `AUTH_SECRET` removal stops the worker within 10 s naming the variable (SC-009), and that `docker build --target build .` still type-checks
 
 ---
 

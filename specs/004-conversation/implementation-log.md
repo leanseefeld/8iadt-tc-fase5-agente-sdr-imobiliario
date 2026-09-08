@@ -266,11 +266,28 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   `toolCalls: [updateSlots {neighborhoods}, recoverSlot {intent}]` — both halves of
   ADR 14 doing their job in one turn.
 
+- T026/T027 — `src/jobs/{consumers,unanswered-turns}.ts` and the worker sweep.
+  `consumers.ts` is `modelo-de-dados.md` §6 signature for signature: `SweepConsumer
+  = { name, run({ db, now, log }) }`, exported as an array, iterated by
+  `src/worker/index.ts` with a try/catch **per consumer** so one bad consumer costs
+  its own sweep and nobody else's — and `lastSweepAt` still moves, or a single bad
+  row would take the readiness probe down. §6 gives the file to 005; 004 creates it
+  because it needs `unanswered-turns` first, which plan.md's boundary notes already
+  allowed. The query is `findUnansweredConversations` in `services/conversation.ts`,
+  using the same "newer than the last agent/broker message" predicate `loadTurn`
+  uses, so the consumer re-runs exactly the turn the route handler would have. It
+  never touches a live turn: `processingSince` newer than `MODEL_TIMEOUT_MS × 2` is
+  skipped by the query and refused again by `claimTurn`, both on the same row.
+  Verified by restarting the worker: it found 7 conversations with unanswered lead
+  messages and committed a turn for each, ~7 s apiece, one of them with the
+  `unbackedFigure` guard firing on the model's own invented number.
+
 ## In flight
 - Nothing.
 
 ## Next step
-T026 — `unanswered-turns` in `src/jobs/consumers.ts`.
+T028 — `ChannelAdapter`, `InboundMessage` and `OutboundMessage` in
+`src/channels/types.ts` (group C).
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus
@@ -305,6 +322,10 @@ T026 — `unanswered-turns` in `src/jobs/consumers.ts`.
   token cap (2000 allowed, ~360 used). The provider does map `reasoning_content`
   onto `result.reasoningText`. Keep `MODEL_THINKING=false` for the demo; a turn run
   with it on will produce nothing to send.
+- The worker's `unanswered-turns` consumer answers **seeded** demo leads too — they
+  have lead messages with no agent reply after them, which is exactly the condition.
+  Run `docker compose exec app npm run db:seed` before a demo if the seeded
+  conversations need to look untouched.
 - `.env` is read by Compose at container start. After changing `MODEL_ID` there, run
   `docker compose up -d` or the running container keeps the old value — `docker
   compose exec -e MODEL_ID=… ` is the one-off workaround.

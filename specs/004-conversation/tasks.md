@@ -51,8 +51,8 @@ description: "Task list for the conversation slice"
 - [x] T023 [US1] Implement `src/agent/recovery.ts` — one `generateObject` for the pending slot alone, run only when the lead's message plausibly answered it and no `updateSlots` arrived
 - [x] T024 [US1] Implement `src/agent/orchestrator.ts` — load, compute, prompt, stream with tool calling, apply the guards at sentence boundaries, call `proposeMeeting` when the intent is `purchase`/`rental` with a hot score and known contact or when `investment`'s script ends (FR-040/041), decide handoff on the two remaining triggers, then commit
 - [x] T025 [US1] Enforce the consent gate ahead of the model call: lead text before `consentAt` gets the fixed pt-BR template reply, no model call, not persisted as a turn; the script starts only once "Aceito" is recorded (FR-018/019)
-- [ ] T026 [US1] Register `unanswered-turns` in `src/jobs/consumers.ts` (create the registry per `modelo-de-dados.md` §6 if spec 005 has not merged it) — re-runs turns whose lead messages are older than `CHAT_DEBOUNCE_MS` with no live, non-stale `processingSince` (FR-046)
-- [ ] T027 [US1] Wire the consumer registry into `src/worker/index.ts`'s sweep loop, iterating with try/catch per consumer
+- [x] T026 [US1] Register `unanswered-turns` in `src/jobs/consumers.ts` (create the registry per `modelo-de-dados.md` §6 if spec 005 has not merged it) — re-runs turns whose lead messages are older than `CHAT_DEBOUNCE_MS` with no live, non-stale `processingSince` (FR-046)
+- [x] T027 [US1] Wire the consumer registry into `src/worker/index.ts`'s sweep loop, iterating with try/catch per consumer
 
 **Checkpoint**: a turn runs and persists; nothing is visible in a browser yet.
 

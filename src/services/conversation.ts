@@ -246,6 +246,46 @@ export async function claimTurn(conversationId: string, now: Date = new Date()):
   return claimed.length > 0;
 }
 
+/**
+ * FR-046: conversations whose lead messages have gone unanswered longer than
+ * `CHAT_DEBOUNCE_MS` with nobody working on them — a replica that died mid-turn,
+ * or a route handler whose debounce timer went down with it.
+ *
+ * The predicate is the same one `loadTurn` uses for `unanswered`, so the consumer
+ * re-runs exactly the turn the route handler would have run. `paused` and
+ * `closed` are excluded here as well as in `claimTurn`: a conversation a broker
+ * holds must not be woken by a sweep.
+ */
+export async function findUnansweredConversations(
+  now: Date = new Date(),
+  limit = 25,
+): Promise<Array<{ id: string; agencyId: string }>> {
+  const debounceCutoff = new Date(now.getTime() - getConfig().CHAT_DEBOUNCE_MS);
+  const stale = staleTurnCutoff(now);
+
+  const rows = await getDb()
+    .select({ id: conversations.id, agencyId: conversations.agencyId })
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.status, "active"),
+        or(isNull(conversations.processingSince), lt(conversations.processingSince, stale)),
+        sql`exists (
+          select 1 from messages m
+          where m.conversation_id = ${conversations.id}
+            and m.role = 'lead'
+            and m.created_at < ${debounceCutoff}
+            and m.created_at > coalesce((select max(m2.created_at) from messages m2
+                  where m2.conversation_id = ${conversations.id} and m2.role in ('agent','broker')),
+                to_timestamp(0)))`,
+      ),
+    )
+    .orderBy(asc(conversations.lastLeadMessageAt))
+    .limit(limit);
+
+  return rows;
+}
+
 /** Hands the conversation back when a turn ends without committing. */
 export async function releaseTurn(conversationId: string): Promise<void> {
   await getDb()

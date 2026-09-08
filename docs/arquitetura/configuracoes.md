@@ -17,6 +17,7 @@ cria uma chave acrescenta a linha aqui no mesmo commit.
 | `CHAT_MAX_MESSAGE_CHARS` | `1000` | agência | 004 | tamanho máximo de uma mensagem do lead |
 | `CHAT_TYPING_DELAY_MS` | `300–800` | agência | 004 | pausa humanizada antes do primeiro token |
 | `SSE_PULSE_INTERVAL_MS` | `15000` | global | 004 | pulso de keep-alive nos streams |
+| `LANGFUSE_UI_PORT` | `3102` | global | 004 | porta do host em que a interface do Langfuse é publicada (só o Compose lê) |
 | `SUMMARY_DEBOUNCE_SECONDS` | `20` | agência | 005 | espera após o último turno antes de resumir |
 | `DASHBOARD_LIVE_WINDOW_MINUTES` | `10` | agência | 005 | "ao vivo" = última mensagem do lead dentro da janela |
 | `DASHBOARD_REFRESH_MS` | via SSE | agência | 005 | atualização do painel |

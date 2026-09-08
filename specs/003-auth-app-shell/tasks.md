@@ -17,7 +17,7 @@ needs a verifiable cookie before it can be tested at all.
 
 ## Format: `[ID] [P?] [Story] Description`
 
-`[P]` = different file, no dependency on an incomplete task. `[Story]` = US1–US4 per [spec.md](spec.md). Single project; `src/`, `tests/` at the repository root, per [plan.md](plan.md#source-code-repository-root).
+`[P]` = different file, no dependency on an incomplete task. `[Story]` = US1–US3 per [spec.md](spec.md). Single project; `src/`, `tests/` at the repository root, per [plan.md](plan.md#source-code-repository-root).
 
 ---
 
@@ -70,37 +70,24 @@ needs a verifiable cookie before it can be tested at all.
 
 ---
 
-## Phase 5: User Story 3 — Leads are visible only to the right role (P2)
+## Phase 5: User Story 3 — Every role sees the whole agency; managers reassign leads (P2)
 
 **Goal / Independent Test**: `scopeForUser()` and `reassignLead()` are correct and reusable by specs 005/006 — apply the scoping helper with each role against the seeded leads; call `reassignLead` as each role.
 
-- [ ] T016 [P] [US3] Write unit tests for `scopeForUser()` in `tests/auth-service.test.ts` — broker and salesManager sessions produce the two documented criteria shapes; no database needed, it is a pure function
+- [ ] T016 [P] [US3] Write unit tests for `scopeForUser()` in `tests/auth-service.test.ts` — broker and salesManager sessions both produce `{ agencyId, defaultOwnLeadsOnly }`, `true` for broker and `false` for salesManager; no database needed, it is a pure function
 - [ ] T017 [US3] Implement `scopeForUser(session)` in `src/services/auth.ts` per [contracts/scope-for-user.md](contracts/scope-for-user.md) (satisfies T016)
-- [ ] T018 [US3] Implement `reassignLead(session, leadId, newBrokerId)` in `src/services/auth.ts`: rejects a non-`salesManager` session with no effect; validates the target is a same-agency `broker` before writing `leads.assignedBrokerId`. **Blocked on spec 002's `users`/`leads` schema.**
-- [ ] T019 [US3] Write `INTEGRATION=1` cases in `tests/auth-service.test.ts` against the seeded leads: broker/manager scoping returns the documented rows; `reassignLead` succeeds for a manager and is rejected for a broker, per [quickstart.md](quickstart.md) step 3
+- [ ] T018 [US3] Implement `reassignLead(session, leadId, newBrokerId)` in `src/services/auth.ts`: rejects a non-`salesManager` session with no effect; validates the target is a same-agency `broker` before writing `leads.assignedBrokerId`; on success records a `lead.reassigned` event (`actorType: "user"`, `actorUserId = session.userId`, `payload { fromBrokerId, toBrokerId }`) per [contracts/scope-for-user.md](contracts/scope-for-user.md). **Blocked on spec 002's `users`/`leads` schema.**
+- [ ] T019 [US3] Write `INTEGRATION=1` cases in `tests/auth-service.test.ts` against the seeded leads: broker/manager scoping both return every agency lead with the documented `defaultOwnLeadsOnly`; `reassignLead` succeeds for a manager (and records the event) and is rejected for a broker (no event), per [quickstart.md](quickstart.md) step 3
 
 **Checkpoint**: the scoping rule later specs depend on is implemented and tested, with no dashboard yet to expose it.
 
 ---
 
-## Phase 6: User Story 4 — Repeated failed logins are throttled (P3)
+## Phase 6: Polish
 
-**Goal / Independent Test**: brute-forcing the three seeded passwords is throttled per source IP — fail past the configured threshold, confirm the next attempt is rejected before any credential check, then confirm recovery after cool-down.
-
-- [ ] T020 [US4] Add `LOGIN_RATE_LIMIT_MAX_ATTEMPTS`, `LOGIN_RATE_LIMIT_WINDOW_MS` and `LOGIN_RATE_LIMIT_COOLDOWN_MS` to `src/core/config.ts` and `.env.example` together — Environment Contract gate
-- [ ] T021 [US4] Implement the in-memory per-IP attempt counter in `src/services/auth.ts`, wired into `login()`: reject before checking credentials once the threshold is reached inside the window; reset on cool-down or on a successful login; log each failed attempt at `warn` with the attempted e-mail and source IP, never the password (FR-016)
-- [ ] T022 [P] [US4] Write unit tests for the rate limiter in `tests/auth-service.test.ts` — threshold, cool-down reset, success reset — using an injectable clock, not real `setTimeout`
-- [ ] T023 [US4] Verify SC-006 per [quickstart.md](quickstart.md) step 5
-
-**Checkpoint**: all four stories complete.
-
----
-
-## Phase 7: Polish
-
-- [ ] T024 [P] Run `npm run lint` — confirm `src/services/auth.ts` is the only module under this slice importing `users`/`leads`, and no `app/**` file imports `db/` or `drizzle-orm` directly
-- [ ] T025 Run [quickstart.md](quickstart.md) steps 6–7 end to end inside the container: `AUTH_SECRET` removal stops both processes naming it within 10 s (SC-009); a full login → authenticated request → logout → anonymous request cycle shows `userId` present only where FR-018 (as amended) requires it (SC-008)
-- [ ] T026 Confirm `docker build --target build .` still succeeds — the only type-checking gate, per spec 001's implementation notes
+- [ ] T020 [P] Run `npm run lint` — confirm `src/services/auth.ts` is the only module under this slice importing `users`/`leads`, and no `app/**` file imports `db/` or `drizzle-orm` directly
+- [ ] T021 Run [quickstart.md](quickstart.md) steps 5–6 end to end inside the container: `AUTH_SECRET` removal stops both processes naming it within 10 s (SC-009); a full login → authenticated request → logout → anonymous request cycle shows `userId` present only where FR-018 (as amended) requires it (SC-008)
+- [ ] T022 Confirm `docker build --target build .` still succeeds — the only type-checking gate, per spec 001's implementation notes
 
 ---
 
@@ -108,10 +95,10 @@ needs a verifiable cookie before it can be tested at all.
 
 ### Phases
 
-Setup → Foundational → US1 → US2 → US3 → US4 → Polish.
+Setup → Foundational → US1 → US2 → US3 → Polish.
 
 - **US2 needs US1's login** to have something to guard; `middleware.ts` itself is independent and could be written in parallel, tested only once US1 lands.
-- **US3 and US4 need Foundational only** — `scopeForUser`, `reassignLead` and the rate limiter share a file with `login()` but not its UI tasks. Ordered after US1/US2 by spec priority, not a hard dependency.
+- **US3 needs Foundational only** — `scopeForUser` and `reassignLead` share a file with `login()` but not its UI tasks. Ordered after US1/US2 by spec priority, not a hard dependency.
 - **T012 and T018 are blocked on spec 002.** Everything else does not wait on it.
 
 ### Parallel opportunities
@@ -119,8 +106,7 @@ Setup → Foundational → US1 → US2 → US3 → US4 → Polish.
 - Foundational: T006 alongside T004/T005
 - US1: T011 independent of T007–T010, T012
 - US3: T016 alongside T017; T019 after both
-- US4: T022 alongside T021
-- Polish: T024 alongside anything
+- Polish: T020 alongside anything
 
 ---
 
@@ -128,8 +114,8 @@ Setup → Foundational → US1 → US2 → US3 → US4 → Polish.
 
 **MVP is Setup + Foundational + US1 + US2** — the guard is real and a seeded
 user can use the shell, the two P1 stories that make this slice worth
-merging alone. US3/US4 are worth finishing before specs 005/006 start but
-block neither.
+merging alone. US3 is worth finishing before specs 005/006 start but blocks
+neither.
 
 ## Notes
 

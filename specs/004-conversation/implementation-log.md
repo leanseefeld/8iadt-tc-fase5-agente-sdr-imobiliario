@@ -210,11 +210,29 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   (`proposeMeeting()` takes no arguments; the viewing/call distinction is decided
   in `domain/handoff.shouldProposeMeeting`, not by the model).
 
+- T023 — `src/agent/recovery.ts`: `plausiblyAnswers` (a greeting, a reaction or an
+  emoji is the spec's "noise instead of an answer" and must not cost a call) and
+  `recoverSlot`, one `generateObject` over a one-field schema. Two things had to
+  change to make it work, both proved by `scripts/recovery-smoke.ts`:
+  `generateObject` is the one call whose options are `Omit<RequestOptions,
+  'timeout'>`, so FR-014's bound is applied as `AbortSignal.timeout`; and
+  `createOpenAICompatible` needs `supportsStructuredOutputs: true` or it sends no
+  `response_format` at all and every structured call comes back as
+  "response did not match schema". oMLX does support `response_format:
+  json_schema` — probed by hand first. With both in place all five Cenário 1
+  answers extract correctly in ~0.5–2.5 s each, an order of magnitude better than
+  the tool call, which is why recovery is the safety net that carries the turn
+  when the tool arrives malformed. `SLOT_HINTS` moved into `prompts/system.ts` so
+  the extraction call and the recovery call read a slot the same way; its `intent`
+  line writes down the spec's own default (US1 scenario 1 reads "procurando
+  apartamento na zona sul" as `purchase`), without which the model guessed
+  `investment`.
+
 ## In flight
 - Nothing.
 
 ## Next step
-T023 — `src/agent/recovery.ts`, the single-slot `generateObject` fallback.
+T024 — `src/agent/orchestrator.ts`, one turn end to end.
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

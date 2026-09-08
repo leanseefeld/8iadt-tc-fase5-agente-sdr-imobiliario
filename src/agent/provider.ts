@@ -49,6 +49,12 @@ function buildProvider() {
   return createOpenAICompatible({
     name: "sdr-provider",
     baseURL: config.PROVIDER_BASE_URL,
+    // Off by default in this provider, and without it `generateObject` sends no
+    // `response_format` at all and every structured call fails to parse.
+    // Verified against oMLX on 08/09/2026: a `json_schema` response format comes
+    // back as clean JSON. A gateway that lacks it degrades to the same failure
+    // `agent/recovery.ts` already treats as "the slot stays empty".
+    supportsStructuredOutputs: true,
     // `apiKey` means `Authorization: Bearer`. When a header name is configured
     // the key goes there instead, and only there — never both.
     ...(header === undefined

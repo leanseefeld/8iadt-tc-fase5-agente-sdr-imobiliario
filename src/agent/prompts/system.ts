@@ -202,6 +202,34 @@ export function turnSystemPrompt(input: TurnPromptInput): string {
 }
 
 /**
+ * How to read one slot out of a Brazilian sentence. Shared by the extraction call
+ * and by `agent/recovery.ts`, so a slot is read the same way whichever path got
+ * to it. The `intent` line is the spec's own default (US1 scenario 1 reads
+ * "procurando apartamento na zona sul" as `purchase`), written down here rather
+ * than left to the model's mood.
+ */
+export const SLOT_HINTS: Record<Askable, string> = {
+  intent:
+    "purchase para comprar, rental para alugar, investment para investir. " +
+    "Quem procura imóvel sem dizer a finalidade está comprando: use purchase. " +
+    "Só use rental se a pessoa falar em alugar ou aluguel, e investment se ela " +
+    "falar em investir, renda, rentabilidade ou retorno.",
+  priceMax: 'Número inteiro em reais: "700 mil" é 700000, "1,2 milhão" é 1200000.',
+  bedrooms: "Número inteiro de quartos. \"pelo menos 2\" é 2.",
+  neighborhoods:
+    "Lista de strings, mesmo com um bairro só. Lista vazia significa \"aberto a sugestões\". " +
+    "Uma zona da cidade também vale como bairro.",
+  urgency: "immediate até 3 meses, soon de 3 a 12 meses, exploring sem prazo definido.",
+  investorProfile: "firstTime na primeira aplicação em imóveis, experienced se já investe.",
+  ticket: "Número inteiro em reais.",
+  returnExpectation:
+    "income para renda de aluguel, appreciation para valorização, both para os dois, " +
+    "undecided se a pessoa não decidiu.",
+  name: "Só o nome pelo qual a pessoa quer ser chamada.",
+  contact: "Telefone ou e-mail, exatamente como a pessoa escreveu.",
+};
+
+/**
  * The extraction call is a different job and gets a different prompt: no persona,
  * no voice, one instruction. It must produce a `updateSlots` call and nothing else.
  */
@@ -211,12 +239,10 @@ export function extractionSystemPrompt(intent: Intent, slots: Slots, pending: As
     "Você extrai dados de uma conversa imobiliária em português. Você não conversa.",
     "",
     "Chame a ferramenta updateSlots com o que a ÚLTIMA mensagem da pessoa informou.",
-    "Regras da extração:",
-    "- Use null para tudo que a pessoa não disse. Não adivinhe, não complete.",
-    "- objetivo (intent): purchase para comprar, rental para alugar, investment para investir.",
-    "- Valores em reais são números inteiros: \"700 mil\" é 700000, \"1,2 milhão\" é 1200000.",
-    "- neighborhoods é uma lista de strings, mesmo com um bairro só. Lista vazia significa \"tanto faz\".",
-    "- urgency: immediate até 3 meses, soon de 3 a 12 meses, exploring sem prazo.",
+    "Use null para tudo que a pessoa não disse. Não adivinhe o que ela não falou.",
+    "",
+    "Como ler cada campo:",
+    ...(Object.keys(SLOT_HINTS) as Askable[]).map((slot) => `- ${slot}: ${SLOT_HINTS[slot]}`),
     "",
     "Já registrado (não repita, não altere):",
     renderSlots(intent, slots),

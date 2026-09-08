@@ -396,3 +396,44 @@ agents that never open the constitution.
 **Consequences.** Plans for UI slices carry a short "who, what, how" paragraph
 per screen, and reviews can reject a screen for flat hierarchy or missing
 feedback rather than only for broken code.
+
+## 19. Three state axes, agent-owned booking, SSE over Postgres notifications
+
+**Accepted 2026-09-08**, after the developer's review of specs 002–006.
+
+**Context.** The specs had merged pipeline stage, human takeover and follow-up
+exhaustion into one `leads.status`, which made "handoff cannot become
+scheduled" a dead end, and had the agent hand a hot lead to a human at the very
+moment it should be booking a visit. Real-time delivery was polling.
+
+**Decision.**
+- Three independent axes: pipeline stage on the lead (`new → qualifying →
+  qualified → scheduled → visited → won | lost`, forward only, broker may set
+  won/lost from any stage); conversation state (`active | paused | closed` plus
+  `heldByUserId`); follow-up state (`none | pending | exhausted`). Details and
+  derived dashboard labels in `modelo-de-dados.md` §7.
+- The agent owns the happy path through booking; human takeover is the
+  exception (lead asks, two fallbacks, or a broker assumes from the dashboard).
+- Real-time delivery is Server-Sent Events fed by Postgres `LISTEN/NOTIFY`:
+  one listening connection per replica, notifications carry ids only, the
+  server re-reads scoped by agency and conversation before writing to a stream,
+  15 s pulse, graceful `goodbye` on SIGTERM, replay from the last event id on
+  reconnect. No polling anywhere. Behind a `Notifier` interface so Redis or a
+  managed pub/sub is a one-module swap at thousands of tenants.
+- Turns are coalesced: one in-flight turn per conversation, 3 s debounce,
+  every agent message records `repliesToMessageId`; the widget quotes the
+  last-read lead message when newer ones exist. Per-session message budget per
+  30-minute window replaces rate limiting; the login rate limit is dropped.
+- Events carry `actorType`, `actorUserId` and the Langfuse `traceId`; Langfuse
+  session id = conversation id.
+- Brokers see the whole agency by default-filtered list ("Meus leads"); they
+  carry specializations by intent and a per-weekday availability.
+- Thinking mode on oMLX is a config flag injecting `chat_template_kwargs`.
+
+**Alternatives considered.** WebSockets (needs a custom server Next.js does not
+provide and adds connection state for no functional gain here); keeping a single
+status enum (simpler schema, wrong model).
+
+**Consequences.** Schema gains a handful of columns before any code exists,
+which is the cheapest moment. The pitch tells a normal CRM funnel story. The
+scalability limits of NOTIFY are documented honestly in `visao-geral.md`.

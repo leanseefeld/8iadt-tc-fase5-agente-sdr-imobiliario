@@ -40,12 +40,45 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   scores, and the 39/40 and 69/70 temperature boundaries. Imports `EMPTY_SLOTS`
   from `src/domain/slots.ts` too, so this suite is red on `ERR_MODULE_NOT_FOUND`
   until both T007 and T008 land.
+- T006 — `tests/reply-guards.test.ts`, 17 tests: `splitSentences` on a
+  three-sentence reply; each FR-012 rejection (English, three questions, a
+  non-refining second question, an unbacked BRL amount, an unbacked percentage,
+  and three leaked-syntax variants — a `toolCall` JSON blob, a `<tool_call>` tag,
+  a "system prompt" mention) with its exact `guard` name; the accepted cases
+  (the doc's own refining-question example, a next-slot preview, a plain
+  one-question reply, a too-short exclamation, and `R$ 850.000` / `850 mil` as
+  the same allowed figure); and `createReplyGuard` counting questions across
+  sentences rather than per sentence. Written against
+  `src/domain/reply-guards.ts` (T009) before it exists — red on
+  `ERR_MODULE_NOT_FOUND` until T007–T010 land. Group A (T004–T013) is now fully
+  written on the test side; T007–T013 remain to turn it green.
 
 ## In flight
 _(nothing)_
 
 ## Next step
-T006 — the last domain test file, written before its subject.
+T007 — implement `src/domain/slots.ts` (script, `mergeSlots`, `nextQuestion`),
+the first of the four pure-core modules the T004–T006 suites are waiting on.
+
+## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
+- **Score cap.** The weight table never states whether the two `+15` bonus
+  branches (`urgency === immediate` vs. the investment return/ticket condition)
+  can both fire on the same lead. Because `Slots` is one flat type shared by
+  every intent, a `purchase` lead can carry non-null `ticket`/`returnExpectation`
+  values that were never asked by its script. I assumed the two branches are
+  independent additions and wrote the "cap at 100" test by stacking
+  `urgency: "soon"` (+5) with a satisfied investment condition (+15) on top of a
+  fully filled purchase script (105 uncapped) and asserting `scoreLead` clamps
+  it to 100. If T008 clamps or short-circuits differently, this one test may
+  need adjusting — everything else in `score.test.ts` follows the table
+  unambiguously.
+- **`mergeSlots` on an explicit `undefined` value.** Rule 1 says a filled slot
+  is never replaced by "null or undefined", but `extraction` keys carrying a
+  literal JS `undefined` are indistinguishable from an absent key once the
+  extraction has round-tripped through JSON. I tested only the `null` case,
+  which is unambiguous, and left the `undefined`-value case untested rather
+  than assume which of "no-op, not dropped" vs. "no-op, dropped" T007 will
+  implement.
 
 ## Gotchas discovered
 - Host has no Node; everything via `docker compose exec app …`.

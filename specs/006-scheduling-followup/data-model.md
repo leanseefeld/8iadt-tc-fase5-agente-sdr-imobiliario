@@ -25,13 +25,22 @@ type Interval = { start: Date; end: Date };
 type Option = { scheduledAt: Date; type: 'viewing' | 'call' };
 
 // services/scheduling.ts
+type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+type WeekdayAvailability = { enabled: boolean; start: string; end: string };
+// users.availability's shape — read by loadBrokerAvailability, written whole by
+// saveBrokerAvailability (FR-008a), seeded Mon–Fri 09:00–18:00 (§1 of
+// modelo-de-dados.md; not a new column, just its read/write shape here).
+
 type ProposeResult =
   | { ok: true; appointmentId: string; options: Option[] }
   | { ok: false; reason: 'no_brokers' | 'no_slots' };
 
 type BookResult =
   | { ok: true; appointmentId: string; scheduledAt: Date; type: 'viewing' | 'call'; propertyCode?: string }
-  | { ok: false; reason: 'collision' | 'outside_window' | 'too_soon' | 'weekend' | 'no_proposal' };
+  | { ok: false; reason: 'collision' | 'too_soon' | 'unavailable' | 'no_proposal' };
+// 'too_soon' — inside SCHEDULING_MIN_NOTICE_MINUTES; 'unavailable' — the broker's
+// own users.availability does not enable that weekday or hour (replaces the
+// fixed 'outside_window'/'weekend' pair, since availability is per broker now).
 
 // services/scheduling.ts — agenda read
 type AgendaGroup = { label: 'Hoje' | 'Amanhã' | string; date: string; rows: AgendaRow[] };
@@ -53,3 +62,11 @@ proposal-then-booking (Clarifications, Q1). `followup_jobs.status`: `pending →
 {running → {sent | cancelled | pending} | failed}` — `running` always resolves back
 to one of the other four within the same sweep; a row is never left `running`
 across sweeps because the claim and the send happen in the same worker pass.
+
+`conversations.followupState`: `{none | exhausted} → pending → {none | exhausted}`.
+It moves to `pending` with the first enqueued attempt (FR-009) — including from
+`exhausted`, when a returned conversation restarts the clock (FR-009a) — back to
+`none` on any inbound lead reply regardless of how many attempts fired (FR-010,
+`followupAttempts` resets with it), and to `exhausted` only when the last attempt
+at the configured maximum sends unanswered (FR-016) — never set directly by a
+booking or an appointment closure.

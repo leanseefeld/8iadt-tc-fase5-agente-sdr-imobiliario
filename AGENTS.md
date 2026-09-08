@@ -47,6 +47,11 @@ instead of inventing an answer.
   require an entry in `docs/arquitetura/restricoes-de-implantacao.md`.
 - **No Redis.** Async work is `followup_jobs` + `events` in Postgres, polled with
   `FOR UPDATE SKIP LOCKED`.
+- **UI changes start from the user, not the code.** Before touching a screen, state
+  who is there, what they came to do and the smoothest interaction for it; then
+  build that, with a clear information hierarchy (summary before detail, one
+  primary action) and a visual hierarchy that shows it. Processing, lost
+  connections and empty states always give feedback. Constitution principle X.
 
 ## Structure
 

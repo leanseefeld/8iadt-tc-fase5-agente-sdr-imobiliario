@@ -297,9 +297,12 @@ export type InboundResult =
  * session over `CHAT_MESSAGE_BUDGET` inside its window. The caller answers each
  * with the fixed pt-BR template of `contracts/chat-api.md` §2.
  *
- * Idempotency is the unique index, not a read-then-write check: the second
- * arrival of a `clientMessageId` raises a unique violation that is caught and
- * reported as `duplicate`, so no second lead message and no second turn (FR-035).
+ * Idempotency is the unique index of `data-model.md` §5, not a read-then-write
+ * check: the second arrival of a `clientMessageId` conflicts, inserts nothing and
+ * is reported as `duplicate`, so no second lead message and no second turn
+ * (FR-035). `on conflict do nothing` rather than catch-and-continue, because a
+ * raised unique violation aborts the whole transaction in Postgres and would
+ * take the lead and the conversation created above down with it.
  */
 export async function recordLeadMessage(inbound: InboundLeadMessage): Promise<InboundResult> {
   const db = getDb();
@@ -334,7 +337,11 @@ export async function recordLeadMessage(inbound: InboundLeadMessage): Promise<In
     const newEvents: PendingEvent[] = [];
 
     if (leadId === undefined || conversationId === undefined) {
-      const [lead] = await tx
+      // Two tabs opening at once both read "no conversation" and both try to
+      // create the lead. `on conflict do nothing` lets the loser re-read the
+      // winner's row instead of aborting its whole transaction on the
+      // `(agency, channel, externalId)` unique index.
+      const [created] = await tx
         .insert(leads)
         .values({
           agencyId: agency.id,
@@ -344,18 +351,51 @@ export async function recordLeadMessage(inbound: InboundLeadMessage): Promise<In
           createdAt: now,
           updatedAt: now,
         })
-        .returning({ id: leads.id });
-      leadId = lead.id;
+        .onConflictDoNothing()
+        .returning({ id: leads.id, consentAt: leads.consentAt });
 
-      const [conversation] = await tx
-        .insert(conversations)
-        .values({ agencyId: agency.id, leadId, channel, createdAt: now, updatedAt: now })
-        .returning({ id: conversations.id });
-      conversationId = conversation.id;
-      conversationStatus = "active";
+      if (created === undefined) {
+        const [found] = await tx
+          .select({ id: leads.id, consentAt: leads.consentAt })
+          .from(leads)
+          .where(
+            and(
+              eq(leads.agencyId, agency.id),
+              eq(leads.channel, channel),
+              eq(leads.externalId, inbound.externalId),
+            ),
+          )
+          .limit(1);
+        if (found === undefined) throw new Error("lead vanished between insert and read");
+        leadId = found.id;
+        if (found.consentAt === null) {
+          await tx.update(leads).set({ consentAt: now, updatedAt: now }).where(eq(leads.id, leadId));
+          newEvents.push({ type: "lead.consented", payload: {} });
+        }
+      } else {
+        leadId = created.id;
+        newEvents.push({ type: "lead.created", payload: { channel } });
+        newEvents.push({ type: "lead.consented", payload: {} });
+      }
 
-      newEvents.push({ type: "lead.created", payload: { channel } });
-      newEvents.push({ type: "lead.consented", payload: {} });
+      const [openConversation] = await tx
+        .select({ id: conversations.id, status: conversations.status })
+        .from(conversations)
+        .where(and(eq(conversations.leadId, leadId), eq(conversations.agencyId, agency.id)))
+        .orderBy(desc(conversations.createdAt))
+        .limit(1);
+
+      if (openConversation === undefined) {
+        const [conversation] = await tx
+          .insert(conversations)
+          .values({ agencyId: agency.id, leadId, channel, createdAt: now, updatedAt: now })
+          .returning({ id: conversations.id });
+        conversationId = conversation.id;
+        conversationStatus = "active";
+      } else {
+        conversationId = openConversation.id;
+        conversationStatus = openConversation.status;
+      }
     } else if (existing?.lead.consentAt == null) {
       await tx
         .update(leads)
@@ -365,12 +405,8 @@ export async function recordLeadMessage(inbound: InboundLeadMessage): Promise<In
     }
 
     let messageId: string | null = null;
-    let duplicate = false;
 
     if (text !== "") {
-      // `on conflict do nothing` rather than catch-and-continue: a raised
-      // unique violation aborts the whole transaction in Postgres, and the
-      // lead and conversation created above would go with it.
       const stored = await tx
         .insert(messages)
         .values({
@@ -383,10 +419,11 @@ export async function recordLeadMessage(inbound: InboundLeadMessage): Promise<In
         .onConflictDoNothing()
         .returning({ id: messages.id });
       messageId = stored[0]?.id ?? null;
-      duplicate = messageId === null;
     }
 
-    if (!duplicate && messageId !== null) {
+    const duplicate = text !== "" && messageId === null;
+
+    if (messageId !== null) {
       await tx
         .update(conversations)
         .set({ lastLeadMessageAt: now, updatedAt: now })

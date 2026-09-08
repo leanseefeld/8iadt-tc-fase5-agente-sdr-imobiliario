@@ -166,11 +166,26 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   four (`user`, `reasoningEffort`, `textVerbosity`, `strictJsonSchema`).
   `scripts/model-smoke.ts` proves it against the real model — see Gotchas.
 
+- T018 — `recordLeadMessage` in `src/services/conversation.ts`. The `wip(004)`
+  partial from the previous session was reviewed and kept: its shape was right.
+  Two things were finished on top of it. First, the lead insert is now
+  `on conflict do nothing` plus a re-read, because two tabs opening at once both
+  see "no conversation" and both try to create the lead — the loser used to abort
+  its whole transaction on `leads_agency_channel_external_unique`. Second, an
+  existing lead with no loaded conversation now adopts its latest conversation
+  instead of blindly creating a second one. Idempotency is `on conflict do
+  nothing` on the message insert against the T014 partial index, never
+  catch-and-continue: a raised unique violation aborts the transaction in
+  Postgres and would take the lead and conversation created in it along. Three
+  refusals happen before anything is written and each costs no model call —
+  `tooLong`, `consent`, `budget` (FR-019, FR-032); the pre-consent one is also
+  T025's gate, because nothing at all is created for text typed before "Aceito".
+
 ## In flight
-- T018 duplicate detection: partial edit to `src/services/conversation.ts` committed as `wip(004)` when the session paused on 2026-09-08. The next lead reviews that diff first (`git show HEAD~1 -- src/services/conversation.ts`), finishes or reverts it, then continues.
+- Nothing.
 
 ## Next step
-T018 — duplicate detection (`recordLeadMessage`) in `src/services/conversation.ts`.
+T019 — the pt-BR persona and turn prompt in `src/agent/prompts/system.ts`.
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

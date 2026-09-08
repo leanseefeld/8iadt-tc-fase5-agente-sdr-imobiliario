@@ -134,6 +134,14 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   here too — it is FR-047's "re-read scoped by conversation" that group C's SSE
   route needs, and it belongs to the same module as the write.
 
+- T016 — `claimTurn`/`releaseTurn`/`staleTurnCutoff`. The claim is the `UPDATE`
+  itself: `set processing_since = now where id = ? and status = 'active' and
+  (processing_since is null or processing_since < stale)` returning the id. One
+  caller's write wins and every other sees zero rows, across replicas, with no
+  advisory lock and no read-then-write. `status = 'active'` in the predicate is
+  what makes a paused conversation produce no further agent turn (FR-028), and
+  the stale cutoff is `MODEL_TIMEOUT_MS × 2` (FR-046).
+
 - T013 — `src/agent/provider.ts`, the only importer of `@ai-sdk/openai-compatible`.
   `getModel()` builds the model lazily; `modelCall()` returns the spreadable
   defaults (`model`, `maxOutputTokens`, `maxRetries`, `timeout`) so a call site
@@ -149,7 +157,7 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
 _(nothing)_
 
 ## Next step
-T016 — `claimTurn` in `src/services/conversation.ts`.
+T017 — `commitTurn` in `src/services/conversation.ts`.
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

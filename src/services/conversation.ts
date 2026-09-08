@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
 import { agencies, conversations, leads, messages } from "../db/schema.ts";
 import { getConfig } from "../core/config.ts";
@@ -206,6 +206,50 @@ function toTurnMessage(row: typeof messages.$inferSelect): TurnMessage {
     metadata: row.metadata,
     createdAt: row.createdAt,
   };
+}
+
+/**
+ * A turn left behind by a replica that died is stale once it is older than
+ * twice the model timeout — long enough that no live turn is ever stolen,
+ * short enough that a lead is not left waiting (FR-046).
+ */
+export function staleTurnCutoff(now: Date): Date {
+  return new Date(now.getTime() - getConfig().MODEL_TIMEOUT_MS * 2);
+}
+
+/**
+ * FR-043: at most one turn per conversation. The claim is the `UPDATE` itself —
+ * whichever caller's row-write wins takes the turn and every other caller sees
+ * zero rows back. No advisory lock, no read-then-write, and it works across
+ * replicas because the arbiter is the row.
+ *
+ * A `paused` or `closed` conversation is never claimed: a broker owns it (FR-028).
+ */
+export async function claimTurn(conversationId: string, now: Date = new Date()): Promise<boolean> {
+  const claimed = await getDb()
+    .update(conversations)
+    .set({ processingSince: now, updatedAt: now })
+    .where(
+      and(
+        eq(conversations.id, conversationId),
+        eq(conversations.status, "active"),
+        or(
+          isNull(conversations.processingSince),
+          lt(conversations.processingSince, staleTurnCutoff(now)),
+        ),
+      ),
+    )
+    .returning({ id: conversations.id });
+
+  return claimed.length > 0;
+}
+
+/** Hands the conversation back when a turn ends without committing. */
+export async function releaseTurn(conversationId: string): Promise<void> {
+  await getDb()
+    .update(conversations)
+    .set({ processingSince: null, updatedAt: new Date() })
+    .where(eq(conversations.id, conversationId));
 }
 
 /** Messages by id, scoped to one conversation — the SSE stream's re-read (FR-047). */

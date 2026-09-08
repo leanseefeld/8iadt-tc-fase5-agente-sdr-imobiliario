@@ -7,7 +7,7 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
 
 | Group | Tasks | Exit gate | Status |
 |---|---|---|---|
-| A | T001–T013 (setup, pure core) | `npm test` green with no DB and no model | in flight |
+| A | T001–T013 (setup, pure core) | `npm test` green with no DB and no model | done |
 | B | T014–T027 (turn service, orchestrator, consumer) | one real turn persists against oMLX via the service layer | pending |
 | C | T028–T037 (channel, notifier, SSE, widget) | widget screenshot; SC-005 reload check | pending |
 | D | T038–T047 (search tool, cards, handoff, opt-out, budget) | SC-004, SC-006, SC-007 by hand | pending |
@@ -114,11 +114,25 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   to fd 1, so capturing it would need a destination parameter this logger does not
   take, and the rule itself is covered by `tests/masking.test.ts`.
 
+- T013 — `src/agent/provider.ts`, the only importer of `@ai-sdk/openai-compatible`.
+  `getModel()` builds the model lazily; `modelCall()` returns the spreadable
+  defaults (`model`, `maxOutputTokens`, `maxRetries`, `timeout`) so a call site
+  writes `streamText({ ...modelCall(), messages, tools })` and cannot forget the
+  bounds of FR-014. `PROVIDER_AUTH_HEADER` set means the key goes in that header
+  and `apiKey` is not passed at all, so there is never a second `Authorization`.
+  Thinking is injected through the provider's `fetch` hook — the OpenAI-compatible
+  provider has no generic extra-body option, its `providerOptions` are a fixed
+  four (`user`, `reasoningEffort`, `textVerbosity`, `strictJsonSchema`).
+  `scripts/model-smoke.ts` proves it against the real model — see Gotchas.
+
 ## In flight
 _(nothing)_
 
 ## Next step
-T013 — `src/agent/provider.ts`, the only importer of the provider SDK.
+T014 — the idempotency index migration in `src/db/migrations/`, per
+[data-model.md](data-model.md) §5. Group A (T001–T013) is complete and its exit
+gate passes: `docker compose exec app npm test` is 156 passing / 4 skipped / 0
+failing with no database and no model, and `npm run lint` is clean.
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus
@@ -145,3 +159,14 @@ T013 — `src/agent/provider.ts`, the only importer of the provider SDK.
 - Next 16: `cookies()`/`headers()` async; guard file is `src/proxy.ts`; page `searchParams`/`params` are Promises.
 - Turbopack dev server can serve empty 200s after large file churn; `docker compose restart app` fixes it.
 - oMLX thinking: only `chat_template_kwargs: { enable_thinking: true }` in the request body works; reply then carries `reasoning_content`; raise the output token cap or the answer comes back empty.
+- Measured on 08/09/2026 through `scripts/model-smoke.ts` with
+  `gemma-4-e4b-it-OptiQ-4bit`: `MODEL_THINKING=false` answers in ~11 s / 33 output
+  tokens with text. `MODEL_THINKING=true` returns **empty text** and ~1.3 kB of
+  `reasoningText` in ~6–7 s / 272–362 output tokens — the whole answer goes to
+  `reasoning_content` and the assistant content comes back blank, and it is not the
+  token cap (2000 allowed, ~360 used). The provider does map `reasoning_content`
+  onto `result.reasoningText`. Keep `MODEL_THINKING=false` for the demo; a turn run
+  with it on will produce nothing to send.
+- `.env` is read by Compose at container start. After changing `MODEL_ID` there, run
+  `docker compose up -d` or the running container keeps the old value — `docker
+  compose exec -e MODEL_ID=… ` is the one-off workaround.

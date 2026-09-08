@@ -8,11 +8,12 @@
 
 A hand-rolled, stateless session: an HMAC-SHA256-signed cookie over
 `AUTH_SECRET`, verified by one Next.js middleware guard in front of the
-`(app)` route group. `services/auth.ts` owns `login()`, `scopeForUser()`,
-`reassignLead()` and the per-IP attempt counter; `core/auth.ts` owns
-signing, verification and `getSession()`. The authenticated shell — top bar,
-nav, `/leads`, `/agenda`, `/catalogo` — is the only new UI. No Auth.js, no
-session table, no new runtime service (ADR 12).
+`(app)` route group. `services/auth.ts` owns `login()`, `scopeForUser()` and
+`reassignLead()`; `core/auth.ts` owns signing, verification and
+`getSession()`. The authenticated shell — top bar, nav, `/leads`, `/agenda`,
+`/catalogo` — is the only new UI. No Auth.js, no session table, no new
+runtime service (ADR 12). No login rate limit (ADR 19): only the
+failed-login `warn` log line remains.
 
 `research.md` is not produced, following the precedent set by spec 001: every
 technology choice here is already fixed by the constitution, ADR 10–12, and
@@ -54,11 +55,10 @@ seed, so those cases run as integration tests inside the container, gated by
 **Performance Goals**: guard adds one cookie verification per request —
 sub-millisecond, no I/O. `getSession()` never queries the database.
 
-**Constraints**: no session store, no Redis (constitution). Rate-limit state
-is in-memory per app instance (see Clarifications in spec.md) — acceptable
-because this POC runs one app replica; a restart only clears the counter
-early, it never lets more attempts through than intended for longer than a
-restart cycle.
+**Constraints**: no session store, no Redis (constitution). No login rate
+limit (ADR 19) — the per-session message budget on the chat side is the
+abuse-resistance mechanism this POC relies on; login keeps only the
+failed-login `warn` log line.
 
 **Scale/Scope**: ~7 new source files, ~100 lines across `core/auth.ts` and
 `services/auth.ts` combined, plus the shell UI (layout, three pages, login
@@ -72,13 +72,33 @@ form).
 |---|---|---|---|
 | I | Document Authority | Cites `docs/` and ADR 12 only; `reference/` used only for the login screen's minimalism, already load-bearing in ADR 12. | Inspection |
 | II | Language Boundaries | Code and this plan in English; login copy and role badge text in pt-BR. | Inspection |
-| III | Modular Monolith | No process-local state except the rate-limit map, which is a POC-scoped exception the spec's Clarifications justify, not shared business state. | Inspection |
+| III | Modular Monolith | No process-local state — the login rate limit (the one exception this plan used to carry) is dropped per ADR 19. | Inspection |
 | IV | One Data Path | `services/auth.ts` is the only module touching `users`/`leads` for this slice; the middleware and layout call `core/auth.ts` and `services/`, never `db/`. | ESLint zone (existing) |
 | V | Deterministic Slot Machine | Not applicable — no agent in this slice. | — |
 | VI | Provider Independence | Not applicable — no model call in this slice. | — |
 | VII | Observability | Not applicable — no LLM call. Failed logins use the existing structured logger, not Langfuse. | Inspection |
 | VIII | Privacy and PII | Password never logged (FR-016). `userId` in log lines is an identifier, not PII, per the existing masking rule's scope. | FR-016, FR-018 |
-| IX | Resilience | Guard and rate limiter fail closed (edge case). Login is a plain form post with a bounded, synchronous check — no timeout/retry surface to add. | Edge Cases |
+| IX | Resilience | Guard fails closed (edge case). Login is a plain form post with a bounded, synchronous check — no timeout/retry surface to add. | Edge Cases |
+| X | User Experience Discipline | Login screen and the shell's top bar each get a who/what/how paragraph below, written before their tasks, per the constitution's amendment (ADR 18). | Screen Intent below |
+
+### Screen Intent (Principle X)
+
+**Login screen.** Who: a broker on a phone, between viewings, coming back to
+check a lead. What they came to do: get past the form in one try. The
+interaction to optimise: the e-mail field is autofocused so typing starts
+immediately with no extra tap; the password field carries a visible-toggle
+instead of a second confirm field, since a phone keyboard makes typos easy to
+miss; one primary button ("Entrar"); a wrong attempt shows its message inline
+next to the form, not in a toast that can scroll away before it is read.
+
+**Shell top bar.** Who: any authenticated user — broker or sales manager —
+moving between Leads, Agenda and Catálogo mid-task. What they came to do:
+know where they are and get back to work. The interaction to optimise: the
+current section is visibly selected in the nav, not just hoverable, so
+orientation is immediate on arrival; the user's name and role badge sit
+together so identity is legible at a glance; "sair" is a secondary control —
+smaller weight, set apart from the nav — because it is rare and its effect
+should not compete with the three links used every visit.
 
 ### Stack and environment gates
 
@@ -90,11 +110,9 @@ form).
 
 ### Post-design re-check
 
-One disclosed exception, carried into Complexity Tracking below rather than
-left as prose only — Principle III's "no process-local state, ever" is
-absolute enough that a real deviation belongs in the constitution's own
-justification mechanism, not just narrated elsewhere. No other new
-violations.
+No disclosed exceptions. The one Principle III deviation this plan used to
+carry — the in-memory per-IP login attempt counter — no longer exists: the
+login rate limit is dropped per ADR 19. No other new violations.
 
 ## Project Structure
 
@@ -119,7 +137,7 @@ src/
 ├── core/
 │   └── auth.ts                  # sign(), verify(), getSession(), cookie constants
 ├── services/
-│   └── auth.ts                  # login(), scopeForUser(), reassignLead(), rate limiter
+│   └── auth.ts                  # login(), scopeForUser(), reassignLead()
 ├── middleware.ts                # guards (app) paths; redirects to /login
 ├── app/
 │   ├── login/
@@ -132,7 +150,7 @@ src/
 │       └── catalogo/page.tsx    # renders spec 002's catalog screen
 tests/
 ├── auth-core.test.ts            # sign/verify: round-trip, tamper, expiry, malformed
-├── auth-service.test.ts         # login, scopeForUser, reassignLead, rate limiter — INTEGRATION=1 for the DB-backed cases
+├── auth-service.test.ts         # login, scopeForUser, reassignLead — INTEGRATION=1 for the DB-backed cases
 ├── config.test.ts               # extended: AUTH_SECRET joins REQUIRED_KEYS
 └── env-example.test.ts          # unchanged in shape; passes once .env.example and schema agree
 ```
@@ -155,6 +173,6 @@ stand-in first, so the slice is not idle while 002 lands.
 
 ## Complexity Tracking
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|---|---|---|
-| In-memory per-IP login attempt counter in `services/auth.ts`, violating Principle III's "no process-local state" | Throttling brute-force login attempts needs some counter; the constitution otherwise requires all state in Postgres | A `login_attempts` table plus a cleanup job is the compliant alternative, rejected for this POC: one app replica means a restart-cleared counter only weakens throttling for one restart cycle, never lets more attempts through than the configured threshold once the app is back up — a table buys durability this feature does not need at the cost of a migration, writes on every attempt, and a cleanup job, for a guard whose whole job is to be cheap and synchronous. If this POC ever runs multiple app replicas, the counter becomes wrong (each replica throttles independently) and that is the trigger to move it to Postgres, not before. |
+No violations. The one entry this table used to carry — an in-memory per-IP
+login attempt counter, a Principle III exception — no longer applies: the
+login rate limit is dropped per ADR 19.

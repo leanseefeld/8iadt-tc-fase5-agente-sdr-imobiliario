@@ -30,21 +30,15 @@ constant time before trusting `expiresAt`.
 | passwordHash | text | `bcrypt.compare` against the submitted password |
 | role | enum `broker` \| `salesManager` | `session.role`, `scopeForUser()` |
 
+Spec 002 also adds `specializations` and `availability` to `users`. Neither
+is read here: the session cookie does not carry them, and the shell's role
+badge (FR-013) is unaffected — it shows only `name` and `role`.
+
 ## Consumed: Lead (spec 002/005, read/write by `scopeForUser`/`reassignLead`)
 
-Only the two fields this slice's service layer touches:
+Only the one field this slice's service layer touches:
 
 | Field | Type | Used here for |
 |---|---|---|
-| agencyId | uuid | every scoped query's tenant filter |
-| assignedBrokerId | uuid, nullable | broker's visibility filter; the field `reassignLead()` writes |
-
-## Ephemeral: login attempt counter
-
-In-memory only, per app instance, never persisted or logged as a table.
-
-| Field | Type | Notes |
-|---|---|---|
-| ip | string | map key |
-| failures | int | consecutive failures since the last reset |
-| windowStartedAt | epoch ms | resets `failures` to 0 once the configured window elapses |
+| agencyId | uuid | every scoped query's tenant filter — the only filter `scopeForUser()` applies; every role sees every lead of the agency |
+| assignedBrokerId | uuid, nullable | the field `reassignLead()` reads (for the `lead.reassigned` event's `fromBrokerId`) and writes |

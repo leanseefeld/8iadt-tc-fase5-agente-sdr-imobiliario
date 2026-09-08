@@ -5,16 +5,18 @@ The rule specs 005 (dashboard) and 006 (agenda) build their lead queries on.
 ## `scopeForUser(session: SessionPayload): LeadScope`
 
 ```ts
-type LeadScope =
-  | { agencyId: string; assignedBrokerId: string }   // role: broker
-  | { agencyId: string };                             // role: salesManager
+type LeadScope = { agencyId: string; defaultOwnLeadsOnly: boolean };
 ```
 
-- `broker` → `{ agencyId: session.agencyId, assignedBrokerId: session.userId }`.
-  A caller applies this as `WHERE agencyId = :agencyId AND assignedBrokerId = :assignedBrokerId`.
-- `salesManager` → `{ agencyId: session.agencyId }` only. A caller applies
-  this as `WHERE agencyId = :agencyId` — every lead of the agency, regardless
-  of who it is assigned to.
+- Every role → `{ agencyId: session.agencyId, defaultOwnLeadsOnly }`. A
+  caller applies this as `WHERE agencyId = :agencyId` only — every lead of
+  the agency, for both roles. There is no cross-role query restriction; a
+  broker is not scoped to `assignedBrokerId` at the data layer.
+- `defaultOwnLeadsOnly` is `true` for `broker`, `false` for `salesManager`.
+  It is a **UI default**, not a permission: spec 005's "Meus leads" list
+  reads it to decide whether the list starts filtered to the signed-in
+  broker's own leads or shows the whole agency. A broker can still switch the
+  filter off in the UI; the query underneath is unrestricted either way.
 - Pure function, no I/O. Later specs pass the returned shape into their own
   Drizzle `where` clause; `scopeForUser` never touches `db/` itself, so it is
   usable from `domain/`-adjacent code without pulling in a database import.
@@ -30,3 +32,9 @@ type LeadScope =
 - Updates `leads.assignedBrokerId = newBrokerId` for the row matching
   `leadId AND agencyId = session.agencyId` — cross-agency reassignment is
   impossible by construction, not by an extra check.
+- On success, records a `lead.reassigned` event: `actorType: "user"`,
+  `actorUserId = session.userId`, `payload = { fromBrokerId, toBrokerId }`
+  (`fromBrokerId` is the lead's `assignedBrokerId` before the write,
+  `toBrokerId` is `newBrokerId`). The service writes this event itself, in
+  the same operation as the update — the caller (spec 005's UI) does not
+  emit it separately.

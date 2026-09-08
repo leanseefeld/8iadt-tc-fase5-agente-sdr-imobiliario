@@ -21,7 +21,7 @@ function listProperties(
 ): Promise<{ items: Property[]; total: number; page: number; pageSize: 24 }>;
 ```
 
-- Always scoped to `agencyId` and `isActive = true` (FR-025, clarification 4).
+- Always scoped to `agencyId` and `isActive = true` (FR-020, clarification 4).
 - `code` combines with every other filter (AND); it is the one field a broker types mid-conversation to confirm a suggested property is real, so it must never wait on a full-text index — a `LIKE 'MOE-%'`-shaped prefix match against the existing (`agencyId`,`code`) unique index is enough at this row count.
 - `ORDER BY price ASC, id ASC` (clarification 5) — stable across pages regardless of which filters are active.
 - `page` beyond the last page returns `items: []`, `total` unchanged — not an error (Edge Cases).
@@ -46,7 +46,7 @@ function searchProperties(
 - Always scoped to `agencyId` and `isActive = true`.
 - Ranking and the relaxation ladder are the pure function in `domain/property-ranking.ts` — see `research.md` for the exact ordering and the named `PRICE_RELAX_FACTOR` constant. This service function's only responsibility is fetching the active/`transaction`-matching candidate set and handing it to that function; it must not duplicate ranking logic inline.
 - `domain/property-ranking.ts` MUST NOT import the `Property` type above (constitution III: `domain/` imports nothing). It declares its own minimal candidate shape — `{ id, price, neighborhood, region }` — the only fields ranking needs. `services/properties.ts` maps its `Property[]` down to that shape before calling in, and back up after; the domain function never sees the full entity.
-- Never throws for "no match" — returns `[]` (US4 scenario 3, FR-024).
+- Never throws for "no match" — returns `[]` (US4 scenario 3, FR-019).
 - `bedrooms` is never relaxed (see research.md's honesty note on SC-005).
 
 ## Shared type

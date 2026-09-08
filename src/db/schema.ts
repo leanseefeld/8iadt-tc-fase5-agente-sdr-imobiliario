@@ -106,9 +106,15 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   role: userRoleEnum("role").notNull(),
   // Intents the broker serves (purchase/rental/investment); empty on the manager.
-  specializations: jsonb("specializations").notNull().default([]),
+  specializations: jsonb("specializations")
+    .$type<string[]>()
+    .notNull()
+    .default([]),
   // Per weekday: { mon: { enabled, start, end }, ... }.
-  availability: jsonb("availability").notNull().default({}),
+  availability: jsonb("availability")
+    .$type<Record<string, { enabled: boolean; start: string; end: string }>>()
+    .notNull()
+    .default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [unique("users_agency_email_unique").on(table.agencyId, table.email)]);
@@ -154,7 +160,7 @@ export const conversations = pgTable("conversations", {
   followupState: followupStateEnum("followup_state").notNull().default("none"),
   // In-flight turn marker; guarantees one turn per conversation.
   processingSince: timestamp("processing_since", { withTimezone: true }),
-  slots: jsonb("slots").notNull().default({}),
+  slots: jsonb("slots").$type<Record<string, unknown>>().notNull().default({}),
   summary: text("summary"),
   previewLine: text("preview_line"),
   summaryUpdatedAt: timestamp("summary_updated_at", { withTimezone: true }),
@@ -178,7 +184,7 @@ export const messages = pgTable("messages", {
   content: text("content").notNull(),
   // Agent messages only — the last lead message the turn read.
   repliesToMessageId: uuid("replies_to_message_id"),
-  metadata: jsonb("metadata").notNull().default({}),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("messages_conversation_created_idx").on(table.conversationId, table.createdAt),
@@ -203,7 +209,7 @@ export const properties = pgTable("properties", {
   city: text("city").notNull(),
   region: text("region").notNull(),
   description: text("description").notNull(),
-  features: jsonb("features").notNull().default([]),
+  features: jsonb("features").$type<string[]>().notNull().default([]),
   // Only on sale rows; permits yield math for the investment script.
   estimatedRent: integer("estimated_rent"),
   imageUrl: text("image_url").notNull(),
@@ -250,7 +256,7 @@ export const events = pgTable("events", {
   actorUserId: uuid("actor_user_id").references(() => users.id),
   // Langfuse trace id when agent/worker called the model.
   traceId: text("trace_id"),
-  payload: jsonb("payload").notNull().default({}),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   // Outbox: null until a worker consumer has processed this row.
   processedAt: timestamp("processed_at", { withTimezone: true }),

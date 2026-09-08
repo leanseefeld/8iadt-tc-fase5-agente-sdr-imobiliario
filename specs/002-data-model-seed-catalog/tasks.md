@@ -80,12 +80,12 @@ Single project. `src/`, `tests/` at the repository root, per [plan.md](plan.md#s
 
 **Goal / Independent Test**: `/catalogo` renders a paginated, filterable grid of active properties; with the seed applied, confirm 24 cards, each filter narrows the grid, paging preserves filters.
 
-- [ ] T021 [US3] Implement `listProperties(agencyId, filters, page)` in `src/services/properties.ts` — scoped by `agencyId`+`isActive`, filter clauses per [contracts/properties-service.md](contracts/properties-service.md) including `code` prefix match, `ORDER BY price ASC, id ASC`, `LIMIT 24`, plus a total count
-- [ ] T022 [P] [US3] Implement `src/app/(app)/catalogo/PropertyCard.tsx` and `catalogo.module.css` — `code` given the most visual weight alongside price (constitution X), photo, BRL price via `Intl.NumberFormat("pt-BR", {style:"currency",currency:"BRL"})`, bedrooms, area, neighborhood
-- [ ] T023 [P] [US3] Implement `src/app/(app)/catalogo/FilterBar.tsx` — client component updating `searchParams`; `code` search first and instant (no debounce beyond the input's own change event), then transaction, neighborhood/region, max price, min bedrooms
-- [ ] T024 [US3] Implement `src/app/(app)/catalogo/page.tsx` — Server Component reading `searchParams`, calling `listProperties`, rendering `FilterBar` + grid + pagination, no session guard (FR-017)
-- [ ] T025 [P] [US3] Write `tests/properties-service.test.ts` (`INTEGRATION=1`) — `listProperties`: filtered, zero-result, and paging-stability cases
-- [ ] T026 [US3] Verify SC-004 per [quickstart.md](quickstart.md)
+- [x] T021 [US3] Implement `listProperties(agencyId, filters, page)` in `src/services/properties.ts` — scoped by `agencyId`+`isActive`, filter clauses per [contracts/properties-service.md](contracts/properties-service.md) including `code` prefix match, `ORDER BY price ASC, id ASC`, `LIMIT 24`, plus a total count
+- [x] T022 [P] [US3] Implement `src/app/(app)/catalogo/PropertyCard.tsx` and `catalogo.module.css` — `code` given the most visual weight alongside price (constitution X), photo, BRL price via `Intl.NumberFormat("pt-BR", {style:"currency",currency:"BRL"})`, bedrooms, area, neighborhood
+- [x] T023 [P] [US3] Implement `src/app/(app)/catalogo/FilterBar.tsx` — client component updating `searchParams`; `code` search first and instant (no debounce beyond the input's own change event), then transaction, neighborhood/region, max price, min bedrooms
+- [x] T024 [US3] Implement `src/app/(app)/catalogo/page.tsx` — Server Component reading `searchParams`, calling `listProperties`, rendering `FilterBar` + grid + pagination, no session guard (FR-017)
+- [x] T025 [P] [US3] Write `tests/properties-service.test.ts` (`INTEGRATION=1`) — `listProperties`: filtered, zero-result, and paging-stability cases
+- [x] T026 [US3] Verify SC-004 per [quickstart.md](quickstart.md) — verified in-browser: unfiltered grid, `?maxPrice=1` empty state, `?code=MOE` narrows instantly, `?transaction=rent&page=2` shows "Página 2 de 2" with filter preserved
 
 **Checkpoint**: the catalog is real and browsable.
 
@@ -95,11 +95,11 @@ Single project. `src/`, `tests/` at the repository root, per [plan.md](plan.md#s
 
 **Goal / Independent Test**: `searchProperties` returns up to 3 ranked matches, relaxing criteria when nothing matches exactly; call it exact-match, needs-relaxation and empty-agency, confirm count and order each time.
 
-- [ ] T027 [US4] Implement the pure ranking/relaxation function in `src/domain/property-ranking.ts` per [research.md](research.md) — price-proximity-then-neighborhood-then-id ranking; neighborhood → region → drop location → widen price (`PRICE_RELAX_FACTOR = 1.2`) ladder; `bedrooms` never relaxed; takes/returns its own minimal candidate shape (`id`/`price`/`neighborhood`/`region`), never the `Property` type, so `domain/` imports nothing (constitution III)
-- [ ] T028 [P] [US4] Write `tests/property-ranking.test.ts` — no DB: exact match, each relaxation step, empty candidate list, price ties
-- [ ] T029 [US4] Implement `searchProperties(agencyId, criteria)` in `src/services/properties.ts` — fetch the active/`transaction`-matching candidate set, map to `property-ranking.ts`'s candidate shape, delegate, map the ranked ids back to full `Property` rows, return the top 3
-- [ ] T030 [US4] Extend `tests/properties-service.test.ts` (`INTEGRATION=1`) — `searchProperties` against seeded data: exact, relaxed, empty-agency, cross-agency isolation
-- [ ] T031 [US4] Verify SC-005 per [quickstart.md](quickstart.md)
+- [x] T027 [US4] Implement the pure ranking/relaxation function in `src/domain/property-ranking.ts` per [research.md](research.md) — price-proximity-then-neighborhood-then-id ranking; neighborhood → region → drop location → widen price (`PRICE_RELAX_FACTOR = 1.2`) ladder; `bedrooms` never relaxed; takes/returns its own minimal candidate shape (`id`/`price`/`neighborhood`/`region`), never the `Property` type, so `domain/` imports nothing (constitution III)
+- [x] T028 [P] [US4] Write `tests/property-ranking.test.ts` — no DB: exact match, each relaxation step, empty candidate list, price ties
+- [x] T029 [US4] Implement `searchProperties(agencyId, criteria)` in `src/services/properties.ts` — fetch the active/`transaction`-matching candidate set, map to `property-ranking.ts`'s candidate shape, delegate, map the ranked ids back to full `Property` rows, return the top 3
+- [x] T030 [US4] Extend `tests/properties-service.test.ts` (`INTEGRATION=1`) — `searchProperties` against seeded data: exact, relaxed, empty-agency, cross-agency isolation
+- [x] T031 [US4] Verify SC-005 per [quickstart.md](quickstart.md) — `tests/properties-service.test.ts` (INTEGRATION=1) passes: exact match, relaxed match, no-throw-on-no-match, cross-agency isolation
 
 **Checkpoint**: all four stories complete; `services/properties.ts` is ready for spec 004 to call.
 

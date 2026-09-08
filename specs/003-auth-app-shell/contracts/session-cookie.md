@@ -27,7 +27,7 @@ function clearSessionCookie(): void;                       // used by logout, no
 
 `sign` and `verify` are `Promise`-returning because HMAC runs on Web Crypto's
 `subtle.sign`/`subtle.verify` (see plan.md), which are asynchronous by
-design — chosen so the same implementation works in `src/middleware.ts`,
+design — chosen so the same implementation works in `src/proxy.ts`,
 which may execute on Next.js's edge runtime where `node:crypto` is
 unavailable. Every caller (`getSession()`, the middleware, `login()`) awaits
 them.
@@ -43,6 +43,6 @@ must treat `null` as "unauthenticated," not as an error to surface.
   server-side revocation).
 - `role` is exactly `"broker"` or `"salesManager"` — the same enum spec 002
   defines on `users.role`, not a separate string.
-- The middleware at `src/middleware.ts` is the only place a failed `verify`
+- The middleware at `src/proxy.ts` is the only place a failed `verify`
   produces a redirect; every other caller (`getSession()` in a Server
   Component or Server Action) just receives `null` and decides for itself.

@@ -122,6 +122,18 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   against the right base. Applied; `pg_indexes` shows
   `messages_client_message_id_uniq`.
 
+- T015 — `loadTurn` in `src/services/conversation.ts`, plus the module's shared
+  types. It takes either end of the turn — `{ conversationId }` for the worker,
+  `{ agencySlug, externalId }` for the route handler — and returns `null` rather
+  than creating anything, because a read must never make a lead. Three queries
+  after the join: the last `MODEL_HISTORY_WINDOW` messages (desc then reversed),
+  the lead messages newer than the last `agent`/`broker` message (FR-044's
+  "answer them together"), and the lead-message count inside
+  `CHAT_BUDGET_WINDOW_MINUTES`. `readSlots` parses the stored `jsonb` through
+  `slotsSchema` instead of trusting it. `readMessages(conversationId, ids)` is
+  here too — it is FR-047's "re-read scoped by conversation" that group C's SSE
+  route needs, and it belongs to the same module as the write.
+
 - T013 — `src/agent/provider.ts`, the only importer of `@ai-sdk/openai-compatible`.
   `getModel()` builds the model lazily; `modelCall()` returns the spreadable
   defaults (`model`, `maxOutputTokens`, `maxRetries`, `timeout`) so a call site
@@ -137,7 +149,7 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
 _(nothing)_
 
 ## Next step
-T015 — `loadTurn` in `src/services/conversation.ts`.
+T016 — `claimTurn` in `src/services/conversation.ts`.
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

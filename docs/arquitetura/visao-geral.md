@@ -169,8 +169,58 @@ tudo.
 - **Migrations versionadas** desde o primeiro commit
 - **Health check** em ambos os processos — exigência de qualquer orquestrador de contêiner
 
+## 8. Tempo real: SSE sobre `LISTEN/NOTIFY`
+
+Sem polling e sem WebSocket. O navegador abre **uma** requisição HTTP que o
+servidor mantém aberta e na qual escreve eventos JSON — *Server-Sent Events*,
+nativo nos navegadores via `EventSource`. O widget assina os eventos da própria
+conversa; o painel assina os eventos da agência.
+
+Do lado do servidor, o Postgres faz o pub/sub: toda transação que grava uma
+mensagem (agente, corretor, worker) termina com `NOTIFY` carregando **apenas
+ids**. Cada réplica da aplicação mantém **uma** conexão dedicada em `LISTEN` e um
+mapa em memória de streams abertos por conversa. Ao receber a notificação, a
+réplica relê a mensagem **escopada por agência e conversa** e a escreve nos
+streams correspondentes. O navegador nunca vê o banco; a chave do stream vem da
+sessão assinada, nunca de um id enviado pelo cliente.
+
+**Conexão perdida e redeploy.** Pulso a cada `SSE_PULSE_INTERVAL_MS`; dois pulsos
+perdidos e o widget mostra "Conexão perdida. Reconectando…" e bloqueia o envio.
+No `SIGTERM` o servidor envia um evento `goodbye` e fecha os streams, então os
+clientes reconectam imediatamente. `EventSource` reconecta sozinho com o último
+id visto, e o servidor **reenvia do banco** o que faltou. O banco é a verdade; a
+notificação é só um despertador.
+
+**Escala, com honestidade.** Uma conexão de `LISTEN` por réplica, não por
+cliente — é isso que permite escalar horizontalmente. Limites: notificações não
+são duráveis (a releitura na reconexão cobre); `NOTIFY` chega a todas as
+réplicas, independente do tenant, e com milhares de agências e muitas réplicas
+esse custo cresce — a troca é Redis ou um pub/sub gerenciado atrás da interface
+`Notifier`, um módulo. Plataformas serverless derrubam conexões longas; por isso
+rodamos em contêineres, com o timeout ocioso do balanceador acima do pulso.
+
+## 9. Segurança do agente contra manipulação
+
+Três camadas, todas em código, nenhuma dependente do prompt obedecer:
+
+1. **Estrutural.** O modelo não decide nada consequente: slots passam por schema,
+   a próxima pergunta vem do código, preços só vêm da busca no catálogo, e as
+   tools só buscam, propõem horário, pedem corretor ou registram opt-out.
+2. **Entrada.** Texto do lead entra sempre como mensagem de usuário, nunca perto
+   do system prompt. Uma lista curta de padrões ("ignore suas instruções",
+   "system prompt", "você agora é") dispara a recusa padrão sem chamar o modelo.
+3. **Saída.** Resposta que vaze instruções, sintaxe de tool, valor em reais ou
+   percentual que nenhuma busca retornou, ou que saia do português, é retida e
+   substituída antes de chegar ao lead.
+
+A spec 004 mantém cinco tentativas roteirizadas de injeção como teste de que as
+três camadas seguram. Abuso de volume é tratado por orçamento de mensagens por
+sessão em janela de 30 minutos e por um turno por conversa (ver
+[`modelo-de-dados.md`](modelo-de-dados.md) §7).
+
 ## Ver também
 
 - [`restricoes-de-implantacao.md`](restricoes-de-implantacao.md) — o que não roda em contêiner local, e por quê
 - [`adr/decisoes.md`](adr/decisoes.md) — as decisões técnicas e suas consequências
 - [`../decisoes-pendentes.md`](../decisoes-pendentes.md) — o que ainda não foi decidido
+- [`configuracoes.md`](configuracoes.md) — registro das configurações que um dia viram painel de administração

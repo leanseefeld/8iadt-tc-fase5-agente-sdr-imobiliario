@@ -193,11 +193,28 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   the model-failure apology, the two handoff lines, the opt-out confirmation and
   `guardedReply`, which is what goes out when a guard rejects the model's text.
 
+- T021/T022 — `src/agent/tools/{update-slots,scheduling.stub,index}.ts`. The
+  advertised schema is `slotsSchema.shape[key].nullish()` per field plus `intent`,
+  so a slot has one definition. Everything optional: the model must be able to
+  report one slot without inventing eight. `execute` only acknowledges — the
+  orchestrator reads the call's *raw* arguments off the stream, because arguments
+  that fail the advertised schema never reach `execute`, and with this model those
+  are common: `scripts/tool-smoke.ts` returned `intent: "comprar apartamento"` and
+  `neighborhoods: "zona sul"` on the very first try. `normalizeExtraction` repairs
+  the unambiguous shapes (a string where a list was asked for, `"700 mil"` where a
+  number was, a pt-BR word where an enum was) and leaves the rest for `mergeSlots`
+  to drop under rule 4. The registry is split by *when* a tool is offered:
+  `extractionTools()` is `updateSlots` alone, and the phrasing call gets none —
+  given five tools and asked for a sentence, this model picks a tool. The
+  scheduling stubs keep `modelo-de-dados.md` §6's signatures exactly
+  (`proposeMeeting()` takes no arguments; the viewing/call distinction is decided
+  in `domain/handoff.shouldProposeMeeting`, not by the model).
+
 ## In flight
 - Nothing.
 
 ## Next step
-T021 — the `updateSlots` tool in `src/agent/tools/update-slots.ts`.
+T023 — `src/agent/recovery.ts`, the single-slot `generateObject` fallback.
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

@@ -167,7 +167,7 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   `scripts/model-smoke.ts` proves it against the real model — see Gotchas.
 
 ## In flight
-_(nothing)_
+- T018 duplicate detection: partial edit to `src/services/conversation.ts` committed as `wip(004)` when the session paused on 2026-09-08. The next lead reviews that diff first (`git show HEAD~1 -- src/services/conversation.ts`), finishes or reverts it, then continues.
 
 ## Next step
 T018 — duplicate detection (`recordLeadMessage`) in `src/services/conversation.ts`.

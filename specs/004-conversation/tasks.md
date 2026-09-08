@@ -39,7 +39,7 @@ description: "Task list for the conversation slice"
 
 **Goal / test**: a turn runs end to end through the service layer — call it directly with the Cenário 1 messages and assert slot state, one question per reply, no re-ask.
 
-- [ ] T014 [US1] Write the idempotency index migration in `src/db/migrations/` per [data-model.md](data-model.md) §5
+- [x] T014 [US1] Write the idempotency index migration in `src/db/migrations/` per [data-model.md](data-model.md) §5
 - [ ] T015 [US1] Implement `loadTurn` in `src/services/conversation.ts` — agency by slug, lead by `externalId`, active conversation, last `MODEL_HISTORY_WINDOW` messages, the session's message count within `CHAT_BUDGET_WINDOW_MINUTES`, all scoped by `agencyId`
 - [ ] T016 [US1] Implement `claimTurn` in `src/services/conversation.ts` — an `UPDATE … SET processingSince = now() WHERE processingSince IS NULL` that at most one caller wins, per FR-043
 - [ ] T017 [US1] Implement `commitTurn` in `src/services/conversation.ts` — one transaction answering every unanswered lead message, recording `repliesToMessageId`, writing slots, lead fields, `lead.status_changed` on a stage advance, the events of [data-model.md](data-model.md) §4 (`actorType`/`traceId`, `maskPII` on payloads), closed by a `NOTIFY` carrying only the conversation id (`visao-geral.md` §8)

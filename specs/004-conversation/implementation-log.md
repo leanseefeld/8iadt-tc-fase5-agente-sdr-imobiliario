@@ -8,7 +8,7 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
 | Group | Tasks | Exit gate | Status |
 |---|---|---|---|
 | A | T001–T013 (setup, pure core) | `npm test` green with no DB and no model | done |
-| B | T014–T027 (turn service, orchestrator, consumer) | one real turn persists against oMLX via the service layer | pending |
+| B | T014–T027 (turn service, orchestrator, consumer) | one real turn persists against oMLX via the service layer | in progress |
 | C | T028–T037 (channel, notifier, SSE, widget) | widget screenshot; SC-005 reload check | pending |
 | D | T038–T047 (search tool, cards, handoff, opt-out, budget) | SC-004, SC-006, SC-007 by hand | pending |
 | E | T048–T053 (Langfuse, observability profile) | SC-010..012; memory total recorded | pending |
@@ -114,6 +114,14 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   to fd 1, so capturing it would need a destination parameter this logger does not
   take, and the rule itself is covered by `tests/masking.test.ts`.
 
+- T014 — `src/db/migrations/0001_idempotent_inbound.sql`, the partial unique index
+  over `(conversation_id, metadata ->> 'clientMessageId')`. Hand-written, not
+  generated: drizzle-kit cannot express a partial index over a jsonb expression.
+  The journal gained an `idx: 1` entry and `meta/0001_snapshot.json` is a copy of
+  the 0000 snapshot with its ids rechained, so a future `db:generate` still diffs
+  against the right base. Applied; `pg_indexes` shows
+  `messages_client_message_id_uniq`.
+
 - T013 — `src/agent/provider.ts`, the only importer of `@ai-sdk/openai-compatible`.
   `getModel()` builds the model lazily; `modelCall()` returns the spreadable
   defaults (`model`, `maxOutputTokens`, `maxRetries`, `timeout`) so a call site
@@ -129,10 +137,7 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
 _(nothing)_
 
 ## Next step
-T014 — the idempotency index migration in `src/db/migrations/`, per
-[data-model.md](data-model.md) §5. Group A (T001–T013) is complete and its exit
-gate passes: `docker compose exec app npm test` is 156 passing / 4 skipped / 0
-failing with no database and no model, and `npm run lint` is clean.
+T015 — `loadTurn` in `src/services/conversation.ts`.
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

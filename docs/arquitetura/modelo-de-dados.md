@@ -203,14 +203,14 @@ Teto 100. Faixas: **frio < 40**, **morno 40–69**, **quente ≥ 70**.
 | `conversation.turn` | `{ messageId }` | 004 — consumido pelo resumidor (005) |
 | `lead.qualified` | `{ score }` | 005 |
 | `properties.suggested` | `{ propertyIds }` | 004 |
-| `handoff.requested` | `{ reason: 'asked' · 'fallback' · 'score' }` | 005 |
+| `handoff.requested` | `{ reason: 'asked' · 'fallback' }` — sem `score`: quente com contato propõe reunião (ADR 19) | 004 (agente) · 005 (regra `shouldHandoff`) |
 | `conversation.assumed` / `conversation.returned` | `{ userId }` | 005 |
 | `summary.updated` | `{}` | 005 |
 | `appointment.proposed` / `appointment.confirmed` | `{ appointmentId }` | 006 |
 | `followup.scheduled` / `followup.sent` | `{ attempt }` | 006 |
 | `followup.recovered` | `{ attempt }` — lead respondeu após follow-up | 006 |
 | `lead.opted_out` | `{}` | 004 |
-| `lead.status_changed` | `{ from, to }` | 005 (corretor) · 006 (visita) |
+| `lead.status_changed` | `{ from, to }` | 004 (agente até `scheduled`) · 005 (corretor) · 006 (visita) |
 | `lead.reassigned` | `{ fromBrokerId, toBrokerId }` | 005 |
 | `appointment.done` / `appointment.cancelled` | `{ appointmentId }` | 006 |
 

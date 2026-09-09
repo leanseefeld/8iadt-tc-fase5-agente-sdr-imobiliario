@@ -2,6 +2,8 @@ import type { ToolSet } from "ai";
 import { updateSlots } from "./update-slots.ts";
 import { bookMeeting, proposeMeeting, runProposeMeeting } from "./scheduling.stub.ts";
 import { searchPropertiesTool, type SearchContext, type SearchOutcome } from "./search-properties.ts";
+import { requestHandoff } from "./handoff.ts";
+import { optOut } from "./opt-out.ts";
 
 /**
  * The tool registry — the one list of what the agent can do.
@@ -21,12 +23,21 @@ import { searchPropertiesTool, type SearchContext, type SearchOutcome } from "./
  * forbids it for `investment`, neither of which may come from a tool argument, so
  * it is built from the turn's own context and invoked from code.
  *
- * Spec 004's later phase adds `requestHandoff` and `optOut` (T043).
+ * `requestHandoff` and `optOut` ride along on the extraction call, and that is
+ * deliberate: both are things the lead *said*, so the call that reads the lead's
+ * message is the call that should notice them. Neither decides anything — the
+ * decision is `domain/handoff.ts` and the write is `commitTurn`.
  */
 
-/** The tools offered during the extraction call. */
+/**
+ * The tools offered during the extraction call — the three things a lead's
+ * message can be: an answer, a request for a person, or a request to be left
+ * alone. `toolChoice: "required"` makes the model pick one of them, and
+ * `updateSlots` with every field null is the "none of the above" it falls back
+ * to.
+ */
 export function extractionTools(): ToolSet {
-  return { updateSlots };
+  return { updateSlots, requestHandoff, optOut };
 }
 
 /**
@@ -45,7 +56,7 @@ export function conversationTools(context?: SearchContext): ToolSet {
   };
 }
 
-export { updateSlots, proposeMeeting, bookMeeting, runProposeMeeting };
+export { updateSlots, proposeMeeting, bookMeeting, runProposeMeeting, requestHandoff, optOut };
 export { runSearchProperties, searchPropertiesTool, MAX_SUGGESTIONS } from "./search-properties.ts";
 export type { SearchContext, SearchOutcome };
 export { normalizeExtraction, updateSlotsInputSchema } from "./update-slots.ts";

@@ -61,6 +61,24 @@ export function noMatchReply(relaxable: "neighborhoods" | "priceMax" | "bedrooms
   return relaxable === null ? apology : `${apology} ${RELAX_QUESTIONS[relaxable]}`;
 }
 
+/**
+ * FR-030, and layer 2 of `visao-geral.md` §9: the refusal that costs no model
+ * call. One sentence declining, then the script's own question, so the refusal
+ * does not also cost the lead their place in the conversation.
+ */
+export function refusalReply(question: Question | null): string {
+  const refusal =
+    "Não consigo mudar as minhas orientações nem falar sobre elas, e desconto quem decide " +
+    "é o corretor.";
+  return question === null
+    ? `${refusal} Mas seguimos: estou aqui para te ajudar a achar um imóvel.`
+    : `${refusal} Mas seguimos: ${lowerFirst(question.question)}`;
+}
+
+function lowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
 /** FR-029: opt-out, confirmed in one sentence. */
 export const OPT_OUT_REPLY =
   "Combinado, não vou mais te escrever por aqui. Obrigada pelo seu tempo!";

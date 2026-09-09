@@ -1,3 +1,4 @@
+import type { Property } from "@/services/properties";
 import type { TurnMessage } from "@/services/conversation";
 
 /**
@@ -35,5 +36,42 @@ export function toWireMessage(message: TurnMessage): WireMessage {
       ? { repliesToMessageId: message.repliesToMessageId }
       : {}),
     createdAt: message.createdAt.toISOString(),
+  };
+}
+
+/**
+ * `contracts/chat-api.md` §5 — the fields a card renders, and no others. The
+ * catalog row carries a description, features and a condo fee the widget has no
+ * use for, and the projection is what keeps them off a public wire.
+ *
+ * The price stays an integer in BRL: formatting to `R$ 680.000` is the
+ * component's job, so a card the broker's `/catalogo` renders and a card the
+ * lead sees cannot drift apart in a locale argument.
+ */
+export interface WireProperty {
+  id: string;
+  code: string;
+  title: string;
+  imageUrl: string;
+  price: number;
+  bedrooms: number;
+  areaM2: number;
+  neighborhood: string;
+  city: string;
+  transaction: "sale" | "rent";
+}
+
+export function toWireProperty(property: Property): WireProperty {
+  return {
+    id: property.id,
+    code: property.code,
+    title: property.title,
+    imageUrl: property.imageUrl,
+    price: property.price,
+    bedrooms: property.bedrooms,
+    areaM2: property.areaM2,
+    neighborhood: property.neighborhood,
+    city: property.city,
+    transaction: property.transaction,
   };
 }

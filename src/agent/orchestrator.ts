@@ -2,6 +2,7 @@ import { streamText, type ModelMessage } from "ai";
 import { getConfig } from "../core/config.ts";
 import { createLogger } from "../core/logging.ts";
 import { handoffDecision, shouldProposeMeeting, type HandoffReason } from "../domain/handoff.ts";
+import { looksLikeInjection } from "../domain/injection.ts";
 import { createReplyGuard, figuresIn, splitSentences } from "../domain/reply-guards.ts";
 import { scoreLead } from "../domain/score.ts";
 import {
@@ -27,10 +28,12 @@ import {
 } from "../services/conversation.ts";
 import {
   MODEL_FAILURE_REPLY,
+  OPT_OUT_REPLY,
   PRE_CONSENT_REPLY,
   SUGGESTION_REPLY,
   guardedReply,
   noMatchReply,
+  refusalReply,
 } from "./prompts/fallback.ts";
 import { extractionSystemPrompt, turnSystemPrompt } from "./prompts/system.ts";
 import { modelCall } from "./provider.ts";
@@ -123,6 +126,18 @@ export interface RunTurnOptions {
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * FR-017: the first thing a lead reads never lands faster than a person could
+ * have typed it — including the replies no model wrote, or the opt-out would
+ * arrive instantly and every other reply would not.
+ */
+async function pauseBeforeFirstChunk(startedAt: number): Promise<void> {
+  const { minMs, maxMs } = getConfig().CHAT_TYPING_DELAY_MS;
+  const target = minMs + Math.random() * Math.max(0, maxMs - minMs);
+  const remaining = target - (Date.now() - startedAt);
+  if (remaining > 0) await sleep(remaining);
+}
 
 // ---------------------------------------------------------------------------
 // Prompt input
@@ -246,7 +261,6 @@ interface PhraseInput {
 }
 
 async function phrase(input: PhraseInput): Promise<PhrasedReply> {
-  const config = getConfig();
   const guard = createReplyGuard({
     pendingSlot: input.pendingSlot,
     nextSlot: input.nextSlot,
@@ -264,10 +278,7 @@ async function phrase(input: PhraseInput): Promise<PhrasedReply> {
   const emit = async (sentence: string): Promise<void> => {
     if (!delayed) {
       delayed = true;
-      const { minMs, maxMs } = config.CHAT_TYPING_DELAY_MS;
-      const target = minMs + Math.random() * Math.max(0, maxMs - minMs);
-      const remaining = target - (Date.now() - input.startedAt);
-      if (remaining > 0) await sleep(remaining);
+      await pauseBeforeFirstChunk(input.startedAt);
     }
     chunks.push(sentence);
     input.sink.chunk(sentence);
@@ -394,6 +405,54 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   const pending = nextQuestion(before, consented);
   const leadText = unansweredText(turn);
 
+  // Layer 2 of `visao-geral.md` §9, and the only place a turn ends before the
+  // model is asked anything: the three phrasings that are never anything but an
+  // override attempt get the written refusal, the script's own question, and no
+  // token spent. No slot moves, because no extraction ran — which is FR-030's
+  // "changes no slot" as a property of the control flow rather than a promise.
+  if (looksLikeInjection(leadText)) {
+    await pauseBeforeFirstChunk(context.startedAt);
+    const refusal = refusalReply(pending);
+    context.sink.chunk(refusal);
+
+    const refused = await commitTurn({
+      turn,
+      reply: refusal,
+      intent: before.intent,
+      slots: before.slots,
+      filled: [],
+      score: turn.lead.score,
+      qualified: isQualified(before.intent, before.slots),
+      // Not a misunderstanding: the message was understood perfectly well.
+      fallbackStreak: turn.conversation.fallbackStreak,
+      guard: "injectionInput",
+      traceId: context.traceId ?? null,
+      now: context.now,
+    });
+    context.sink.done();
+
+    log.info({ conversationId: turn.conversation.id }, "input layer refused an override attempt");
+
+    return {
+      status: "committed",
+      conversationId: turn.conversation.id,
+      messageId: refused.messageId,
+      repliesToMessageId: refused.repliesToMessageId,
+      reply: refusal,
+      intent: before.intent,
+      slots: before.slots,
+      filled: [],
+      score: refused.score,
+      qualified: isQualified(before.intent, before.slots),
+      question: pending,
+      guard: "injectionInput",
+      handoffReason: null,
+      meeting: null,
+      propertyCodes: [],
+      events: refused.events,
+    };
+  }
+
   // 1 · extract
   const extraction = await extract(turn, pending?.slot ?? null);
   const toolCalls: CommittedToolCall[] = [...extraction.calls];
@@ -423,6 +482,50 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       merged = step;
       for (const slot of step.filled) filled.add(slot);
     }
+  }
+
+  // FR-029: someone who asked to be left alone is not qualified further, not
+  // phrased at by a model and not asked one more question. The sentence is
+  // written down (`OPT_OUT_REPLY`), the flag and the closed conversation are
+  // `commitTurn`'s, and the turn ends here.
+  if (extraction.optedOut) {
+    await pauseBeforeFirstChunk(context.startedAt);
+    context.sink.chunk(OPT_OUT_REPLY);
+
+    const closed = await commitTurn({
+      turn,
+      reply: OPT_OUT_REPLY,
+      intent: merged.intent,
+      slots: merged.slots,
+      filled: [],
+      score: scoreLead(merged.intent, merged.slots),
+      qualified: isQualified(merged.intent, merged.slots),
+      fallbackStreak: 0,
+      optedOut: true,
+      toolCalls,
+      traceId: context.traceId ?? null,
+      now: context.now,
+    });
+    context.sink.done();
+
+    return {
+      status: "committed",
+      conversationId: turn.conversation.id,
+      messageId: closed.messageId,
+      repliesToMessageId: closed.repliesToMessageId,
+      reply: OPT_OUT_REPLY,
+      intent: merged.intent,
+      slots: merged.slots,
+      filled: [],
+      score: closed.score,
+      qualified: isQualified(merged.intent, merged.slots),
+      question: null,
+      guard: null,
+      handoffReason: null,
+      meeting: null,
+      propertyCodes: [],
+      events: closed.events,
+    };
   }
 
   // 3 · compute — every decision below is made here, never by the model

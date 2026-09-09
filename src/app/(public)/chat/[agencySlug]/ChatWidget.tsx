@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { WireProperty } from "@/app/api/chat/wire";
+import PropertyCard from "./PropertyCard";
 import styles from "./chat.module.css";
 
 /**
@@ -47,7 +49,7 @@ interface Bubble {
   role: Role;
   content: string;
   repliesToMessageId?: string;
-  /** Group D (T040) renders cards from these. */
+  /** The catalog rows this reply put on the screen (FR-021). */
   propertyIds?: string[];
   /** A lead bubble the server has not confirmed yet — "enviando" (FR-049). */
   pending?: boolean;
@@ -132,6 +134,8 @@ export default function ChatWidget({
   const [connection, setConnection] = useState<Connection>("connecting");
   const [notice, setNotice] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  /** The cards behind every `propertyIds` seen so far, by id (FR-021). */
+  const [properties, setProperties] = useState<Record<string, WireProperty>>({});
 
   const endRef = useRef<HTMLDivElement | null>(null);
   const lastPulseRef = useRef<number>(Date.now());
@@ -273,6 +277,43 @@ export default function ChatWidget({
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [bubbles, typing]);
 
+  // The wire carries ids, never the catalog rows themselves (`contracts/chat-api.md`
+  // §3 and §4), so a bubble with cards resolves them once — on mount for a loaded
+  // transcript, and again when a turn pushes a new set. Ids already resolved are
+  // never asked for twice.
+  useEffect(() => {
+    const missing = [
+      ...new Set(
+        bubbles.flatMap((bubble) => bubble.propertyIds ?? []).filter((id) => !(id in properties)),
+      ),
+    ];
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(
+          `/api/chat/properties?agencySlug=${encodeURIComponent(agencySlug)}&ids=${missing.map(encodeURIComponent).join(",")}`,
+        );
+        if (!response.ok) return;
+        const body = (await response.json()) as { properties: WireProperty[] };
+        if (cancelled) return;
+        setProperties((current) => {
+          const next = { ...current };
+          for (const property of body.properties) next[property.id] = property;
+          return next;
+        });
+      } catch {
+        // The reply itself is on the screen; a card that failed to load is a
+        // missing picture, not a broken conversation.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agencySlug, bubbles, properties]);
+
   // 3 · sending --------------------------------------------------------------
 
   const post = useCallback(
@@ -352,17 +393,24 @@ export default function ChatWidget({
 
   // 4 · rendering ------------------------------------------------------------
 
-  /** FR-045: only quote when the reply did not answer the lead's latest message. */
-  const lastLeadMessageId = useMemo(
-    () => [...bubbles].reverse().find((bubble) => bubble.role === "lead" && bubble.id)?.id,
-    [bubbles],
-  );
-
-  const quotedFor = (bubble: Bubble): string | null => {
+  /**
+   * FR-045: quote only when a lead message exists *after* the one this reply
+   * answered — the WhatsApp rule, and the reason a reply that answered the last
+   * thing said carries no quote at all. Comparing against "the newest lead
+   * bubble" was not the same test: a bubble the server has not confirmed yet
+   * carries no id, so on a fresh conversation every reply looked like it had
+   * skipped something.
+   */
+  const quotedFor = (bubble: Bubble, index: number): string | null => {
     if (bubble.role === "lead" || bubble.repliesToMessageId === undefined) return null;
-    if (bubble.repliesToMessageId === lastLeadMessageId) return null;
-    const quoted = bubbles.find((candidate) => candidate.id === bubble.repliesToMessageId);
-    return quoted === undefined ? null : firstLine(quoted.content);
+    const quotedIndex = bubbles.findIndex(
+      (candidate) => candidate.id === bubble.repliesToMessageId,
+    );
+    if (quotedIndex === -1) return null;
+    const newerLeadMessage = bubbles
+      .slice(quotedIndex + 1, index)
+      .some((candidate) => candidate.role === "lead" && candidate.local !== true);
+    return newerLeadMessage ? firstLine(bubbles[quotedIndex].content) : null;
   };
 
   const closed = status === "closed";
@@ -428,8 +476,11 @@ export default function ChatWidget({
           </div>
         ) : null}
 
-        {bubbles.map((bubble) => {
-          const quote = quotedFor(bubble);
+        {bubbles.map((bubble, index) => {
+          const quote = quotedFor(bubble, index);
+          const cards = (bubble.propertyIds ?? [])
+            .map((id) => properties[id])
+            .filter((property) => property !== undefined);
           return (
             <div
               key={bubble.key}
@@ -444,7 +495,16 @@ export default function ChatWidget({
                 </p>
               )}
               <p className={styles.text}>{bubble.content}</p>
-              {/* Group D (T040) renders PropertyCard here, from `bubble.propertyIds`. */}
+              {/* FR-021: the cards are built from catalog rows, never from the
+                  reply's own words — which is why they hang off `propertyIds`
+                  and not off anything the model wrote. */}
+              {cards.length === 0 ? null : (
+                <div className={styles.cards}>
+                  {cards.map((property) => (
+                    <PropertyCard key={property.id} property={property} />
+                  ))}
+                </div>
+              )}
               {bubble.role === "lead" && bubble.local !== true ? (
                 <span className={styles.state}>
                   {bubble.pending === true ? "enviando" : "recebido"}

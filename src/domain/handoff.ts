@@ -12,7 +12,8 @@ import { temperature } from "./score.ts";
  * Pure; imports only its siblings in `domain/`.
  */
 
-export type HandoffReason = "asked" | "fallback";
+export const HANDOFF_REASONS = ["asked", "fallback"] as const;
+export type HandoffReason = (typeof HANDOFF_REASONS)[number];
 
 /** Two consecutive replies the agent could not understand (FR-027). */
 export const FALLBACK_STREAK_LIMIT = 2;

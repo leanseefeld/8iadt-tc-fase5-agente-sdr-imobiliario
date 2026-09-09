@@ -485,11 +485,71 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   `fallbackText` so a guard-rejected cards turn says `SUGGESTION_REPLY` instead
   of "Perfeito, anotado!" under three property cards.
 
+- T040 — `PropertyCard.tsx` (subagent, commit `ace5998`) plus the data path it
+  needs, which is the part worth writing down. `contracts/chat-api.md` §3 and §4
+  carry **ids**, not rows — a card is a property of the reply, not a copy of the
+  catalog embedded in every transcript — so the widget resolves them through a
+  new read: `GET /api/chat/properties?agencySlug=…&ids=…`, backed by
+  `services/properties.findPropertiesByIds` (scoped by agency, order preserved,
+  `isActive` deliberately NOT required, or a delisted imóvel would leave a hole in
+  a transcript the lead remembers). `wire.ts` gained `WireProperty`/
+  `toWireProperty`, §5's ten fields and nothing else. **No contract shape
+  changed**: this is a fourth endpoint next to the three §2–§4 describe, not an
+  edit to any of them. It is scoped by slug rather than by the signed cookie
+  because these are the same public rows `/catalogo` renders, and a lead whose
+  cookie expired should not see a transcript with holes in it.
+  The widget resolves each id once and never twice.
+  **Group C's follow-up (a), fixed.** The FR-045 quote compared
+  `repliesToMessageId` against "the newest lead bubble that has an id", and an
+  optimistic bubble has no id until the reload — so on a fresh conversation the
+  test was `"<uuid>" !== undefined`, true, and every reply looked like it had
+  skipped a message. It now asks the question FR-045 actually asks: is there a
+  lead bubble *between* the message this reply answered and the reply itself.
+
+- T041 — the empty result. Landed with T039's commit because it is the same
+  branch of the same function: `SearchOutcome.relaxable` picks ONE filter
+  (neighbourhoods → price → bedrooms, widest first), `prompts/system.ts` turns it
+  into the turn's task ("diga que não encontrou … e pergunte se pode procurar em
+  bairros vizinhos"), and `noMatchReply()` is the written version for when a
+  guard throws the model's away. No cards are rendered, because `propertyIds` is
+  never written when the search returned nothing.
+
+- T043 — `src/agent/tools/{handoff,opt-out}.ts`, both offered on the
+  **extraction** call: they report something the lead *said*, so the call that
+  reads the lead's message is the call that should notice them. Neither decides
+  anything — `domain/handoff.handoffDecision` decides, `commitTurn` writes. With
+  `toolChoice: "required"` and three tools the extraction prompt now says which
+  is which, and that complaining, disagreeing or changing the subject is
+  `updateSlots` with every field null. `HANDOFF_REASONS` was added to
+  `domain/handoff.ts` so the tool's enum and the type have one source.
+
+- T044 — the two ways out wired through the turn, and the third defence layer
+  that had no task. `handoffDecision` was already called by T024; what was
+  missing was opt-out and the input layer.
+  **Opt-out** short-circuits the turn: no phrasing call at all, `OPT_OUT_REPLY`
+  written verbatim, `commitTurn({ optedOut: true })` setting `doNotContact` and
+  `status = closed`. The last thing someone reads from us should not depend on a
+  sampler.
+  **Handoff** stays where T024 put it and `commitTurn` pauses the conversation
+  with `heldByUserId` null, emitting `handoff.requested` with its reason.
+  **`src/domain/injection.ts`** is layer 2 of `visao-geral.md` §9, which no task
+  named and the exit gate requires: five patterns, checked before the extraction
+  call, answering with `refusalReply(pendingQuestion)` and recording
+  `metadata.guard = "injectionInput"` — the layer that caught it, in the field
+  that already means "which guard fired". It is deliberately *short*:
+  `tests/injection.test.ts` asserts it catches attempts 1 and 3 of SC-007 and
+  **does not** catch 2, 4 and 5, which belong to the structural and output
+  layers. A list that grew until it matched all five would refuse real leads and
+  would hide whether the other two layers still hold.
+  FR-017's 300–800 ms pause moved into `pauseBeforeFirstChunk`, shared by the
+  phrasing path and by both written replies, so a written reply does not arrive
+  instantly while every model-written one waits.
+
 ## In flight
 - Group D (T038–T047).
 
 ## Next step
-T040 — `PropertyCard.tsx` per `contracts/chat-api.md` §5.
+T042/T045/T047 — the by-hand verifications, then T046's budget enforcement.
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

@@ -396,11 +396,49 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   and the HTTP route itself replaying to a reconnecting client. It cleans up its
   own rows, so the demo database stays the demo database.
 
+- T034/T035/T036 — the widget, one commit: `page.tsx`, `ChatWidget.tsx` and
+  `chat.module.css` are one screen and reviewing them apart is reviewing nothing.
+  **Constitution X, answered before an element was written**: one person, on a
+  phone, who tapped an agency link and will decide in ten seconds whether this is
+  worth their evening and, later, their phone number; they came to say what they
+  want and be understood, not to fill a form; so the transcript is the whole
+  screen, the composer sits at the thumb, and the only outright decision the page
+  asks for is the consent — first, in the same voice as everything else, one
+  button. Every state whose cause is invisible says so in words: enviando,
+  recebido, "Carregando a conversa…", the typing dots, "Conexão perdida.
+  Reconectando…", "Conversa encerrada".
+  The page resolves the tenant and hands down everything else as props — the
+  consent wording, the opening question, the pulse interval — so the client bundle
+  carries neither `domain/`, nor the prompts, nor the config schema.
+  Four decisions worth keeping. (1) The consent notice **stays** after acceptance,
+  with "Você aceitou." where its button was: FR-018 says it is the first agent
+  message *on open*, and what someone agreed to should not vanish the moment they
+  agree. (2) The opening question is *derived* — rendered whenever the lead has
+  consented and no persisted message exists yet — not appended on the tap, so it
+  survives a reload and disappears the moment a real turn does exist. (3) A
+  pre-consent exchange marks the lead's own bubble local as well, so it carries no
+  "recebido": nothing was stored and it will not be there after a reload. (4)
+  `chunk` events join into one growing bubble and the `message` event then replaces
+  it with the stored row — the database is the truth on the client too, which is
+  also what makes a `Last-Event-ID` replay idempotent (a `message` whose id is
+  already on screen is dropped).
+  One thing to hand to group D: the SSE event contract has no conversation status,
+  and FR-022's "Falando com um corretor" badge needs one mid-conversation, so the
+  widget re-reads `GET /api/chat` **once per completed turn** for `status` alone.
+  It is triggered by the stream, not a poll, but if T044 would rather add a status
+  to the `message` payload, this is the code to delete.
+  Verified in a real browser at 375×812: the consent notice as the first bubble;
+  text typed before "Aceito" answered with the fixed template and not persisted;
+  "Aceito" → the intent question; "Estou procurando apartamento na zona sul" →
+  "recebido", typing dots for ~3 s, then the reply streamed in
+  ("Que bacana que você está de olho na Zona Sul, é uma área ótima! Pra te ajudar
+  melhor, qual faixa de preço você tem em mente? 😊").
+
 ## In flight
 - Nothing.
 
 ## Next step
-T034 — the public page `src/app/(public)/chat/[agencySlug]/page.tsx` (group C).
+T037 — verify SC-005 by hand (reload and `docker compose restart app`).
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

@@ -1,0 +1,338 @@
+/*
+ * The lead's screen. Mobile first in the literal sense: the phone layout is the
+ * default and the desktop one is the media query, because the person who taps
+ * an agency's link from an ad is on a phone.
+ *
+ * It borrows the app's palette from `globals.css` and warms it: a paper ground,
+ * a terracotta accent already in the tokens (`--accent`), and one green for the
+ * lead's own bubbles so the two voices are told apart by hue and side at once,
+ * never by a label. Nothing here is a component library and nothing is a
+ * utility class — the whole surface is one screen and it fits in one file.
+ *
+ * Hierarchy (constitution X): the transcript owns the screen and scrolls; the
+ * header is a thin, non-scrolling anchor saying who is talking; the composer is
+ * fixed at the thumb. Everything the lead cannot see the cause of — sending,
+ * thinking, disconnected — is a small piece of text near the thing it explains.
+ */
+
+.shell {
+  --lead: #dcf3e4;
+  --lead-text: #17321f;
+  --agent: var(--surface);
+  --quote: #efeeea;
+
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-width: 46rem;
+  margin: 0 auto;
+  background: var(--bg);
+}
+
+/* --- header ------------------------------------------------------------- */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.avatar {
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.identity {
+  min-width: 0;
+  flex: 1;
+}
+
+.agency {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.persona {
+  margin: 0.1rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+.badge {
+  flex: none;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* --- the strip that explains an interruption ---------------------------- */
+
+.strip {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--accent);
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+/* --- transcript ---------------------------------------------------------- */
+
+.transcript {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1rem 0.9rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.loading {
+  margin: auto;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.bubble {
+  max-width: 84%;
+  padding: 0.55rem 0.75rem 0.5rem;
+  border-radius: 1rem;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 6%);
+  animation: rise 160ms ease-out;
+}
+
+.agentBubble {
+  align-self: flex-start;
+  background: var(--agent);
+  border-bottom-left-radius: 0.3rem;
+}
+
+.leadBubble {
+  align-self: flex-end;
+  background: var(--lead);
+  color: var(--lead-text);
+  border-bottom-right-radius: 0.3rem;
+}
+
+.text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* FR-045: the WhatsApp-style quote of the message this reply actually read. */
+.quote {
+  margin: 0 0 0.35rem;
+  padding: 0.3rem 0.5rem;
+  border-left: 3px solid var(--accent);
+  border-radius: 0.35rem;
+  background: var(--quote);
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quoteLabel {
+  display: block;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.74rem;
+}
+
+/* FR-049: enviando → recebido, small and under the lead's own words. */
+.state {
+  display: block;
+  margin-top: 0.15rem;
+  text-align: right;
+  font-size: 0.68rem;
+  color: color-mix(in srgb, var(--lead-text) 55%, transparent);
+}
+
+/* --- consent ------------------------------------------------------------- */
+
+.consent {
+  max-width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.accept {
+  margin-top: 0.6rem;
+  padding: 0.5rem 1.1rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.accepted {
+  margin: 0.4rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.accept:hover {
+  filter: brightness(1.08);
+}
+
+.accept:focus-visible,
+.send:focus-visible,
+.input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* --- typing indicator ---------------------------------------------------- */
+
+.typing {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  padding: 0.7rem 0.85rem;
+}
+
+.typing span {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: blink 1.2s infinite ease-in-out;
+}
+
+.typing span:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.typing span:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+/* --- composer ------------------------------------------------------------ */
+
+.composer {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem calc(0.6rem + env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--field-border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  /* 16px or iOS zooms the whole page on focus. */
+  font: inherit;
+  font-size: 1rem;
+}
+
+.input:disabled {
+  opacity: 0.6;
+}
+
+.send {
+  flex: none;
+  padding: 0.65rem 1.15rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.send:disabled {
+  background: var(--field-border);
+  color: var(--muted);
+  cursor: default;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes blink {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble {
+    animation: none;
+  }
+  .typing span {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .shell {
+    --lead: #23402c;
+    --lead-text: #e6f2e9;
+    --quote: #2b292d;
+  }
+}
+
+@media (min-width: 40rem) {
+  .shell {
+    border-inline: 1px solid var(--border);
+  }
+
+  .bubble {
+    max-width: 70%;
+    font-size: 1rem;
+  }
+
+  .transcript {
+    padding: 1.25rem 1.25rem 1.5rem;
+  }
+}

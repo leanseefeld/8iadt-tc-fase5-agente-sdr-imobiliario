@@ -790,14 +790,40 @@ again with the redaction registry. Also: the span processor captures the mask
 closure at registration, so a dev-server hot reload will not pick up a change to
 it — restart the container or you are testing the old closure.
 
-**Contract drift to reconcile in group F or a follow-up spec.** Measured against
-live traces, not read from code: the trace `name` is empty where
-`contracts/observability.md` §1 says `conversation.turn` (the name is on the root
-span instead); generation spans report `usage` as zeros, where §2 asks for
-`usage.input_tokens`/`usage.output_tokens`; and the emitted span set includes
-`model.extract` and `model.call`, which §2 does not list — a consequence of the
-two-call design the developer accepted, never written back into the contract.
-None of these break SC-010–012; all three make the contract untrue as written.
+**Three of those were fixed the same day** (`6133b7a`), after the developer asked:
+
+- *Token counts.* Both calls stream, and a streaming OpenAI-compatible response
+  carries no usage unless the request asks. oMLX reports it fine — we never asked.
+  `includeUsage: true` on the provider fixed it; spans now also carry `cache_read`
+  from `prompt_tokens_details.cached_tokens`, measuring **82–84%** prefix-cache
+  hits on a real conversation, and `reasoning` for if `MODEL_THINKING` returns.
+- *Trace name.* A trace does not inherit its root span's name; `traceName` on the
+  propagated attributes does it. Every row in the trace list was blank before.
+- *`model.call`.* Never a taxonomy entry — the fallback for a call arriving with
+  no `functionId`, which is exactly what `modelTelemetry` returned while it read
+  the wrong module instance's registration. All twelve are from the eight minutes
+  before `bba772c` and none since. It now logs a warning instead of silently
+  inventing a span name.
+
+**Contract elements that exist only on paper.** A full pass over
+`contracts/observability.md` against the code and against live traces, 09/09/2026:
+
+| Element | State |
+|---|---|
+| `guard.rejected` event (§2) | **Never emitted.** Guards run and their name is stored on the message metadata, but nothing reaches Langfuse. Its listed vocabulary (`language`, `two_questions`, `unbacked_money`, `leak`) does not match the code's (`language`, `questionCount`, `unbackedFigure`, `leakedSyntax`, plus group D's `injectionInput` and `steering`). |
+| `retry.count`, `error.code` (§2) | Never set on a generation span. `finish.reason` is set instead and is not in the contract. |
+| `slots.changed`, `filters`, `results.count`, `results.codes`, `reason` (§2) | Never set as named attributes. Every tool span carries `{ arguments: … }` verbatim, so `codes` and `reason` are present but nested inside the raw arguments. |
+| `model.extract` | Emitted on every turn, listed nowhere — the two-call design, never written back. |
+| `model.recover_slot` | In the code, **zero** observations ever recorded: the recovery path has not run since tracing worked. Unverified, not unimplemented. |
+| §1 "Started by `services/conversation.ts`" | The trace is started in `src/agent/orchestrator.ts`. |
+| §1 "every span in the trace inherits them" | True at trace level; a child span's own metadata carries neither `turn.*` nor `agency.id`. |
+| §1 `turn.outcome` "always set" | Set only when the turn commits — `trace.finish` is inside the `status === "committed"` branch. |
+| §3 masking examples | `Camila S.` and `(11) 9****-1234` are not what the code produces (`C*** D***`, `(11) *****-**21`); the e-mail example is right. T011 diverged deliberately and it was never written back. |
+| §3 free text row | Now understates it: the lead's own name is redacted from free text too, per the developer's decision of 09/09/2026. |
+| §6 "Every row this slice writes" | `lead.created` and `lead.consented` are written on the inbound path, outside any turn, so they carry no trace id. Right behaviour, absolute wording. |
+
+None of this breaks SC-010, SC-011 or SC-012. It is the gap between a contract
+written before the code and the code that answered it.
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

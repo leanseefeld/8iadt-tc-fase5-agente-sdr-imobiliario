@@ -468,11 +468,28 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   names the ONE filter T041 will offer to relax, widest first
   (neighbourhoods → price → bedrooms).
 
+- T039 — the search wired into `agent/orchestrator.ts`, and the suggestion
+  recorded. `commitTurn` already accepted `propertyIds` and emitted
+  `properties.suggested` (T017); what was missing was the caller. The search runs
+  **once**, on the turn that completes the qualifying script (`qualified` and at
+  least one *qualifying* slot filled this turn) and never on a handoff or meeting
+  turn — merge rule 1 means those filters can no longer change, so a second
+  search would return the same three rows under a second set of cards. Three
+  consequences worth keeping: the card prices join `allowedAmounts`, so the
+  `unbackedFigure` guard lets the agent repeat a price the catalog returned; the
+  script's question waits for the next turn (the cards turn asks which one
+  interested them, FR-025) while the guard's `pendingSlot` still previews it; and
+  a lead reaction to the cards no longer counts as a fallback — reacting to three
+  cards fills no slot, and without that exception a happy conversation walked
+  into a handoff two turns after the catalog answered. `phrase()` gained
+  `fallbackText` so a guard-rejected cards turn says `SUGGESTION_REPLY` instead
+  of "Perfeito, anotado!" under three property cards.
+
 ## In flight
 - Group D (T038–T047).
 
 ## Next step
-T039 — record the suggestion in `commitTurn` (`properties.suggested` + `propertyIds`).
+T040 — `PropertyCard.tsx` per `contracts/chat-api.md` §5.
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

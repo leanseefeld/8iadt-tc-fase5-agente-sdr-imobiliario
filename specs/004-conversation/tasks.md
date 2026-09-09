@@ -76,7 +76,7 @@ description: "Task list for the conversation slice"
 **Goal / test**: at most three catalog properties as cards — run Cenário 1 to the search and confirm every card matches a seeded row satisfying the filters.
 
 - [x] T038 [US3] Implement the `searchProperties` tool in `src/agent/tools/search-properties.ts`, calling spec 002's `services/properties.searchProperties` scoped by agency, capped at three, never invoked for `investment` (FR-024)
-- [ ] T039 [US3] Record the suggestion in `commitTurn` — `properties.suggested` plus `propertyIds` in the agent message metadata
+- [x] T039 [US3] Record the suggestion in `commitTurn` — `properties.suggested` plus `propertyIds` in the agent message metadata
 - [ ] T040 [P] [US3] Implement `PropertyCard.tsx` with the payload of [contracts/chat-api.md](contracts/chat-api.md) §5 and BRL formatting in the component
 - [ ] T041 [US3] Handle the empty result: the agent says so and offers to relax exactly one filter, with no cards rendered
 - [ ] T042 [US3] Verify SC-004 per [quickstart.md](quickstart.md) §2 — every code shown exists in `properties` and satisfies the stated filters

@@ -41,6 +41,26 @@ export const MODEL_FAILURE_REPLY =
   "Desculpa, tive um probleminha aqui e não consegui responder agora. Pode me mandar de " +
   "novo em instantes?";
 
+/**
+ * FR-025: the cards are already on the screen, so the sentence that introduces
+ * them says nothing the lead can read off the card itself. Used when a guard
+ * throws the model's own version away.
+ */
+export const SUGGESTION_REPLY =
+  "Separei algumas opções que combinam com o que você me contou. Qual delas te interessou mais?";
+
+/** FR-025: nothing matched, and exactly one filter is offered for relaxing. */
+const RELAX_QUESTIONS: Record<"neighborhoods" | "priceMax" | "bedrooms", string> = {
+  neighborhoods: "Posso procurar em bairros vizinhos também?",
+  priceMax: "Você toparia esticar um pouco o valor?",
+  bedrooms: "Você consideraria um imóvel com um quarto a menos?",
+};
+
+export function noMatchReply(relaxable: "neighborhoods" | "priceMax" | "bedrooms" | null): string {
+  const apology = "Não encontrei nenhum imóvel com exatamente essas características agora.";
+  return relaxable === null ? apology : `${apology} ${RELAX_QUESTIONS[relaxable]}`;
+}
+
 /** FR-029: opt-out, confirmed in one sentence. */
 export const OPT_OUT_REPLY =
   "Combinado, não vou mais te escrever por aqui. Obrigada pelo seu tempo!";

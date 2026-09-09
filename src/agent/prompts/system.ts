@@ -131,7 +131,23 @@ export interface TurnPromptInput {
   notUnderstood: boolean;
   /** The lead is being handed to a person this turn (FR-028). */
   handoff: boolean;
+  /**
+   * The catalog answered this turn (FR-024/025): how many cards the widget is
+   * about to render under this message, and — when none — the one filter the
+   * agent may offer to relax.
+   */
+  suggestions?: {
+    count: number;
+    relaxable: "neighborhoods" | "priceMax" | "bedrooms" | null;
+  };
 }
+
+/** FR-025, in the two shapes a search can end in. */
+const RELAX_ASKS: Record<"neighborhoods" | "priceMax" | "bedrooms", string> = {
+  neighborhoods: "se pode procurar em bairros vizinhos",
+  priceMax: "se a pessoa toparia esticar um pouco o valor",
+  bedrooms: "se a pessoa consideraria um quarto a menos",
+};
 
 function acknowledgement(input: TurnPromptInput): string {
   if (input.filled.length === 0) return "";
@@ -146,6 +162,21 @@ function acknowledgement(input: TurnPromptInput): string {
 }
 
 function task(input: TurnPromptInput): string {
+  // The cards are rendered from the search result, under this message. Anything
+  // the model writes about a specific imóvel is prose the lead can already read
+  // off the card — and prose is exactly where an invented price comes from.
+  if (input.suggestions !== undefined && input.suggestions.count > 0) {
+    return `\nSua tarefa nesta mensagem: diga em UMA frase que separou ${input.suggestions.count} ` +
+      `opções que combinam com o que a pessoa contou, e pergunte qual delas chamou mais atenção.
+NÃO descreva os imóveis, não cite preço, bairro nem código: os cards aparecem logo abaixo
+da sua mensagem e a pessoa consegue ler tudo neles.`;
+  }
+  if (input.suggestions !== undefined && input.suggestions.count === 0) {
+    const ask = input.suggestions.relaxable === null ? null : RELAX_ASKS[input.suggestions.relaxable];
+    return `\nSua tarefa nesta mensagem: diga com franqueza que não encontrou nenhum imóvel com
+exatamente essas características agora${ask === null ? "" : `, e pergunte ${ask}`}.
+Não invente imóvel nenhum e não ofereça mais de uma mudança nos filtros.`;
+  }
   if (input.handoff) {
     return `\nSua tarefa nesta mensagem: diga em uma ou duas frases que vai chamar um corretor
 de verdade para continuar o atendimento, e que a pessoa pode escrever aqui mesmo.

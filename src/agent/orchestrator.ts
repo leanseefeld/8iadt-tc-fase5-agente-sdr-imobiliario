@@ -9,6 +9,7 @@ import {
   isQualified,
   mergeSlots,
   nextQuestion,
+  qualifyingSlots,
   upcomingSlots,
   type Askable,
   type Intent,
@@ -24,11 +25,17 @@ import {
   type CommittedToolCall,
   type LoadedTurn,
 } from "../services/conversation.ts";
-import { MODEL_FAILURE_REPLY, PRE_CONSENT_REPLY, guardedReply } from "./prompts/fallback.ts";
+import {
+  MODEL_FAILURE_REPLY,
+  PRE_CONSENT_REPLY,
+  SUGGESTION_REPLY,
+  guardedReply,
+  noMatchReply,
+} from "./prompts/fallback.ts";
 import { extractionSystemPrompt, turnSystemPrompt } from "./prompts/system.ts";
 import { modelCall } from "./provider.ts";
 import { plausiblyAnswers, recoverSlot } from "./recovery.ts";
-import { extractionTools, runProposeMeeting } from "./tools/index.ts";
+import { extractionTools, runProposeMeeting, runSearchProperties } from "./tools/index.ts";
 import { normalizeExtraction } from "./tools/update-slots.ts";
 
 /**
@@ -101,6 +108,8 @@ export type TurnResult =
       guard: string | null;
       handoffReason: HandoffReason | null;
       meeting: "viewing" | "call" | null;
+      /** The catalog codes this turn put on the screen, in order (SC-004). */
+      propertyCodes: string[];
       events: string[];
     };
 
@@ -225,6 +234,13 @@ interface PhraseInput {
   nextSlot: Askable | null;
   allowedAmounts: number[];
   allowedPercentages: number[];
+  /**
+   * What goes out when a guard throws the whole reply away. Defaults to the
+   * script's question; a turn whose job is not to ask one (the cards, the empty
+   * result) hands its own sentence in, or the lead would get "anotado!" under
+   * three property cards.
+   */
+  fallbackText?: string;
   sink: ReplySink;
   startedAt: number;
 }
@@ -304,7 +320,9 @@ async function phrase(input: PhraseInput): Promise<PhrasedReply> {
   // Nothing survived: the lead still gets an answer, and which failure it was
   // decides which one (FR-014 for a dead provider, FR-012 for a bad reply).
   if (chunks.length === 0) {
-    const replacement = failed ? MODEL_FAILURE_REPLY : guardedReply(input.question);
+    const replacement = failed
+      ? MODEL_FAILURE_REPLY
+      : (input.fallbackText ?? guardedReply(input.question));
     await emit(replacement);
     return { chunks, guard: rejectedBy, failed };
   }
@@ -414,9 +432,17 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   const score = scoreLead(intent, slots);
   const qualified = isQualified(intent, slots);
 
+  // A reaction to the cards ("gostei do segundo") fills no slot and is not a
+  // misunderstanding — counting it as one would walk a happy conversation into
+  // a handoff two turns after the catalog answered.
+  const lastAgentMessage = [...turn.history].reverse().find((message) => message.role === "agent");
+  const cardsJustShown =
+    Array.isArray(lastAgentMessage?.metadata.propertyIds) &&
+    (lastAgentMessage.metadata.propertyIds as unknown[]).length > 0;
+
   // FR-023/FR-027: a turn that read a real message and learned nothing is a
   // fallback, and two in a row are a handoff.
-  const notUnderstood = !learnedSomething && plausiblyAnswers(leadText);
+  const notUnderstood = !learnedSomething && plausiblyAnswers(leadText) && !cardsJustShown;
   const fallbackStreak = notUnderstood ? turn.conversation.fallbackStreak + 1 : 0;
   const handoffReason = handoffDecision({
     leadAskedForHuman: extraction.leadAskedForHuman,
@@ -433,6 +459,30 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   const question = meeting !== null || handoffReason !== null ? null : nextQuestion({ intent, slots }, consented);
   const upcoming = upcomingSlots({ intent, slots }, consented);
 
+  // FR-024/026: the catalog is asked exactly once, on the turn that completes the
+  // qualifying script — `mergeSlots` never overwrites a filled slot, so those
+  // filters cannot change afterwards and a second search would return the same
+  // three rows under a second set of cards. `runSearchProperties` refuses
+  // `investment` on its own (FR-041), and a handoff or a meeting turn has a
+  // different job.
+  const searchDue =
+    qualified &&
+    handoffReason === null &&
+    meeting === null &&
+    filledThisTurn.some((slot) => qualifyingSlots(intent).includes(slot));
+
+  const search = searchDue
+    ? await runSearchProperties({ agencyId: turn.agency.id, intent, slots })
+    : { properties: [], searched: false, relaxable: null };
+
+  if (search.searched) {
+    toolCalls.push({
+      name: "searchProperties",
+      arguments: { codes: search.properties.map((property) => property.code) },
+    });
+  }
+  const propertyIds = search.properties.map((property) => property.id);
+
   // 4 · phrase
   const lead = figuresIn(`${leadText} ${turn.history.map((m) => m.content).join(" ")}`);
   const phrased = await phrase({
@@ -446,16 +496,30 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       meeting,
       notUnderstood,
       handoff: handoffReason !== null,
+      ...(search.searched
+        ? { suggestions: { count: search.properties.length, relaxable: search.relaxable } }
+        : {}),
     }),
     question,
-    pendingSlot: question?.slot ?? null,
+    // On a search turn the script's question waits for the next one, but the
+    // guard still has to tolerate a sentence that previews it.
+    pendingSlot: search.searched ? (upcoming[0] ?? null) : (question?.slot ?? null),
     nextSlot: upcoming[1] ?? null,
     allowedAmounts: [
       ...lead.amounts,
       ...(slots.priceMax === null ? [] : [slots.priceMax]),
       ...(slots.ticket === null ? [] : [slots.ticket]),
+      // FR-012's allowed set is "what a search returned, plus what the lead
+      // wrote" — these are the prices on the cards themselves.
+      ...search.properties.map((property) => property.price),
     ],
     allowedPercentages: lead.percentages,
+    ...(search.searched
+      ? {
+          fallbackText:
+            search.properties.length > 0 ? SUGGESTION_REPLY : noMatchReply(search.relaxable),
+        }
+      : {}),
     sink: context.sink,
     startedAt: context.startedAt,
   });
@@ -472,6 +536,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     qualified,
     fallbackStreak,
     handoffReason,
+    ...(propertyIds.length > 0 ? { propertyIds } : {}),
     guard: phrased.guard,
     toolCalls,
     traceId: context.traceId ?? null,
@@ -495,6 +560,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     guard: phrased.guard,
     handoffReason,
     meeting,
+    propertyCodes: search.properties.map((property) => property.code),
     events: committed.events,
   };
 }

@@ -9,8 +9,8 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
 |---|---|---|---|
 | A | T001–T013 (setup, pure core) | `npm test` green with no DB and no model | done |
 | B | T014–T027 (turn service, orchestrator, consumer) | one real turn persists against oMLX via the service layer | done |
-| C | T028–T037 (channel, notifier, SSE, widget) | widget screenshot; SC-005 reload check | next |
-| D | T038–T047 (search tool, cards, handoff, opt-out, budget) | SC-004, SC-006, SC-007 by hand | pending |
+| C | T028–T037 (channel, notifier, SSE, widget) | widget screenshot; SC-005 reload check | done |
+| D | T038–T047 (search tool, cards, handoff, opt-out, budget) | SC-004, SC-006, SC-007 by hand | next |
 | E | T048–T053 (Langfuse, observability profile) | SC-010..012; memory total recorded | pending |
 | F | T054–T058 (scenario tests, lint, build, README) | both suites green, build green | pending |
 
@@ -434,11 +434,31 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   ("Que bacana que você está de olho na Zona Sul, é uma área ótima! Pra te ajudar
   melhor, qual faixa de preço você tem em mente? 😊").
 
+- T037 — **SC-005 verified by hand**, in a real browser at 375x812 against
+  `/chat/demo`, on the conversation built in T035's check (consent notice, one lead
+  message, one agent reply):
+  1. **Reload** — transcript and pending question identical, character for
+     character, from `GET /api/chat` alone.
+  2. **`docker compose restart app`** (~22 s) — reload again: identical. Nothing
+     lived in process memory, so nothing was lost. The widget showed no
+     "Conexão perdida" during it, correctly: 22 s is one missed pulse, not two.
+  3. **`docker compose stop app` for 40 s** — past two missed pulses, the strip
+     appeared and both the input and the send button went disabled (FR-048).
+  4. **`docker compose up -d app`** — the strip cleared on its own, with no reload,
+     when `EventSource` reconnected and the first pulse arrived.
+  5. A second message sent straight after the reconnect — *"Até uns 700 mil"* —
+     was answered over the same recovered stream with *"Entendi que seu orçamento
+     máximo é de R$ 700.000! Para eu refinar a busca, quantos quartos você
+     precisa?"*: the script advanced to the next slot, nothing was re-asked, and
+     the figure quoted is the lead's own (the `unbackedFigure` guard's allowed set).
+
+  **Group C's exit gate is passed.**
+
 ## In flight
 - Nothing.
 
 ## Next step
-T037 — verify SC-005 by hand (reload and `docker compose restart app`).
+T038 — the `searchProperties` tool in `src/agent/tools/search-properties.ts` (group D).
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

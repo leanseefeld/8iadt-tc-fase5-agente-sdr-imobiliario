@@ -69,7 +69,7 @@ description: "Task list for the conversation slice"
 - [x] T034 [US2] Implement the agency-resolving server component in `src/app/(public)/chat/[agencySlug]/page.tsx`, returning 404 for an unknown slug and importing no `db/`
 - [x] T035 [US2] Implement `ChatWidget.tsx` — session id in `localStorage`, history on mount, an `EventSource` connection, the consent notice with its "Aceito" button as the first bubble, message state `enviando → recebido`, a typing indicator from turn start to first `chunk`, "Conexão perdida. Reconectando…" with sending disabled after two missed pulses, and — when a `message` event's `repliesToMessageId` is not the lead's latest — quoting that message's first line atop the bubble (FR-045)
 - [x] T036 [P] [US2] Write the widget stylesheet as CSS Modules — warm, mobile-first, no component library and no Tailwind
-- [ ] T037 [US2] Verify SC-005 by hand per [quickstart.md](quickstart.md) §2 — reload and `docker compose restart app`, and the pending question does not move
+- [x] T037 [US2] Verify SC-005 by hand per [quickstart.md](quickstart.md) §2 — reload and `docker compose restart app`, and the pending question does not move
 
 ## Phase 5: User Story 3 — The properties shown are real (P2)
 

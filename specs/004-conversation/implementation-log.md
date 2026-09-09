@@ -545,6 +545,19 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   phrasing path and by both written replies, so a written reply does not arrive
   instantly while every model-written one waits.
 
+- T046 — the budget and the length cap, **verified by hand**. The enforcement was
+  already `recordLeadMessage`'s (T018): three refusals before anything is written,
+  each answered `200` with a fixed template by the route (T031). What this task
+  changed is one sentence: `BUDGET_REPLY` used to promise that a corretor would
+  take over, and nothing of the sort happens — no turn, no handoff, no row — so it
+  now says only what is true. Verified with `CHAT_MESSAGE_BUDGET=3` and
+  `CHAT_MAX_MESSAGE_CHARS=40` in `.env` and `docker compose up -d app`: four
+  messages on one session gave `202 202 202` then the budget template with `200`,
+  and `select count(*)` over that conversation's lead messages returned **3**; a
+  41-character message on a fresh session returned the length template and left
+  **0** leads behind — the length check runs before the agency is even resolved.
+  `.env` restored and the QA rows deleted afterwards.
+
 ## In flight
 - Group D (T038–T047).
 

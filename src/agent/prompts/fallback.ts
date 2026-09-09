@@ -26,10 +26,14 @@ export const PRE_CONSENT_REPLY =
   "Antes de começarmos, preciso do seu aceite no aviso acima. É só tocar em \"Aceito\" " +
   "e eu sigo daqui.";
 
-/** FR-032: the per-session budget tripped. */
+/**
+ * FR-032: the per-session budget tripped. It promises nothing, because nothing
+ * happens — no turn is created, no broker is called and no row is written, so a
+ * sentence saying otherwise would be the one lie in this file.
+ */
 export const BUDGET_REPLY =
-  "Recebi bastante coisa em pouco tempo por aqui. Vou pedir para um corretor assumir a " +
-  "conversa e te responder direitinho, tudo bem?";
+  "Recebi muitas mensagens suas em pouco tempo e preciso de uma pausa para dar conta. " +
+  "Daqui a pouco eu consigo te responder de novo por aqui.";
 
 /** FR-032: a single message over `CHAT_MAX_MESSAGE_CHARS`. */
 export const TOO_LONG_REPLY =

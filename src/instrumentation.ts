@@ -15,6 +15,11 @@ import { createLogger } from "@/core/logging";
  * is how the demo usually runs.
  */
 export async function register() {
+  // Next compiles this file for the Edge runtime too, where `process.once` does
+  // not exist and the OpenTelemetry packages cannot load. Everything below is
+  // Node-only, so the Edge copy returns immediately.
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+
   const config = getConfig();
   await registerLangfuse("app");
 

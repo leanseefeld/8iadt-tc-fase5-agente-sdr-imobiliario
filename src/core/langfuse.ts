@@ -42,8 +42,30 @@ interface Registration {
   flush: (timeoutMs: number) => Promise<void>;
 }
 
-let registration: Registration | null = null;
-let attempted = false;
+/**
+ * The registration lives on `globalThis`, not in a module-level `let`.
+ *
+ * Next bundles `src/instrumentation.ts` separately from the route handlers, so
+ * the module instance that runs `registerLangfuse` is **not** the instance a
+ * turn imports — a plain module variable is set in one graph and still `null`
+ * in the other. That failure is silent and looks exactly like "Langfuse is not
+ * configured": the model spans arrive (the AI SDK's own integration registry is
+ * process-global) while the turn trace, its attributes and `events.trace_id`
+ * are all missing. Measured on 09/09/2026, then fixed here.
+ */
+const STATE = Symbol.for("sdr.core.langfuse");
+
+interface State {
+  registration: Registration | null;
+  attempted: boolean;
+}
+
+function state(): State {
+  const container = globalThis as unknown as Record<symbol, State | undefined>;
+  container[STATE] ??= { registration: null, attempted: false };
+  return container[STATE];
+}
+
 let log = createLogger("app", { module: "core/langfuse" });
 
 /** The bound on every shutdown flush: a slow exporter must not delay an exit. */
@@ -100,8 +122,8 @@ function maskedLeadId(leadId: string): string {
  * — unless all three keys are present.
  */
 export async function registerLangfuse(process: ProcessName): Promise<void> {
-  if (attempted) return;
-  attempted = true;
+  if (state().attempted) return;
+  state().attempted = true;
   log = createLogger(process, { module: "core/langfuse" });
 
   const config = getConfig();
@@ -140,7 +162,7 @@ export async function registerLangfuse(process: ProcessName): Promise<void> {
     tracing.setLangfuseTracerProvider(provider);
     registerTelemetry(aiSdkIntegration(tracing));
 
-    registration = {
+    state().registration = {
       tracing,
       flush: async (timeoutMs) => {
         let timer: ReturnType<typeof setTimeout> | undefined;
@@ -159,7 +181,7 @@ export async function registerLangfuse(process: ProcessName): Promise<void> {
   } catch (error) {
     // A missing package or a bad key must not stop a process from starting.
     log.warn({ err: (error as Error).message }, "langfuse registration failed, tracing disabled");
-    registration = null;
+    state().registration = null;
   }
 }
 
@@ -169,9 +191,9 @@ export async function registerLangfuse(process: ProcessName): Promise<void> {
  * pending batch is simply lost — which is the correct trade for telemetry.
  */
 export async function flushLangfuse(timeoutMs: number = FLUSH_TIMEOUT_MS): Promise<void> {
-  const active = registration;
+  const active = state().registration;
   if (active === null) return;
-  registration = null;
+  state().registration = null;
   try {
     await active.flush(timeoutMs);
   } catch (error) {
@@ -223,7 +245,7 @@ export async function withTurnTrace<T>(
   attributes: TurnTraceAttributes,
   fn: (trace: TurnTrace) => Promise<T>,
 ): Promise<T> {
-  const active = registration;
+  const active = state().registration;
   if (active === null) return fn(NO_TRACE);
 
   const { tracing } = active;
@@ -296,7 +318,7 @@ export async function withTurnTrace<T>(
  * repeated at each call site. With Langfuse unconfigured this spreads nothing.
  */
 export function modelTelemetry(name: string): { experimental_telemetry?: TelemetryOptions } {
-  if (registration === null) return {};
+  if (state().registration === null) return {};
   return { experimental_telemetry: { isEnabled: true, functionId: name } };
 }
 
@@ -374,8 +396,9 @@ export interface ToolSpan {
  * every commit path, and the span set the contract asks for.
  */
 export function recordToolSpans(calls: readonly ToolSpan[]): void {
-  if (registration === null || calls.length === 0) return;
-  const { tracing } = registration;
+  const active = state().registration;
+  if (active === null || calls.length === 0) return;
+  const { tracing } = active;
   for (const call of calls) {
     safely("tool span", () => {
       tracing

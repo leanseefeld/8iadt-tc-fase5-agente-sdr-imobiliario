@@ -23,7 +23,7 @@ guards and PII masking. Fast, deterministic, and the place a regression shows fi
 
 ## 2 · The widget by hand (US1, US2, US3)
 
-Open `http://localhost:3100/chat/imobiliaria-demo`. The first bubble is the consent
+Open `http://localhost:3100/chat/demo`. The first bubble is the consent
 notice with an "Aceito" button — type anything before tapping it and the reply is
 the fixed template, not persisted (**FR-018/019**). Tap "Aceito", then run Cenário 1
 verbatim from `reference/exemplos de conversas.md`:
@@ -97,9 +97,9 @@ docker compose exec db psql -U sdr -d sdr -c \
 ```bash
 # same clientMessageId twice → one lead message, one reply (SC-008)
 curl -s localhost:3100/api/chat -H 'content-type: application/json' \
-  -d '{"agencySlug":"imobiliaria-demo","sessionId":"qa-1","clientMessageId":"dup-1","text":"oi"}' # 202
+  -d '{"agencySlug":"demo","sessionId":"qa-1","clientMessageId":"dup-1","text":"oi"}' # 202
 curl -s localhost:3100/api/chat -H 'content-type: application/json' \
-  -d '{"agencySlug":"imobiliaria-demo","sessionId":"qa-1","clientMessageId":"dup-1","text":"oi"}' # 202, no second row
+  -d '{"agencySlug":"demo","sessionId":"qa-1","clientMessageId":"dup-1","text":"oi"}' # 202, no second row
 docker compose exec db psql -U sdr -d sdr -c \
   "select role, count(*) from messages group by role;"
 ```

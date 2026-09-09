@@ -5,6 +5,7 @@ import { getConfig } from "../core/config.ts";
 import { EMPTY_SLOTS, slotsSchema, type Intent, type SlotKey, type Slots } from "../domain/slots.ts";
 import type { HandoffReason } from "../domain/handoff.ts";
 import { maskPII, maskText } from "../core/security.ts";
+import { MESSAGE_CHANNEL } from "../core/notifier.ts";
 
 /**
  * The turn's one door to the database.
@@ -507,8 +508,11 @@ export async function recordLeadMessage(inbound: InboundLeadMessage): Promise<In
  * (`visao-geral.md` §8). The payload carries ids only — the replica that wakes
  * re-reads the row scoped by agency and conversation before writing it to a
  * stream, because the notification is a doorbell, not a delivery.
+ *
+ * Declared by `core/notifier.ts`, which is the side that listens; re-exported
+ * here so the writer and the reader can never drift onto two channel names.
  */
-export const MESSAGE_CHANNEL = "conversation_message";
+export { MESSAGE_CHANNEL };
 
 export interface CommittedToolCall {
   name: string;

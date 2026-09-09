@@ -55,8 +55,14 @@ export interface ChannelAdapter {
  * the adapter does not know about status codes.
  */
 export class InboundMessageError extends Error {
-  constructor(readonly field: string) {
+  // Declared and assigned rather than a parameter property: `tsconfig` runs
+  // with `erasableSyntaxOnly`, so the constructor-shorthand form is a compile
+  // error here (Node runs this TypeScript by stripping types, not compiling).
+  readonly field: string;
+
+  constructor(field: string) {
     super(`invalid inbound message: ${field}`);
     this.name = "InboundMessageError";
+    this.field = field;
   }
 }

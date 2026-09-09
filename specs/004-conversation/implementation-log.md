@@ -302,6 +302,23 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   class carries the offending field name and no status code: the adapter does not
   know about HTTP.
 
+- T030 — `src/core/notifier.ts`, taken **before** T029 because the web adapter's
+  `ReplySink` publishes through it. One `LISTEN` `pg.Client` per process, opened on
+  the first `subscribe`, rebuilt with backoff after a drop, plus a map of listeners
+  by conversation id. Two channels, and the difference is durability:
+  `conversation_message` is rung inside `commitTurn`'s transaction and carries ids
+  only (the row exists, so a missed one is recovered by `Last-Event-ID`), while
+  `conversation_chunk` carries *text*, because at chunk time no row exists yet —
+  it is deliberately lossy and nothing is ever recovered from it. `MESSAGE_CHANNEL`
+  moved here and `services/conversation.ts` re-exports it, so the writer and the
+  listener cannot drift onto two names. This module is the one place outside `db/`
+  and `services/` that opens a Postgres connection: `LISTEN` needs a connection
+  held for the life of the process, which is exactly what a pool must not give
+  away, and it never reads a row — ids in, ids out — so constitution IV is intact.
+  `tests/integration/notifier.test.ts`, 5 tests: two subscribers woken by one
+  publish, a third on another conversation left asleep, a chunk carrying its text,
+  and unsubscribe stopping delivery.
+
 ## In flight
 - Nothing.
 

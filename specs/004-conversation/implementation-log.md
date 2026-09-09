@@ -687,11 +687,33 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   the worker logs `langfuse keys absent, tracing disabled` and then runs a real
   turn to a committed reply.
 
+- T050 — telemetry on every model call, and the turn trace around them.
+  `...modelTelemetry(name)` spreads into all three call sites —
+  `model.extract` and `model.reply` in `agent/orchestrator.ts`,
+  `model.recover_slot` in `agent/recovery.ts` — and spreads *nothing* when
+  Langfuse is unconfigured. `runTurn` wraps `run()` in `withTurnTrace`, which
+  carries the agency, lead, conversation, channel, intent and pending-slot
+  attributes of contract §1 through `propagateAttributes`, so every child span
+  inherits them instead of each call site repeating them; the turn's own trace
+  id is what `commitTurn` then writes to `events.trace_id` (FR-050), and it is
+  `null` with the profile down, same as before. Two shape notes for whoever
+  owns the contract:
+  (a) contract §1 says the trace is started by `services/conversation.ts`, but
+  the turn boundary in the code is `agent/orchestrator.runTurn` — that is where
+  it went;
+  (b) contract §2 expects `tool.*` spans from the AI SDK's tool instrumentation,
+  which can never fire here: `agent/tools/index.ts` invokes every tool from code
+  (FR-024 scopes the search by agency, ADR 19 owns the meeting decision), so the
+  SDK sees no tool execute. They are emitted from `commitTurn` instead, from the
+  same `toolCalls` list it persists — one place, all four commit paths.
+  `TurnResult` gained `outcome` and `stage`, the two values contract §1 wants at
+  the end of a turn and nothing else exposed.
+
 ## In flight
 - Nothing.
 
 ## Next step
-T050 — attach the AI SDK telemetry option to every model call (group E).
+T053 — verify SC-010/011/012 per quickstart §6 and record the measured memory total (group E).
 
 ## Orchestrator validation of group D — 09/09/2026
 

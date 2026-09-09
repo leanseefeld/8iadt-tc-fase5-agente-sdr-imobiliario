@@ -4,6 +4,7 @@ import { agencies, conversations, events as events_, leads, messages } from "../
 import { getConfig } from "../core/config.ts";
 import { EMPTY_SLOTS, slotsSchema, type Intent, type SlotKey, type Slots } from "../domain/slots.ts";
 import type { HandoffReason } from "../domain/handoff.ts";
+import { recordToolSpans } from "../core/langfuse.ts";
 import { maskPII, maskText } from "../core/security.ts";
 import { MESSAGE_CHANNEL } from "../core/notifier.ts";
 
@@ -587,6 +588,17 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
   const { turn } = input;
   const now = input.now ?? new Date();
   const repliesToMessageId = turn.unanswered.at(-1)?.id ?? null;
+
+  // The `tool.*` spans of contracts/observability.md §2, from the same list this
+  // function is about to persist — one place for every commit path, and the
+  // only place that knows the full set, because this agent invokes its tools
+  // from code and the AI SDK never sees them execute. A no-op without Langfuse.
+  recordToolSpans(
+    (input.toolCalls ?? []).map((call) => ({
+      name: call.name,
+      attributes: { arguments: call.arguments },
+    })),
+  );
 
   const leadStatus = nextLeadStatus(turn.lead.status, input.intent, input.qualified);
   const conversationStatus: ConversationStatus =

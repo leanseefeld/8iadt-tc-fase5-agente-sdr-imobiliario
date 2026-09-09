@@ -1,5 +1,6 @@
 import { streamText, type ModelMessage } from "ai";
 import { getConfig } from "../core/config.ts";
+import { modelTelemetry, withTurnTrace } from "../core/langfuse.ts";
 import { createLogger } from "../core/logging.ts";
 import { handoffDecision, shouldProposeMeeting, type HandoffReason } from "../domain/handoff.ts";
 import { looksLikeInjection, looksLikeSteering } from "../domain/injection.ts";
@@ -24,6 +25,7 @@ import {
   loadTurn,
   releaseTurn,
   type CommittedToolCall,
+  type LeadStatus,
   type LoadedTurn,
 } from "../services/conversation.ts";
 import {
@@ -95,6 +97,14 @@ export type SkipReason =
   | "preConsent"
   | "alreadyRunning";
 
+/**
+ * `contracts/observability.md` §1: one value, always set. `budget_exceeded` and
+ * `replayed` are the two the turn itself never produces — the budget is refused
+ * in the route handler before a turn starts (FR-032), and a replay never runs
+ * one (FR-042).
+ */
+export type TurnOutcomeName = "replied" | "fallback" | "handoff" | "meeting_proposed" | "opted_out";
+
 export type TurnResult =
   | { status: "skipped"; reason: SkipReason; reply?: string }
   | {
@@ -115,6 +125,9 @@ export type TurnResult =
       /** The catalog codes this turn put on the screen, in order (SC-004). */
       propertyCodes: string[];
       events: string[];
+      /** How this turn ended, and the stage it left the lead in (contract §1). */
+      outcome: TurnOutcomeName;
+      stage: LeadStatus;
     };
 
 export interface RunTurnOptions {
@@ -194,6 +207,7 @@ async function extract(turn: LoadedTurn, pending: Askable | null): Promise<Extra
   try {
     const stream = streamText({
       ...modelCall(),
+      ...modelTelemetry("model.extract"),
       system: extractionSystemPrompt(turn.lead.intent, turn.conversation.slots, pending),
       messages: toModelMessages(turn, 4),
       tools: extractionTools(),
@@ -288,6 +302,7 @@ async function phrase(input: PhraseInput): Promise<PhrasedReply> {
   try {
     const stream = streamText({
       ...modelCall(),
+      ...modelTelemetry("model.reply"),
       system: input.system,
       messages: toModelMessages(input.turn),
     });
@@ -383,8 +398,41 @@ export async function runTurn(options: RunTurnOptions): Promise<TurnResult> {
     return { status: "skipped", reason: "alreadyRunning" };
   }
 
+  // The whole turn, inside its `conversation.turn` trace (contract §1). With
+  // Langfuse unconfigured `withTurnTrace` is `fn(no trace)` and the turn is
+  // identical, down to the `null` trace id every event row then carries
+  // (FR-050). The skipped turns above are deliberately outside it: they answer
+  // nothing and are not turns.
   try {
-    return await run(loaded, { ...options, sink, now, startedAt });
+    return await withTurnTrace(
+      {
+        agencyId: loaded.agency.id,
+        leadId: loaded.lead.id,
+        conversationId: loaded.conversation.id,
+        channel: loaded.lead.channel,
+        intent: loaded.lead.intent,
+        // Recomputed here rather than read out of `run`: `nextQuestion` is pure,
+        // and the trace wants the slot the script was on *before* the turn.
+        pendingSlot:
+          nextQuestion(
+            { intent: loaded.lead.intent, slots: loaded.conversation.slots },
+            true,
+          )?.slot ?? null,
+      },
+      async (trace) => {
+        const result = await run(loaded, {
+          ...options,
+          sink,
+          now,
+          startedAt,
+          traceId: options.traceId ?? trace.traceId,
+        });
+        if (result.status === "committed") {
+          trace.finish({ score: result.score, stage: result.stage, outcome: result.outcome });
+        }
+        return result;
+      },
+    );
   } catch (error) {
     // Nothing was committed, so the same lead messages are still unanswered and
     // the next sweep answers them. Only the claim has to be given back.
@@ -451,6 +499,8 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       meeting: null,
       propertyCodes: [],
       events: refused.events,
+      outcome: "replied",
+      stage: refused.leadStatus,
     };
   }
 
@@ -546,6 +596,8 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       meeting: null,
       propertyCodes: [],
       events: closed.events,
+      outcome: "opted_out",
+      stage: closed.leadStatus,
     };
   }
 
@@ -658,6 +710,8 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       meeting: null,
       propertyCodes: [],
       events: paused.events,
+      outcome: "handoff",
+      stage: paused.leadStatus,
     };
   }
 
@@ -744,5 +798,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     meeting,
     propertyCodes: search.properties.map((property) => property.code),
     events: committed.events,
+    outcome: meeting !== null ? "meeting_proposed" : notUnderstood ? "fallback" : "replied",
+    stage: committed.leadStatus,
   };
 }

@@ -1,6 +1,7 @@
 import { generateObject } from "ai";
 import { z } from "zod";
 import { getConfig } from "../core/config.ts";
+import { modelTelemetry } from "../core/langfuse.ts";
 import { createLogger } from "../core/logging.ts";
 import {
   QUESTIONS,
@@ -72,6 +73,7 @@ export async function recoverSlot(input: RecoveryInput): Promise<SlotExtraction>
   try {
     const result = await generateObject({
       model: getModel(),
+      ...modelTelemetry("model.recover_slot"),
       maxRetries: config.MODEL_MAX_RETRIES,
       // `generateObject` is the one call that does not take `timeout` — its
       // options are `Omit<RequestOptions, 'timeout'>` — so the same bound of

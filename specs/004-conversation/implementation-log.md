@@ -343,11 +343,33 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   every other read here orders by, so "after" means the same thing on both sides of
   a reconnect).
 
+- T031/T032 — `src/app/api/chat/route.ts`, one commit because `GET` and `POST` share
+  the cookie and the wire shape. `POST` stores and returns; it never runs a turn in
+  the request (FR-042), which is what makes a reply survive the tab closing. All
+  four status codes of `contracts/chat-api.md` §2 verified by curl: `400` naming the
+  missing field, `404` for an unknown slug, `200` carrying the pre-consent template,
+  `202` with the conversation id. A `duplicate` still answers `202` and schedules
+  nothing, and a `paused` conversation stores the message and stays quiet.
+  Three supporting pieces: `CHAT_SESSION_COOKIE` and `signChatSession`/
+  `verifyChatSession` in `src/core/auth.ts` — same key and same primitives as the
+  broker session, different cookie and a payload that names an agency and a session
+  id but never a user, so nothing in the `(app)` shell can ever be reached with one;
+  `src/services/agency.ts` (`findAgencyBySlug`), which both this route and the page
+  need for FR-016's 404; and `src/app/api/chat/wire.ts`, the single message shape
+  `GET` and the SSE `message` event both emit, so the widget has one bubble renderer
+  and `metadata`'s tool calls and guard names never reach a lead. The cookie is
+  minted on `POST` and re-minted on `GET`, so a lead whose cookie expired but whose
+  `localStorage` id survived gets a stream back without sending anything first.
+  Verified: consent tap → `202` + `Set-Cookie`, then "Estou procurando apartamento
+  na zona sul" → `202`, and ~20 s later the agent row is in the database
+  ("Que legal que você está focada na Zona Sul! 😊 Pra eu te ajudar melhor, qual
+  faixa de preço…") — the debounce, the claim and the commit all through HTTP.
+
 ## In flight
 - Nothing.
 
 ## Next step
-T031 — `POST /api/chat` in `src/app/api/chat/route.ts` (group C).
+T033 — the SSE route `GET /api/chat/[conversationId]/events` (group C).
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

@@ -336,3 +336,92 @@
     padding: 1.25rem 1.25rem 1.5rem;
   }
 }
+
+/* --- property cards (FR-021, contracts/chat-api.md §5) -------------------- */
+/* Cards sit under an agent bubble at ~84vw: a compact horizontal card — thumb
+   left, text right — reads better here than the grid tile `/catalogo` uses. */
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.propertyCard {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--bg);
+}
+
+.propertyImageWrap {
+  flex: none;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 0.55rem;
+  overflow: hidden;
+  background: var(--hover);
+}
+
+.propertyImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Broken seed URL: falls back to the wrap's background instead of the
+     browser's broken-image glyph and alt text (no JS, no onError). */
+  color: transparent;
+  font-size: 0;
+}
+
+.propertyBody {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.propertyTitle {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.propertyPrice {
+  margin: 0.05rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.propertyMeta,
+.propertyLocation {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.propertyCode {
+  margin: 0.05rem 0 0;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+@media (min-width: 40rem) {
+  .propertyImageWrap {
+    width: 5rem;
+    height: 5rem;
+  }
+}

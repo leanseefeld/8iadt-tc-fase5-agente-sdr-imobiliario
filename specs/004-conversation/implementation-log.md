@@ -11,8 +11,8 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
 | B | T014–T027 (turn service, orchestrator, consumer) | one real turn persists against oMLX via the service layer | done |
 | C | T028–T037 (channel, notifier, SSE, widget) | widget screenshot; SC-005 reload check | done |
 | D | T038–T047 (search tool, cards, handoff, opt-out, budget) | SC-004, SC-006, SC-007 by hand | done |
-| E | T048–T053 (Langfuse, observability profile) | SC-010..012; memory total recorded | next |
-| F | T054–T058 (scenario tests, lint, build, README) | both suites green, build green | pending |
+| E | T048–T053 (Langfuse, observability profile) | SC-010..012; memory total recorded | done |
+| F | T054–T058 (scenario tests, lint, build, README) | both suites green, build green | next |
 
 ## Done
 - T001 — `ai@7.0.93`, `@ai-sdk/openai-compatible@3.0.44`, `@ai-sdk/react@4.0.96`,
@@ -751,6 +751,53 @@ unhealthy since they were built).
 Open, for whoever owns it: the seeded `imageUrl` is `picsum.photos/seed/<code>`, so
 the demo's property cards show random photographs — a dog, a swimming pool. That is
 spec 002's seed, not 004, but it is what a pitch audience will look at.
+
+## Group E — T048 to T053, and what T053 found
+
+The group E lead committed T048–T050 and then hit a spend limit mid-T051. The
+orchestrator committed its work in progress (`effce65`, `bba772c`) and finished
+T053. What the verification actually turned up is worth more than the checklist:
+
+- **SC-012 passes with room.** Declared limits 5552 MiB against ADR 13's 6 GiB;
+  measured use 2594 MiB; whole system with observability up, 3.26 GiB of 7.65.
+  Recorded in `docs/arquitetura/restricoes-de-implantacao.md` §4 with the two
+  numbers that were found by failure rather than estimated.
+- **SC-010 passes.** With the three `LANGFUSE_*` keys commented out: the same
+  conversation persisted identically, the trace count did not move (24 → 24), and
+  the app logged `langfuse keys absent, tracing disabled`. It also exposed an
+  Edge-runtime compile error — a `NEXT_RUNTIME` guard does not stop a bundler —
+  fixed by splitting `instrumentation.node.ts` out behind a dynamic import.
+- **SC-011 needed two fixes and one decision.** The span mask ran `maskPII` over
+  payloads the AI SDK had *already serialized*, so a key-aware masker was handed a
+  JSON string and treated it as free text: tool arguments reached Langfuse reading
+  `{"name": "Camila Duarte", "contact": "(11) *****-**21"}` — the phone masked by
+  its shape, the name beside it untouched under a key called `name`. Parsing before
+  masking fixed that. The remaining case, a name inside the lead's own sentence,
+  is a genuine conflict: `contracts/observability.md` §3 requires only phone and
+  e-mail replacement in free text, while SC-011 says zero unmasked names anywhere.
+  **The developer chose** (09/09/2026) to redact the known name rather than stop
+  recording prompts, keeping the conversation visible in Langfuse. Residual, by
+  measurement: from the second turn on, zero occurrences of the name or the phone
+  in any span; on the turn where the name is first typed it survives, because the
+  consent gate has not yet let it into the slots and there is nothing to register.
+
+**Two traps, both the same trap.** Anything that must be shared between the
+orchestrator and the span processor has to live on `globalThis`: Next bundles
+`instrumentation.ts` separately from the route handlers, so a module-level `let`
+or `Map` is written in one instance and read empty in the other, and the failure
+is silent. The group E lead hit it with the registration; the orchestrator hit it
+again with the redaction registry. Also: the span processor captures the mask
+closure at registration, so a dev-server hot reload will not pick up a change to
+it — restart the container or you are testing the old closure.
+
+**Contract drift to reconcile in group F or a follow-up spec.** Measured against
+live traces, not read from code: the trace `name` is empty where
+`contracts/observability.md` §1 says `conversation.turn` (the name is on the root
+span instead); generation spans report `usage` as zeros, where §2 asks for
+`usage.input_tokens`/`usage.output_tokens`; and the emitted span set includes
+`model.extract` and `model.call`, which §2 does not list — a consequence of the
+two-call design the developer accepted, never written back into the contract.
+None of these break SC-010–012; all three make the contract untrue as written.
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

@@ -662,11 +662,28 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   `npm run lint` and `npx tsc --noEmit` both clean. The QA rows were deleted
   afterwards: the database holds the three seeded demo leads and nothing else.
 
+- T048 — `src/core/langfuse.ts`, the only module that knows Langfuse or
+  OpenTelemetry exist. Three-key gate first: with any of `LANGFUSE_PUBLIC_KEY`,
+  `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` missing nothing registers and the
+  three OTel packages are never imported — hence dynamic `import()` inside the
+  gate rather than top-level imports. `maskPII` is the span processor's mask, so
+  principle VIII keeps one definition and two sinks. Exports
+  `isLangfuseConfigured`, `registerLangfuse`, `flushLangfuse` (bounded race
+  against `provider.shutdown()`, default 2 s), `withTurnTrace`,
+  `modelTelemetry` and `recordToolSpans`. Nothing in the file ever rethrows.
+  **The AI SDK 7 surprise, verified not remembered:** up to v5
+  `experimental_telemetry` emitted OTel spans by itself; `ai@7.0.93` emits none
+  — `grep -c opentelemetry node_modules/ai/dist/index.js` is `0` — and replaced
+  that with a callback interface (`Telemetry`, `registerTelemetry`). So the
+  translation from SDK lifecycle events to Langfuse generations lives in this
+  file. There is no `@ai-sdk/opentelemetry` and no `@langfuse/ai-sdk` on npm
+  (both 404); this is the supported path, not a workaround.
+
 ## In flight
 - Nothing.
 
 ## Next step
-T048 — `src/core/langfuse.ts`, the tracer provider with `maskPII` as its mask (group E).
+T049 — register the tracer from `src/instrumentation.ts` and `src/worker/index.ts` (group E).
 
 ## Orchestrator validation of group D — 09/09/2026
 

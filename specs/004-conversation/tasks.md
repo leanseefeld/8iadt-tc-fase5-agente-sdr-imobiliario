@@ -95,7 +95,7 @@ description: "Task list for the conversation slice"
 
 **Goal / test**: the trace shape of [contracts/observability.md](contracts/observability.md), and an application that does not notice when it is gone — one conversation with the profile up, then the same with the keys unset.
 
-- [ ] T048 [US5] Implement `src/core/langfuse.ts` — tracer provider and span processor with `maskPII` as the mask, registered only when all three `LANGFUSE_*` keys are present, flushed with a bounded timeout on shutdown
+- [x] T048 [US5] Implement `src/core/langfuse.ts` — tracer provider and span processor with `maskPII` as the mask, registered only when all three `LANGFUSE_*` keys are present, flushed with a bounded timeout on shutdown
 - [ ] T049 [US5] Register it from `src/instrumentation.ts` and from `src/worker/index.ts`
 - [ ] T050 [US5] Attach the AI SDK telemetry option to every model call with the trace name and the agency, lead and conversation attributes of [contracts/observability.md](contracts/observability.md) §1
 - [ ] T051 [US5] Add the `observability` Compose profile to `docker-compose.yml` — `langfuse-web`, `langfuse-worker`, `clickhouse`, `redis`, `minio`, each with a `mem_limit` summing to 6 GiB, UI on `LANGFUSE_UI_PORT`

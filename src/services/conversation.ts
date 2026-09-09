@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
 import { agencies, conversations, events as events_, leads, messages } from "../db/schema.ts";
 import { getConfig } from "../core/config.ts";
@@ -721,6 +721,198 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
       events: events.map((event) => event.type),
     };
   });
+}
+
+export interface OutboundRecord {
+  conversationId: string;
+  /** `broker` once spec 005 lets a person answer on the same stream. */
+  role?: "agent" | "broker";
+  content: string;
+  propertyIds?: string[];
+  /** Hand the conversation to a person as part of this write (FR-028). */
+  paused?: boolean;
+  now?: Date;
+}
+
+/**
+ * One outbound message, written and announced — the persistence half of
+ * `ChannelAdapter.send`.
+ *
+ * `commitTurn` is the path a *turn* takes and it writes far more than a
+ * message; this is the path everything else takes, and spec 006's follow-up
+ * will be its second caller. Both end the same way, on the same channel, so a
+ * stream cannot tell which of them produced the bubble it just received — which
+ * is the point of moving delivery off the request cycle.
+ *
+ * `repliesToMessageId` follows FR-044's rule here too: the last lead message
+ * this reply leaves answered.
+ */
+export async function recordOutboundMessage(
+  input: OutboundRecord,
+): Promise<{ messageId: string; agencyId: string } | null> {
+  const db = getDb();
+  const now = input.now ?? new Date();
+
+  const [conversation] = await db
+    .select({ id: conversations.id, agencyId: conversations.agencyId })
+    .from(conversations)
+    .where(eq(conversations.id, input.conversationId))
+    .limit(1);
+  if (conversation === undefined) return null;
+
+  const [lastLead] = await db
+    .select({ id: messages.id })
+    .from(messages)
+    .where(and(eq(messages.conversationId, conversation.id), eq(messages.role, "lead")))
+    .orderBy(desc(messages.createdAt), desc(messages.id))
+    .limit(1);
+
+  return db.transaction(async (tx) => {
+    const [written] = await tx
+      .insert(messages)
+      .values({
+        conversationId: conversation.id,
+        role: input.role ?? "agent",
+        content: input.content,
+        repliesToMessageId: lastLead?.id ?? null,
+        metadata:
+          input.propertyIds !== undefined && input.propertyIds.length > 0
+            ? { propertyIds: input.propertyIds }
+            : {},
+        createdAt: now,
+      })
+      .returning({ id: messages.id });
+
+    await tx
+      .update(conversations)
+      .set({
+        lastAgentMessageAt: now,
+        ...(input.paused === true ? { status: "paused" as const, heldByUserId: null } : {}),
+        updatedAt: now,
+      })
+      .where(eq(conversations.id, conversation.id));
+
+    await tx.execute(
+      sql`select pg_notify(${MESSAGE_CHANNEL}, ${JSON.stringify({
+        conversationId: conversation.id,
+        agencyId: conversation.agencyId,
+        messageId: written.id,
+      })})`,
+    );
+
+    return { messageId: written.id, agencyId: conversation.agencyId };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Reads the widget needs
+// ---------------------------------------------------------------------------
+
+export interface ChatHistory {
+  conversationId: string;
+  agencyId: string;
+  status: ConversationStatus;
+  consented: boolean;
+  messages: TurnMessage[];
+}
+
+/**
+ * The whole transcript for one widget session — `contracts/chat-api.md` §3, and
+ * the L14 continuity claim of SC-005 in one query.
+ *
+ * Deliberately not `loadTurn`: that read is bounded to `MODEL_HISTORY_WINDOW`
+ * because it feeds a prompt, and a lead returning after a week must see more
+ * than the model does. `null` for a session that has never written — a first
+ * visit is not an error, and a read never creates a lead.
+ */
+export async function loadChatHistory(ref: {
+  agencySlug: string;
+  externalId: string;
+  channel?: Channel;
+  limit?: number;
+}): Promise<ChatHistory | null> {
+  const db = getDb();
+
+  const [row] = await db
+    .select({
+      conversationId: conversations.id,
+      agencyId: conversations.agencyId,
+      status: conversations.status,
+      consentAt: leads.consentAt,
+    })
+    .from(conversations)
+    .innerJoin(agencies, eq(agencies.id, conversations.agencyId))
+    .innerJoin(
+      leads,
+      and(eq(leads.id, conversations.leadId), eq(leads.agencyId, conversations.agencyId)),
+    )
+    .where(
+      and(
+        eq(agencies.slug, ref.agencySlug),
+        eq(leads.externalId, ref.externalId),
+        eq(leads.channel, ref.channel ?? "web"),
+      ),
+    )
+    .orderBy(desc(conversations.createdAt))
+    .limit(1);
+
+  if (row === undefined) return null;
+
+  const transcript = await db
+    .select()
+    .from(messages)
+    .where(and(eq(messages.conversationId, row.conversationId), ne(messages.role, "system")))
+    .orderBy(asc(messages.createdAt), asc(messages.id))
+    .limit(ref.limit ?? 200);
+
+  return {
+    conversationId: row.conversationId,
+    agencyId: row.agencyId,
+    status: row.status,
+    consented: row.consentAt !== null,
+    messages: transcript.map(toTurnMessage),
+  };
+}
+
+/**
+ * FR-048's replay: everything written to this conversation after the last event
+ * the client saw. The `Last-Event-ID` is a message id, so the cursor is that
+ * row's own timestamp — ordering by `(createdAt, id)` exactly as every other
+ * read here does, so "after" means the same thing on both sides of a reconnect.
+ *
+ * An id the client invented, or one from a conversation that is not this one,
+ * finds no cursor row and replays nothing rather than replaying everything.
+ */
+export async function readMessagesAfter(
+  conversationId: string,
+  lastEventId: string,
+): Promise<TurnMessage[]> {
+  const db = getDb();
+
+  const [cursor] = await db
+    .select({ id: messages.id, createdAt: messages.createdAt })
+    .from(messages)
+    .where(and(eq(messages.conversationId, conversationId), eq(messages.id, lastEventId)))
+    .limit(1);
+  if (cursor === undefined) return [];
+
+  const rows = await db
+    .select()
+    .from(messages)
+    .where(
+      and(
+        eq(messages.conversationId, conversationId),
+        ne(messages.role, "system"),
+        or(
+          gt(messages.createdAt, cursor.createdAt),
+          and(eq(messages.createdAt, cursor.createdAt), gt(messages.id, cursor.id)),
+        ),
+      ),
+    )
+    .orderBy(asc(messages.createdAt), asc(messages.id))
+    .limit(50);
+
+  return rows.map(toTurnMessage);
 }
 
 /** Messages by id, scoped to one conversation — the SSE stream's re-read (FR-047). */

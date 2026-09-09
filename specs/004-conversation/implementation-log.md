@@ -319,11 +319,35 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   publish, a third on another conversation left asleep, a chunk carrying its text,
   and unsubscribe stopping delivery.
 
+- T029 — `src/channels/web.ts`: `receive` (a zod parse of `contracts/chat-api.md`
+  §2's body, throwing `InboundMessageError` with the offending field and knowing
+  nothing about status codes), `send` (one outbound message through the new
+  `recordOutboundMessage`), `scheduleTurn` and `notifyingSink`. `text` is optional
+  in the schema because the "Aceito" tap is a message with consent and no words.
+  The debounce is a per-conversation timer **restarted** by every new lead message,
+  which is what makes a burst of three collapse into one reply answering all three
+  (FR-043/044); it is `unref`'d so a pending reply never holds a shutdown open.
+  On process-local state: the constitution's rule is about the *orchestrator*,
+  which still loads from rows and writes back; this timer is scheduling, and if the
+  process dies holding one the lead message is already committed and
+  `jobs/unanswered-turns.ts` re-runs exactly the turn it would have. The sink
+  publishes each approved sentence on `conversation_chunk` and does nothing on
+  `done()` — the final bubble is announced by `commitTurn`'s own `NOTIFY`, so the
+  write that made it durable is the write that announces it.
+  Three reads were added to `services/conversation.ts` in the same commit because
+  the routes above need them and services own their queries: `recordOutboundMessage`
+  (insert + `lastAgentMessageAt` + optional pause + `NOTIFY`, in one transaction),
+  `loadChatHistory` (the whole transcript for a session — deliberately not
+  `loadTurn`, which is bounded to `MODEL_HISTORY_WINDOW` because it feeds a prompt)
+  and `readMessagesAfter` (FR-048's replay, cursored on the `(createdAt, id)` pair
+  every other read here orders by, so "after" means the same thing on both sides of
+  a reconnect).
+
 ## In flight
 - Nothing.
 
 ## Next step
-T029 — the web adapter in `src/channels/web.ts` (group C).
+T031 — `POST /api/chat` in `src/app/api/chat/route.ts` (group C).
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

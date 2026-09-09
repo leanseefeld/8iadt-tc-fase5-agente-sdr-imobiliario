@@ -61,7 +61,7 @@ description: "Task list for the conversation slice"
 **Goal / test**: the public chat surface, real-time delivery, with continuity — chat, reload, confirm the transcript and the pending question survive.
 
 - [x] T028 [US2] Define `ChannelAdapter`, `InboundMessage` and `OutboundMessage` in `src/channels/types.ts` per [contracts/chat-api.md](contracts/chat-api.md) §1 — `send` returns `Promise<void>`, delivery is no longer its job
-- [ ] T029 [US2] Implement the web adapter in `src/channels/web.ts` — `receive` normalises the request, `send` persists through the shared commit path
+- [x] T029 [US2] Implement the web adapter in `src/channels/web.ts` — `receive` normalises the request, `send` persists through the shared commit path
 - [x] T030 [US2] Implement `src/core/notifier.ts` — one `LISTEN` connection per replica, an in-memory map of open streams by conversation id, `publish`/`subscribe` per [contracts/chat-api.md](contracts/chat-api.md) §4 and `visao-geral.md` §8
 - [ ] T031 [US2] Implement `POST /api/chat` in `src/app/api/chat/route.ts` — persists the lead message and returns `202`, or `200` with the fixed template reply pre-consent or over `CHAT_MESSAGE_BUDGET`/`CHAT_MAX_MESSAGE_CHARS`, per [contracts/chat-api.md](contracts/chat-api.md) §2
 - [ ] T032 [US2] Implement `GET /api/chat` in the same route handler — history for a session id, 404 for an unknown agency, empty list for an unknown session, per §3

@@ -454,11 +454,25 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
 
   **Group C's exit gate is passed.**
 
+- T038 — `src/agent/tools/search-properties.ts`. No query of its own: spec 002's
+  `services/properties.searchProperties` already ranks, relaxes and returns `[]`
+  instead of throwing, so this file only turns the *slot state* into that
+  service's criteria, caps the result at three and refuses to run for
+  `investment`/`undefined` (FR-024). Two things can never come from a tool
+  argument and so are bound by the caller: the `agencyId`, and the intent → the
+  `sale`/`rent` transaction. `runSearchProperties` is the code path (the
+  orchestrator invokes it like `runProposeMeeting`); `searchPropertiesTool(ctx)`
+  is the declared form with an **empty** input schema, offered only through
+  `conversationTools(ctx)` — a search tool that cannot exist without a turn is a
+  search tool that cannot be aimed at another tenant. `SearchOutcome.relaxable`
+  names the ONE filter T041 will offer to relax, widest first
+  (neighbourhoods → price → bedrooms).
+
 ## In flight
-- Nothing.
+- Group D (T038–T047).
 
 ## Next step
-T038 — the `searchProperties` tool in `src/agent/tools/search-properties.ts` (group D).
+T039 — record the suggestion in `commitTurn` (`properties.suggested` + `propertyIds`).
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

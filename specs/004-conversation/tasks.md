@@ -79,7 +79,7 @@ description: "Task list for the conversation slice"
 - [x] T039 [US3] Record the suggestion in `commitTurn` — `properties.suggested` plus `propertyIds` in the agent message metadata
 - [x] T040 [P] [US3] Implement `PropertyCard.tsx` with the payload of [contracts/chat-api.md](contracts/chat-api.md) §5 and BRL formatting in the component
 - [x] T041 [US3] Handle the empty result: the agent says so and offers to relax exactly one filter, with no cards rendered
-- [ ] T042 [US3] Verify SC-004 per [quickstart.md](quickstart.md) §2 — every code shown exists in `properties` and satisfies the stated filters
+- [x] T042 [US3] Verify SC-004 per [quickstart.md](quickstart.md) §2 — every code shown exists in `properties` and satisfies the stated filters
 
 ## Phase 6: User Story 4 — The conversation always has a way out (P2)
 
@@ -87,9 +87,9 @@ description: "Task list for the conversation slice"
 
 - [x] T043 [P] [US4] Implement the `requestHandoff` tool in `src/agent/tools/handoff.ts` (`asked`, `fallback`) and the `optOut` tool in `src/agent/tools/opt-out.ts`
 - [x] T044 [US4] Wire `handoffDecision` into the orchestrator — set `conversations.status = paused` with `heldByUserId` null, emit `handoff.requested` with its reason, and maintain `fallbackStreak` in `commitTurn`
-- [ ] T045 [US4] Verify the `proposeMeeting` paths: hot score plus known contact for `purchase`/`rental`, and the end of the `investment` script — the conversation stays `active` in both (FR-040/041)
+- [x] T045 [US4] Verify the `proposeMeeting` paths: hot score plus known contact for `purchase`/`rental`, and the end of the `investment` script — the conversation stays `active` in both (FR-040/041)
 - [x] T046 [US4] Enforce `CHAT_MESSAGE_BUDGET`/`CHAT_BUDGET_WINDOW_MINUTES` and `CHAT_MAX_MESSAGE_CHARS` in `POST /api/chat` — the fixed template reply, no model call, nothing persisted
-- [ ] T047 [US4] Verify SC-006 and SC-007 per [quickstart.md](quickstart.md) §3 — the two handoff paths and opt-out each reach their terminal state, a paused conversation produces zero further agent messages, and the five scripted injection attempts each yield a refusal with unchanged slots, no figure quoted, and the layer that caught it recorded
+- [x] T047 [US4] Verify SC-006 and SC-007 per [quickstart.md](quickstart.md) §3 — the two handoff paths and opt-out each reach their terminal state, a paused conversation produces zero further agent messages, and the five scripted injection attempts each yield a refusal with unchanged slots, no figure quoted, and the layer that caught it recorded
 
 ## Phase 7: User Story 5 — Every turn can be inspected afterwards (P3)
 

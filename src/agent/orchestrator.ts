@@ -2,7 +2,7 @@ import { streamText, type ModelMessage } from "ai";
 import { getConfig } from "../core/config.ts";
 import { createLogger } from "../core/logging.ts";
 import { handoffDecision, shouldProposeMeeting, type HandoffReason } from "../domain/handoff.ts";
-import { looksLikeInjection } from "../domain/injection.ts";
+import { looksLikeInjection, looksLikeSteering } from "../domain/injection.ts";
 import { createReplyGuard, figuresIn, splitSentences } from "../domain/reply-guards.ts";
 import { scoreLead } from "../domain/score.ts";
 import {
@@ -30,6 +30,7 @@ import {
   MODEL_FAILURE_REPLY,
   OPT_OUT_REPLY,
   PRE_CONSENT_REPLY,
+  handoffReply,
   SUGGESTION_REPLY,
   guardedReply,
   noMatchReply,
@@ -563,9 +564,15 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     Array.isArray(lastAgentMessage?.metadata.propertyIds) &&
     (lastAgentMessage.metadata.propertyIds as unknown[]).length > 0;
 
+  // An override attempt learns nothing on purpose, and it was understood
+  // perfectly — counting it as a misunderstanding walked SC-007's own five
+  // scripted attempts into a handoff on the second one.
+  const steering = looksLikeSteering(leadText);
+
   // FR-023/FR-027: a turn that read a real message and learned nothing is a
   // fallback, and two in a row are a handoff.
-  const notUnderstood = !learnedSomething && plausiblyAnswers(leadText) && !cardsJustShown;
+  const notUnderstood =
+    !learnedSomething && plausiblyAnswers(leadText) && !cardsJustShown && !steering;
   const fallbackStreak = notUnderstood ? turn.conversation.fallbackStreak + 1 : 0;
   const handoffReason = handoffDecision({
     leadAskedForHuman: extraction.leadAskedForHuman,
@@ -606,6 +613,54 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   }
   const propertyIds = search.properties.map((property) => property.id);
 
+  // FR-028: a handoff is terminal for the agent, so it is written rather than
+  // generated — for the same reason opt-out is. The phrasing call was asked not
+  // to ask anything and asked something anyway ("Você gostaria de falar sobre
+  // alguma cidade específica?"), which is a question nobody was going to answer:
+  // the conversation is paused the moment this commits, so the next lead message
+  // gets silence until a person arrives. `handoffReply` names the limitation and
+  // says who is coming, in both flavours, and costs no model call.
+  if (handoffReason !== null) {
+    await pauseBeforeFirstChunk(context.startedAt);
+    const reply = handoffReply(handoffReason);
+    context.sink.chunk(reply);
+
+    const paused = await commitTurn({
+      turn,
+      reply,
+      intent,
+      slots,
+      filled: filledThisTurn,
+      score,
+      qualified,
+      fallbackStreak,
+      handoffReason,
+      toolCalls,
+      traceId: context.traceId ?? null,
+      now: context.now,
+    });
+    context.sink.done();
+
+    return {
+      status: "committed",
+      conversationId: turn.conversation.id,
+      messageId: paused.messageId,
+      repliesToMessageId: paused.repliesToMessageId,
+      reply,
+      intent,
+      slots,
+      filled: filledThisTurn,
+      score,
+      qualified,
+      question: null,
+      guard: null,
+      handoffReason,
+      meeting: null,
+      propertyCodes: [],
+      events: paused.events,
+    };
+  }
+
   // 4 · phrase
   const lead = figuresIn(`${leadText} ${turn.history.map((m) => m.content).join(" ")}`);
   const phrased = await phrase({
@@ -618,7 +673,6 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       consented,
       meeting,
       notUnderstood,
-      handoff: handoffReason !== null,
       ...(search.searched
         ? { suggestions: { count: search.properties.length, relaxable: search.relaxable } }
         : {}),
@@ -648,6 +702,11 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   });
 
   const reply = phrased.chunks.join(" ").trim();
+  // Which defence answered this turn, for the record (`visao-geral.md` §9): an
+  // output guard names itself, and a steering attempt the structural layer
+  // simply absorbed — no slot moved, no figure existed to quote — is recorded as
+  // such, or SC-007 would have nothing to read afterwards.
+  const guard = phrased.guard ?? (steering ? "steering" : null);
 
   const committed = await commitTurn({
     turn,
@@ -660,7 +719,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     fallbackStreak,
     handoffReason,
     ...(propertyIds.length > 0 ? { propertyIds } : {}),
-    guard: phrased.guard,
+    guard,
     toolCalls,
     traceId: context.traceId ?? null,
     now: context.now,
@@ -680,7 +739,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     score,
     qualified,
     question,
-    guard: phrased.guard,
+    guard,
     handoffReason,
     meeting,
     propertyCodes: search.properties.map((property) => property.code),

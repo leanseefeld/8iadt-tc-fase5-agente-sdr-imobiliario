@@ -129,8 +129,11 @@ export interface TurnPromptInput {
   meeting: "viewing" | "call" | null;
   /** The lead's message answered nothing we could parse (FR-023). */
   notUnderstood: boolean;
-  /** The lead is being handed to a person this turn (FR-028). */
-  handoff: boolean;
+  /**
+   * A handoff is not phrased at all — `agent/orchestrator.ts` sends
+   * `fallback.handoffReply` and never reaches this prompt, because the last
+   * thing said before a conversation pauses must not depend on a sampler.
+   */
   /**
    * The catalog answered this turn (FR-024/025): how many cards the widget is
    * about to render under this message, and — when none — the one filter the
@@ -176,11 +179,6 @@ da sua mensagem e a pessoa consegue ler tudo neles.`;
     return `\nSua tarefa nesta mensagem: diga com franqueza que não encontrou nenhum imóvel com
 exatamente essas características agora${ask === null ? "" : `, e pergunte ${ask}`}.
 Não invente imóvel nenhum e não ofereça mais de uma mudança nos filtros.`;
-  }
-  if (input.handoff) {
-    return `\nSua tarefa nesta mensagem: diga em uma ou duas frases que vai chamar um corretor
-de verdade para continuar o atendimento, e que a pessoa pode escrever aqui mesmo.
-NÃO faça nenhuma pergunta.`;
   }
   if (input.meeting === "call") {
     return `\nSua tarefa nesta mensagem: agradeça, diga que um especialista em investimentos

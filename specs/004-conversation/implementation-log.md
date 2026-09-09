@@ -10,8 +10,8 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
 | A | T001–T013 (setup, pure core) | `npm test` green with no DB and no model | done |
 | B | T014–T027 (turn service, orchestrator, consumer) | one real turn persists against oMLX via the service layer | done |
 | C | T028–T037 (channel, notifier, SSE, widget) | widget screenshot; SC-005 reload check | done |
-| D | T038–T047 (search tool, cards, handoff, opt-out, budget) | SC-004, SC-006, SC-007 by hand | next |
-| E | T048–T053 (Langfuse, observability profile) | SC-010..012; memory total recorded | pending |
+| D | T038–T047 (search tool, cards, handoff, opt-out, budget) | SC-004, SC-006, SC-007 by hand | done |
+| E | T048–T053 (Langfuse, observability profile) | SC-010..012; memory total recorded | next |
 | F | T054–T058 (scenario tests, lint, build, README) | both suites green, build green | pending |
 
 ## Done
@@ -591,11 +591,82 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   neighbourhoods. `plausiblyAnswers` is too weak a gate on its own, and the fix
   belongs with whoever writes the scenario assertions.
 
+- **Handoff replies are written, not phrased.** The fallback handoff's model
+  reply asked a question ("Você gostaria de falar sobre alguma cidade
+  específica?") right as the conversation paused — a question nobody was going to
+  answer, since the next lead message gets silence until a person arrives. The
+  handoff now takes the same shape as opt-out: `fallback.handoffReply(reason)`,
+  no phrasing call, both flavours naming the limitation and who is coming. The
+  now-unreachable handoff branch of `turnSystemPrompt` was removed rather than
+  left as a lie.
+
+- **`domain/injection.looksLikeSteering`** — a second, deliberately WIDER read
+  that never refuses anything: it only stops an override attempt being counted as
+  a fallback. FR-027 hands over after two turns that learned nothing, and an
+  override attempt learns nothing by design, so SC-007's own five scripted
+  attempts used to trip the fallback handoff on the second one — the agent had
+  understood every one of them and refused. A false positive here costs one
+  missed fallback count, which is why it may be wide where `INJECTION_PATTERNS`
+  must stay narrow. The turn records `metadata.guard = "steering"` when the
+  structural layer simply absorbed the attempt, so every one of the five leaves a
+  trace of the layer that answered it.
+
+- T042 — **SC-004 verified by hand.** Cenário 1 through `POST /api/chat` on a
+  fresh session, `demo` slug. On the turn that completed the qualifying script the
+  agent suggested three codes; the widget rendered three cards at 375×812 with
+  photo, title, `R$ 695.000`, quartos, m², bairro/cidade and `Cód. SAU-0005`.
+  ```
+  select code, price, bedrooms, neighborhood, region, transaction, is_active
+    from properties where code in ('SAU-0005','VMA-0002','MOE-0003');
+   MOE-0003 | 660000 | 2 | Moema        | zona sul | sale | t
+   SAU-0005 | 695000 | 3 | Saúde        | zona sul | sale | t
+   VMA-0002 | 665000 | 2 | Vila Mariana | zona sul | sale | t
+  ```
+  against the slots recorded at search time —
+  `{"priceMax": 700000, "bedrooms": 2, "neighborhoods": ["zona sul"], …}`: three
+  of three exist, are active, are `sale` (the `purchase` intent), cost at most
+  R$ 700.000, have at least 2 quartos and sit in the `zona sul` the lead named.
+  `properties.suggested` carries the same three ids.
+
+- T045 — **both `proposeMeeting` paths verified, conversation `active` in both.**
+  Purchase: after name and telephone the agent offered a visit —
+  `proposeMeeting {kind: viewing, status: notAvailable}`, `status = active`,
+  `held_by_user_id` null, lead `qualified` at score 85, and **no**
+  `handoff.requested` (FR-040, ADR 19). Investment: the script ended on
+  `proposeMeeting {kind: call}`, `status = active`, score 85, and **no**
+  `properties.suggested` and no `propertyIds` on any message — the catalog is
+  never searched for `investment` (FR-041/FR-024).
+
+- T047 — **SC-006 and SC-007 verified by hand**, per quickstart §3.
+  **SC-006**, three fresh sessions:
+  · *"Quero falar com um corretor"* → "Claro, já estou chamando um corretor…",
+    `status = paused`, `held_by_user_id` null, `handoff.requested {reason: asked}`;
+    the widget showed "Falando com um corretor" and the `Corretor` badge.
+  · two unintelligible messages → the second reply names the limitation and calls
+    a corretor, `fallback_streak = 2`, `handoff.requested {reason: fallback}`.
+  · *"Não quero mais receber mensagens"* → the one-sentence confirmation,
+    `lead.opted_out`, `do_not_contact = t`, `status = closed`.
+  · **Zero further agent messages while paused**: a new lead message on the paused
+    conversation was stored and left unanswered for 45 s — past the debounce and a
+    worker sweep — because `claimTurn` and `findUnansweredConversations` both carry
+    `status = 'active'` in their predicate.
+  **SC-007**, a fourth session with `priceMax` and `neighborhoods` already filled:
+  five attempts, five refusals, conversation still `active`, and the slot state
+  byte-identical before and after (no `slot.filled` event after the first
+  injection). No reply quoted a price or a percentage. The layer that answered,
+  from `messages.metadata.guard`: `injectionInput` for 1 and 3 (layer 2, no model
+  call), `steering` for 2, 4 and 5 (layer 1 — the model refused, nothing moved,
+  and no tool ever returned a figure to quote).
+
+- **Group D's exit gate is passed.** Unit suite 169 passing / 4 skipped;
+  `npm run lint` and `npx tsc --noEmit` both clean. The QA rows were deleted
+  afterwards: the database holds the three seeded demo leads and nothing else.
+
 ## In flight
-- Group D (T038–T047).
+- Nothing.
 
 ## Next step
-T042/T045/T047 — the by-hand verifications, then T046's budget enforcement.
+T048 — `src/core/langfuse.ts`, the tracer provider with `maskPII` as its mask (group E).
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

@@ -38,3 +38,36 @@ export function looksLikeInjection(text: string): boolean {
   const normalized = normalize(text);
   return INJECTION_PATTERNS.some((pattern) => pattern.test(normalized));
 }
+
+/**
+ * A wider read, used for a different purpose: **not** to refuse, only to stop a
+ * refusal being counted as a misunderstanding.
+ *
+ * FR-027 hands the conversation to a person after two consecutive turns that
+ * learned nothing, and an override attempt learns nothing by design — so five
+ * scripted attempts in one session used to trip the fallback handoff on the
+ * second one, which is the opposite of what SC-007 asks for: the agent had
+ * understood every one of them and refused. Someone asking us to pretend, to
+ * drop the script or to recite our instructions has been understood perfectly;
+ * they are steering, not confusing us.
+ *
+ * A false positive here costs nothing but a missed fallback count, which is why
+ * this list may be wide where `INJECTION_PATTERNS` must stay narrow: that one
+ * ends a turn before the model runs, this one only declines to hold something
+ * against the lead.
+ */
+const STEERING_PATTERNS: ReadonlyArray<RegExp> = [
+  ...INJECTION_PATTERNS,
+  /\bfinja\b|\bfaca de conta\b|\bfinge que\b|\bpretend\b/,
+  /\baja como\b|\bse comporte como\b|\bassuma o papel\b/,
+  /\bsem (?:regras|restricoes|limites|filtros)\b/,
+  /\besque[çc]a\s+(?:o\s+)?(?:roteiro|script|tudo)\b/,
+  /\b(?:repita|revele|mostre|diga)\b[^.?!]{0,40}\b(?:instru\w+|prompt|regras)\b/,
+  /\bmodo desenvolvedor\b|\bdeveloper mode\b|\bjailbreak\b/,
+];
+
+/** True when the message is trying to steer the agent rather than answer it. */
+export function looksLikeSteering(text: string): boolean {
+  const normalized = normalize(text);
+  return STEERING_PATTERNS.some((pattern) => pattern.test(normalized));
+}

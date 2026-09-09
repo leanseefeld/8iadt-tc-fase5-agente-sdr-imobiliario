@@ -1,0 +1,15 @@
+<!--
+  Keeps ClickHouse's own idea of its memory budget under the `mem_limit` the
+  observability profile gives the container (ADR 13: the 6 GiB cap is not a
+  target, stay well under it). Without this, ClickHouse sizes caches off host
+  memory and gets killed by the container's cgroup instead of degrading
+  gracefully. Mounted read-only into config.d, so it merges over the image's
+  defaults rather than replacing them.
+-->
+<clickhouse>
+    <!-- ~1.43 GiB, leaving headroom under the container's 2g mem_limit. -->
+    <max_server_memory_usage>1500000000</max_server_memory_usage>
+    <!-- Default is 5 GiB; this deployment's query latency doesn't matter
+         (quickstart §6 says so), so shrink it hard. -->
+    <mark_cache_size>134217728</mark_cache_size>
+</clickhouse>

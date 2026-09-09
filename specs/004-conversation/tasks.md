@@ -98,8 +98,8 @@ description: "Task list for the conversation slice"
 - [x] T048 [US5] Implement `src/core/langfuse.ts` — tracer provider and span processor with `maskPII` as the mask, registered only when all three `LANGFUSE_*` keys are present, flushed with a bounded timeout on shutdown
 - [x] T049 [US5] Register it from `src/instrumentation.ts` and from `src/worker/index.ts`
 - [x] T050 [US5] Attach the AI SDK telemetry option to every model call with the trace name and the agency, lead and conversation attributes of [contracts/observability.md](contracts/observability.md) §1
-- [ ] T051 [US5] Add the `observability` Compose profile to `docker-compose.yml` — `langfuse-web`, `langfuse-worker`, `clickhouse`, `redis`, `minio`, each with a `mem_limit` summing to 6 GiB, UI on `LANGFUSE_UI_PORT`
-- [ ] T052 [US5] Add the Langfuse database init script under `scripts/db/` and mount it into the `db` container
+- [x] T051 [US5] Add the `observability` Compose profile to `docker-compose.yml` — `langfuse-web`, `langfuse-worker`, `clickhouse`, `redis`, `minio`, each with a `mem_limit` summing to 6 GiB, UI on `LANGFUSE_UI_PORT`
+- [x] T052 [US5] Add the Langfuse database init script under `scripts/db/` and mount it into the `db` container
 - [ ] T053 [US5] Verify SC-010, SC-011 and SC-012 per [quickstart.md](quickstart.md) §6, and record the measured memory total in `docs/arquitetura/restricoes-de-implantacao.md` §4
 
 ## Phase 8: Polish and acceptance

@@ -1,4 +1,5 @@
 import { getConfig } from "../core/config.ts";
+import { flushLangfuse, registerLangfuse } from "../core/langfuse.ts";
 import { createLogger } from "../core/logging.ts";
 import { closePool, getDb } from "../db/client.ts";
 import { consumers } from "../jobs/consumers.ts";
@@ -16,6 +17,11 @@ import { startHealthServer } from "./health-server.ts";
 
 const config = getConfig();
 const log = createLogger("worker");
+
+// T049. A no-op — the OpenTelemetry packages are not even imported — unless all
+// three `LANGFUSE_*` keys are set, so the worker boots identically with the
+// `observability` profile down.
+await registerLangfuse("worker");
 
 let lastSweepAt = Date.now();
 let sweeping = false;
@@ -69,6 +75,9 @@ async function shutdown(signal: string): Promise<void> {
 
   clearInterval(timer);
   await new Promise<void>((resolve) => healthServer.close(() => resolve()));
+  // Bounded inside `core/langfuse.ts`: a slow or dead Langfuse costs the
+  // shutdown its timeout and nothing more (contracts/observability.md §5).
+  await flushLangfuse();
   await closePool();
 
   log.info("shutdown complete");

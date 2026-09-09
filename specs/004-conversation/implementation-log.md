@@ -679,11 +679,19 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   file. There is no `@ai-sdk/opentelemetry` and no `@langfuse/ai-sdk` on npm
   (both 404); this is the supported path, not a workaround.
 
+- T049 — registered from both entry points. `src/instrumentation.ts`'s
+  `register()` is now `async` (Next awaits it) and also installs the bounded
+  `flushLangfuse` on SIGTERM/SIGINT; `src/worker/index.ts` awaits
+  `registerLangfuse("worker")` at the top and `flushLangfuse()` inside its
+  existing `shutdown()`, before `closePool()`. Verified with the keys empty:
+  the worker logs `langfuse keys absent, tracing disabled` and then runs a real
+  turn to a committed reply.
+
 ## In flight
 - Nothing.
 
 ## Next step
-T049 — register the tracer from `src/instrumentation.ts` and `src/worker/index.ts` (group E).
+T050 — attach the AI SDK telemetry option to every model call (group E).
 
 ## Orchestrator validation of group D — 09/09/2026
 

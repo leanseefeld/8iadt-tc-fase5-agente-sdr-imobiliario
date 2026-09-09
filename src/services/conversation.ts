@@ -604,7 +604,13 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
       type: "slot.filled",
       payload: {
         slot,
-        value: slot === "name" || slot === "contact" ? maskText(String(value)) : value,
+        // Through `maskPII` under the slot's own key, not `maskText`: the rule is
+        // key-aware, and a bare `Camila` is not free text with a phone in it —
+        // `maskText` left it whole and the name went to `events` unmasked.
+        value:
+          slot === "name" || slot === "contact"
+            ? (maskPII({ [slot]: value }) as Record<string, unknown>)[slot]
+            : value,
       },
     });
   }

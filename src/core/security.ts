@@ -111,13 +111,39 @@ function maskPhoneValue(value: string): string | null {
 // ---------------------------------------------------------------------------
 
 /** Partially masks one string: keeps the shape, loses the identity. */
+/**
+ * A UUID is not a telephone number, however much of one it contains.
+ *
+ * The digit budget cannot tell them apart on its own: `…-fe90-4141-414f-…`
+ * spends exactly the eleven digits a mobile number does, and this project puts
+ * ids in the very payloads that get masked (`conversation.turn { messageId }`,
+ * which spec 005 reads back). Masking one corrupts it silently, so a UUID is cut
+ * out of the text before the phone scan runs and put back untouched.
+ */
+const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+
+function maskOutsideIds(text: string, mask: (segment: string) => string): string {
+  const parts: string[] = [];
+  let last = 0;
+  UUID_PATTERN.lastIndex = 0;
+  for (const match of text.matchAll(UUID_PATTERN)) {
+    const start = match.index;
+    parts.push(mask(text.slice(last, start)), match[0]);
+    last = start + match[0].length;
+  }
+  parts.push(mask(text.slice(last)));
+  return parts.join("");
+}
+
 export function maskText(text: string): string {
   try {
-    return text
-      .replace(EMAIL_PATTERN, (_match, local: string, domain: string) =>
-        maskEmailMatch(local, domain),
-      )
-      .replace(PHONE_PATTERN, (match) => maskPhoneMatch(match));
+    return maskOutsideIds(text, (segment) =>
+      segment
+        .replace(EMAIL_PATTERN, (_match, local: string, domain: string) =>
+          maskEmailMatch(local, domain),
+        )
+        .replace(PHONE_PATTERN, (match) => maskPhoneMatch(match)),
+    );
   } catch {
     return text;
   }

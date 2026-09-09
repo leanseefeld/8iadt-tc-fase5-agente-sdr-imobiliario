@@ -134,3 +134,26 @@ test("maskText itself is idempotent on already-masked text", () => {
   const masked = maskText("liga pra mim: 11987654321 ou joao.silva@gmail.com");
   assert.equal(maskText(masked), masked);
 });
+
+/** An id is not a telephone number, however many digits it spends. */
+test("leaves a bare UUID untouched", () => {
+  const id = "d3c4dbdf-fe90-4141-414f-2d326d894141";
+  assert.equal(maskText(id), id);
+});
+
+test("leaves a UUID inside a sentence untouched while still masking a real number", () => {
+  const masked = maskText("mensagem d3c4dbdf-fe90-4141-414f-2d326d894141 de 11987654321");
+  assert.ok(masked.includes("d3c4dbdf-fe90-4141-414f-2d326d894141"), masked);
+  assert.ok(masked.includes("(11) *****-**21"), masked);
+});
+
+test("masks a payload carrying an id and a telephone side by side", () => {
+  assert.deepEqual(
+    maskPII({ messageId: "d3c4dbdf-fe90-4141-414f-2d326d894141", phone: "11987654321" }),
+    { messageId: "d3c4dbdf-fe90-4141-414f-2d326d894141", phone: "(11) *****-**21" },
+  );
+});
+
+test("masks a bare name through its key, the way an event payload does", () => {
+  assert.deepEqual(maskPII({ name: "Camila" }), { name: "C***" });
+});

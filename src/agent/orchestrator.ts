@@ -474,7 +474,27 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       ? merged.intent === "undefined"
       : merged.slots[pending.slot] === null);
 
-  if (stillPending && plausiblyAnswers(leadText)) {
+  // ...and only when the extraction itself came back empty-handed. T023's own
+  // rule ("run only when no `updateSlots` arrived") had been widened to "when the
+  // pending slot is still empty", and that is a different thing: a lead answering
+  // the *previous* question again — "Tenho preferência por Moema ou Vila Mariana"
+  // while the script is on `urgency` — produced a perfectly good `neighborhoods`
+  // extraction, which merge rule 1 then dropped as already filled, and recovery
+  // guessed `urgency: exploring` out of a sentence about bairros. A slot the lead
+  // never spoke about is worse than a question asked once more.
+  //
+  // `intent` is the exception, because it is not an answer to anything: every
+  // first message implies one, and the extraction reporting a neighbourhood is
+  // exactly the message whose intent is worth recovering.
+  const extractionSaidSomething = extraction.calls.some(
+    (call) =>
+      call.name === "updateSlots" &&
+      Object.values(normalizeExtraction(call.arguments)).some(
+        (value) => value !== null && value !== undefined,
+      ),
+  );
+
+  if (stillPending && (pending.slot === "intent" || !extractionSaidSomething) && plausiblyAnswers(leadText)) {
     const recovered = await recoverSlot({ slot: pending.slot, text: leadText });
     if (Object.keys(recovered).length > 0) {
       toolCalls.push({ name: "recoverSlot", arguments: recovered });

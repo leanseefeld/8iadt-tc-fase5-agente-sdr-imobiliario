@@ -558,6 +558,39 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   **0** leads behind — the length check runs before the agency is even resolved.
   `.env` restored and the QA rows deleted afterwards.
 
+- **`fix(004)`, found by the T042/T045 evidence** — two masking defects the
+  by-hand run surfaced in `events`, both in code group B wrote and both visible
+  only once real payloads were read back:
+  1. `conversation.turn`'s payload came out as
+     `{"messageId": "d3c4dbdf-fe(90) ****-**41-414f2d326d89"}`. A UUID spends
+     exactly the eleven digits a mobile number does, so the phone rule matched
+     the middle of an id and corrupted it — and that id is precisely what spec
+     005's summariser reads back. `core/security.ts` now cuts UUIDs out of the
+     text before the phone scan and puts them back untouched.
+  2. `slot.filled` for `name` was stored **unmasked** (`{"slot":"name",
+     "value":"Camila"}`), against data-model §4 and FR-031: `commitTurn` used
+     `maskText`, which scrubs a phone or an e-mail *inside* free text and has no
+     way to know a bare `Camila` is a name. It now masks through
+     `maskPII({ [slot]: value })`, whose rule is key-aware — the same rule, via
+     the key that names it. `contact` was already fine by accident, because a
+     phone number looks like one wherever it is.
+  Four tests added to `tests/masking.test.ts`; suite 167 passing, 4 skipped.
+
+- **`fix(004)` — recovery no longer guesses over a good extraction.** T023's own
+  rule is "run only when the lead's message plausibly answered the pending slot
+  **and no `updateSlots` arrived**"; the code ran it whenever the pending slot was
+  still empty. So "Tenho preferência por Moema ou Vila Mariana", answered while
+  the script was on `urgency`, produced a fine `neighborhoods` extraction, merge
+  rule 1 dropped it as already filled, and the recovery call then guessed
+  `urgency: exploring` out of a sentence about bairros. `intent` stays the
+  exception, because it is not an answer to a question — every first message
+  implies one, and that is the recovery group B's exit gate depends on.
+  **Still open (for group F's T054):** when the extraction returns *nothing at
+  all*, `recoverSlot` will still answer a question the lead did not answer —
+  observed twice, both times filling `urgency` from a message about
+  neighbourhoods. `plausiblyAnswers` is too weak a gate on its own, and the fix
+  belongs with whoever writes the scenario assertions.
+
 ## In flight
 - Group D (T038–T047).
 

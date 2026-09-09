@@ -386,6 +386,10 @@ export async function withTurnTrace<T>(
   try {
     return await tracing.propagateAttributes(
       {
+        // Contract §1's Name row. Without it every row in Langfuse's trace list
+        // is blank and the turns are told apart only by their timestamps: the
+        // root span carries the name, but the trace does not inherit it.
+        traceName: "conversation.turn",
         sessionId: attributes.conversationId,
         userId: maskedLeadId(attributes.leadId),
         metadata: {
@@ -463,6 +467,16 @@ function aiSdkIntegration(tracing: LangfuseTracing): Telemetry {
   return {
     onLanguageModelCallStart(event) {
       safely("model call start", () => {
+        if (event.functionId === undefined) {
+          // Not a span the taxonomy has: a call that reached the model without
+          // `modelTelemetry(...)`, or — the way this actually happened — with a
+          // `modelTelemetry` that returned nothing because it read a different
+          // module instance's registration. Twelve `model.call` spans were the
+          // only visible symptom of that bug. Say so rather than name it and
+          // move on.
+          log.warn("a model call carried no functionId; tracing it as model.call");
+        }
+
         const generation = tracing.startObservation(
           event.functionId ?? "model.call",
           {
@@ -484,6 +498,14 @@ function aiSdkIntegration(tracing: LangfuseTracing): Telemetry {
         const started = open.get(event.callId);
         if (started === undefined) return;
         open.delete(event.callId);
+        // `cache_read` is the prefix-cache hit the lead brief asks us to watch:
+        // oMLX reports `prompt_tokens_details.cached_tokens`, and a turn whose
+        // shared prefix is stable should show most of its input tokens here.
+        // Both extra keys are omitted rather than sent as zero, so a provider
+        // that does not report them leaves no misleading row in Langfuse.
+        const cacheRead = event.usage.inputTokenDetails?.cacheReadTokens;
+        const reasoning = event.usage.outputTokenDetails?.reasoningTokens;
+
         started.generation
           .update({
             output: event.content,
@@ -491,6 +513,8 @@ function aiSdkIntegration(tracing: LangfuseTracing): Telemetry {
               input: event.usage.inputTokens ?? 0,
               output: event.usage.outputTokens ?? 0,
               total: event.usage.totalTokens ?? 0,
+              ...(cacheRead === undefined ? {} : { cache_read: cacheRead }),
+              ...(reasoning === undefined ? {} : { reasoning: reasoning }),
             },
             metadata: {
               "latency.ms": Math.round(event.performance.responseTimeMs),

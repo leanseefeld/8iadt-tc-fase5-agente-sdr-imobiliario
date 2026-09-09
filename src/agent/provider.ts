@@ -55,6 +55,14 @@ function buildProvider() {
     // back as clean JSON. A gateway that lacks it degrades to the same failure
     // `agent/recovery.ts` already treats as "the slot stays empty".
     supportsStructuredOutputs: true,
+    // Sends `stream_options: { include_usage: true }`. Both model calls in this
+    // agent stream, and a streaming OpenAI-compatible response carries **no**
+    // usage at all unless this asks for it — which is why every generation span
+    // reported zero tokens until 09/09/2026. oMLX then closes the stream with a
+    // choice-less chunk carrying prompt/completion counts and
+    // `prompt_tokens_details.cached_tokens`, the prefix-cache hit rate the lead
+    // brief asks us to watch.
+    includeUsage: true,
     // `apiKey` means `Authorization: Bearer`. When a header name is configured
     // the key goes there instead, and only there — never both.
     ...(header === undefined

@@ -24,6 +24,14 @@ const log = createLogger("app", { module: "api/chat/properties" });
 /** Three per turn (FR-024); a handful of turns' worth per request, and no more. */
 const MAX_IDS = 30;
 
+/**
+ * `properties.id` is a `uuid` column, so a value that is not one is not a row
+ * that does not exist — it is a cast Postgres refuses, and the query throws
+ * where a read should have come back empty. Shape-checking here keeps that a
+ * `400` about the request instead of a `500` about us.
+ */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -41,6 +49,7 @@ export async function GET(request: Request): Promise<Response> {
 
   if (!agencySlug) return json({ error: "campo inválido: agencySlug é obrigatório" }, 400);
   if (ids.length > MAX_IDS) return json({ error: "campo inválido: ids demais" }, 400);
+  if (!ids.every((id) => UUID.test(id))) return json({ error: "campo inválido: ids" }, 400);
   if (ids.length === 0) return json({ properties: [] }, 200);
 
   const agency = await findAgencyBySlug(agencySlug);

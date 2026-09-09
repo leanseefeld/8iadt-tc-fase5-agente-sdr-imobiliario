@@ -8,8 +8,8 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
 | Group | Tasks | Exit gate | Status |
 |---|---|---|---|
 | A | T001–T013 (setup, pure core) | `npm test` green with no DB and no model | done |
-| B | T014–T027 (turn service, orchestrator, consumer) | one real turn persists against oMLX via the service layer | in progress |
-| C | T028–T037 (channel, notifier, SSE, widget) | widget screenshot; SC-005 reload check | pending |
+| B | T014–T027 (turn service, orchestrator, consumer) | one real turn persists against oMLX via the service layer | done |
+| C | T028–T037 (channel, notifier, SSE, widget) | widget screenshot; SC-005 reload check | next |
 | D | T038–T047 (search tool, cards, handoff, opt-out, budget) | SC-004, SC-006, SC-007 by hand | pending |
 | E | T048–T053 (Langfuse, observability profile) | SC-010..012; memory total recorded | pending |
 | F | T054–T058 (scenario tests, lint, build, README) | both suites green, build green | pending |

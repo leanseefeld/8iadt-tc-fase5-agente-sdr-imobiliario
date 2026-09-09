@@ -50,7 +50,7 @@ services:
       migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:${APP_PORT:-3000}/api/health/ready > /dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${APP_PORT:-3000}/api/health/ready > /dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -74,7 +74,7 @@ services:
       migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:${WORKER_HEALTH_PORT:-3001}/health/ready > /dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${WORKER_HEALTH_PORT:-3001}/health/ready > /dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 6

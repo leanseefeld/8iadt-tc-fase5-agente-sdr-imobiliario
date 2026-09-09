@@ -1,7 +1,3 @@
-import { getConfig } from "@/core/config";
-import { flushLangfuse, registerLangfuse } from "@/core/langfuse";
-import { createLogger } from "@/core/logging";
-
 /**
  * Runs once when the Next.js server starts.
  *
@@ -13,24 +9,14 @@ import { createLogger } from "@/core/logging";
  * — imports included — unless all three `LANGFUSE_*` keys are set, so the
  * application starts identically with the `observability` profile down, which
  * is how the demo usually runs.
+ *
+ * Everything real lives in `instrumentation.node.ts` and is reached through a
+ * dynamic import, because Next compiles this file for the Edge runtime too and
+ * a static import would drag Node-only code in there whatever the guard says.
  */
 export async function register() {
-  // Next compiles this file for the Edge runtime too, where `process.once` does
-  // not exist and the OpenTelemetry packages cannot load. Everything below is
-  // Node-only, so the Edge copy returns immediately.
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
-  const config = getConfig();
-  await registerLangfuse("app");
-
-  // The exporter batches, so a container stopping mid-batch would lose the last
-  // spans. The flush is bounded inside `core/langfuse.ts`: shutdown never waits
-  // on Langfuse (contracts/observability.md §5).
-  process.once("SIGTERM", () => void flushLangfuse());
-  process.once("SIGINT", () => void flushLangfuse());
-
-  createLogger("app").info(
-    { port: config.APP_PORT, nodeEnv: config.NODE_ENV },
-    "application started",
-  );
+  const { registerNode } = await import("./instrumentation.node");
+  await registerNode();
 }

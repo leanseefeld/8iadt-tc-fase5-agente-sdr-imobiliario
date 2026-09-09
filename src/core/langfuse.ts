@@ -85,6 +85,35 @@ export function isLangfuseConfigured(): boolean {
   );
 }
 
+/**
+ * The span mask.
+ *
+ * `maskPII` is key-aware — it masks a value because of the key above it, which
+ * is the only way a bare name like "Camila Duarte" can be recognised as a name
+ * at all. But the AI SDK hands OpenTelemetry its payloads **already serialized**:
+ * tool arguments, prompts and completions arrive as JSON *strings*, and a string
+ * reaching `maskPII` is treated as free text, where only phone- and e-mail-shaped
+ * substrings are recognised. The observable result was a span reading
+ * `{"name": "Camila Duarte", "contact": "(11) *****-**21"}` — the phone masked by
+ * its shape, the name beside it untouched, under a key literally called `name`.
+ *
+ * So: parse first when the payload is JSON, mask the structure, re-serialize.
+ * Anything that is not JSON is free text and goes through exactly as before.
+ */
+function maskSpanData(data: unknown): unknown {
+  if (typeof data !== "string") return maskPII(data);
+
+  const trimmed = data.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return maskPII(data);
+
+  try {
+    return JSON.stringify(maskPII(JSON.parse(trimmed)));
+  } catch {
+    // Not JSON after all — a reply that merely opens with a brace, say.
+    return maskPII(data);
+  }
+}
+
 /** Telemetry degrades, never propagates (principle IX). */
 function safely(what: string, action: () => void): void {
   try {
@@ -151,7 +180,7 @@ export async function registerLangfuse(process: ProcessName): Promise<void> {
       // FR-031 / principle VIII: one masking rule, both sinks. Everything a span
       // carries — the prompt, the reply, tool arguments — goes through the same
       // function the logger uses.
-      mask: ({ data }) => maskPII(data),
+      mask: ({ data }) => maskSpanData(data),
       environment: config.NODE_ENV,
     });
 

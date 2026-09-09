@@ -282,12 +282,31 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   messages and committed a turn for each, ~7 s apiece, one of them with the
   `unbackedFigure` guard firing on the model's own invented number.
 
+- **Pre-task (group C), `fix(002)`** — the three seeded demo transcripts ended on a
+  *lead* message, which is precisely what `unanswered-turns` sweeps for, so the
+  worker answered the demo leads on boot (the Gotcha below predicted it). Each
+  seeded conversation now closes on the agent: the hot lead's visit confirmation,
+  and the script's next question for the warm (neighbourhoods) and cold (bedrooms)
+  leads — which is also where those leads actually are, waiting on the lead. The
+  demo rows had to be deleted before re-seeding, because `seedLeads` is
+  skip-if-exists. The six `test-*` leads group B's integration runs left behind
+  were deleted at the same time: they carried unanswered lead messages, so every
+  sweep was spending model calls on them. Verified: `docker compose restart worker`
+  now logs no "re-running unanswered turns" line and the message count stays 16.
+
+- T028 — `src/channels/types.ts`: `Channel`, `InboundMessage`, `OutboundMessage`,
+  `ChannelAdapter` and `InboundMessageError`, per `contracts/chat-api.md` §1.
+  `send` returns `Promise<void>` because delivery belongs to the SSE stream, not
+  to the request that produced the message — which is what lets spec 006's worker
+  send a follow-up through the same method with no request in flight. The error
+  class carries the offending field name and no status code: the adapter does not
+  know about HTTP.
+
 ## In flight
 - Nothing.
 
 ## Next step
-T028 — `ChannelAdapter`, `InboundMessage` and `OutboundMessage` in
-`src/channels/types.ts` (group C).
+T029 — the web adapter in `src/channels/web.ts` (group C).
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

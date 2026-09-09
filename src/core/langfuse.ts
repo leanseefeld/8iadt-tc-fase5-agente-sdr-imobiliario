@@ -1,7 +1,7 @@
 import type { Telemetry, TelemetryOptions } from "ai";
 import { getConfig } from "./config.ts";
 import { createLogger, type ProcessName } from "./logging.ts";
-import { maskPII } from "./security.ts";
+import { maskName, maskPII } from "./security.ts";
 
 /**
  * The only module in the repository that knows Langfuse or OpenTelemetry exist.
@@ -86,6 +86,80 @@ export function isLangfuseConfigured(): boolean {
 }
 
 /**
+ * Names to redact from free text, and why this exists at all.
+ *
+ * `maskPII` recognises a name by the **key** above it, which is the only way a
+ * bare string can be known to be a name. That leaves the case SC-011 cares
+ * about: a lead who writes "meu nome é Camila Duarte" puts their name in a
+ * message body, and the body is what the prompt and the completion carry. No
+ * rule can pick a Brazilian surname out of a sentence — but this system does
+ * not need one, because by then it knows the name: it is a slot.
+ *
+ * So the turn registers the name it holds and the span mask redacts exactly
+ * that string, in the same `C*** D***` shape `maskPII` produces, wherever it
+ * appears. Bounded, because the process is long-lived and this is a demo.
+ *
+ * The residual, stated plainly: on the single turn where a name is first typed,
+ * the extraction prompt is built before anything knows a name is in it. Every
+ * later turn, and every span that names the lead as data, is covered.
+ */
+const MAX_REMEMBERED_NAMES = 200;
+
+/**
+ * On `globalThis` for the same reason the registration is (see `state()`): the
+ * orchestrator that registers a name and the span processor that redacts it are
+ * in two different module instances under Next's bundling. A plain module-level
+ * Map is written in one and read, empty, in the other — and the failure is
+ * invisible, because everything else about the mask keeps working.
+ */
+const REDACTIONS = Symbol.for("sdr.core.langfuse.redactions");
+
+function redactions(): Map<string, string> {
+  const container = globalThis as unknown as Record<symbol, Map<string, string> | undefined>;
+  container[REDACTIONS] ??= new Map<string, string>();
+  return container[REDACTIONS];
+}
+
+export function rememberLeadName(name: string | null | undefined): void {
+  if (typeof name !== "string") return;
+  const known = redactions();
+  for (const word of [name, ...name.trim().split(/\s+/)]) {
+    const trimmed = word.trim();
+    // Two-letter fragments are not worth redacting and would shred ordinary
+    // text; the full name is always registered whatever its length.
+    if (trimmed.length < 3 && trimmed !== name.trim()) continue;
+    if (trimmed === "" || known.has(trimmed)) continue;
+    if (known.size >= MAX_REMEMBERED_NAMES) {
+      const oldest = known.keys().next();
+      if (!oldest.done) known.delete(oldest.value);
+    }
+    known.set(trimmed, maskName(trimmed));
+  }
+}
+
+/** Exposed for the tests; the process keeps its registry otherwise. */
+export function forgetLeadNames(): void {
+  redactions().clear();
+}
+
+function escapeForRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function redactKnownNames(text: string): string {
+  const known = redactions();
+  if (known.size === 0) return text;
+  let result = text;
+  // Longest first, so "Camila Duarte" is replaced whole rather than leaving
+  // "C*** Duarte" behind from a single-word pass.
+  for (const [name, masked] of [...known].sort((a, b) => b[0].length - a[0].length)) {
+    if (!result.includes(name)) continue;
+    result = result.replace(new RegExp(escapeForRegExp(name), "g"), masked);
+  }
+  return result;
+}
+
+/**
  * The span mask.
  *
  * `maskPII` is key-aware — it masks a value because of the key above it, which
@@ -100,18 +174,34 @@ export function isLangfuseConfigured(): boolean {
  * So: parse first when the payload is JSON, mask the structure, re-serialize.
  * Anything that is not JSON is free text and goes through exactly as before.
  */
-function maskSpanData(data: unknown): unknown {
-  if (typeof data !== "string") return maskPII(data);
+export function maskSpanData(data: unknown): unknown {
+  if (typeof data !== "string") return redactDeep(maskPII(data));
 
   const trimmed = data.trim();
-  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return maskPII(data);
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+    return redactKnownNames(maskPII(data));
+  }
 
   try {
-    return JSON.stringify(maskPII(JSON.parse(trimmed)));
+    // The masked forms carry no JSON-special characters, so redacting the
+    // serialized form is safe and reaches every nested string in one pass.
+    return redactKnownNames(JSON.stringify(maskPII(JSON.parse(trimmed))));
   } catch {
     // Not JSON after all — a reply that merely opens with a brace, say.
-    return maskPII(data);
+    return redactKnownNames(maskPII(data));
   }
+}
+
+/** `redactKnownNames` over every string in a structure the mask was handed. */
+function redactDeep(value: unknown): unknown {
+  if (typeof value === "string") return redactKnownNames(value);
+  if (Array.isArray(value)) return value.map(redactDeep);
+  if (value !== null && typeof value === "object" && value.constructor === Object) {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, redactDeep(v)]),
+    );
+  }
+  return value;
 }
 
 /** Telemetry degrades, never propagates (principle IX). */
@@ -242,6 +332,12 @@ export interface TurnTraceAttributes {
   intent: string;
   /** The slot the deterministic question targets, when there is one. */
   pendingSlot: string | null;
+  /**
+   * The lead's name as the conversation already holds it, registered for
+   * redaction from this turn's prompts and completions. Never becomes a span
+   * attribute — it is the one thing here that must not be traced.
+   */
+  leadName: string | null;
 }
 
 /** What the turn learns about itself on the way out (contract §1). */
@@ -274,6 +370,10 @@ export async function withTurnTrace<T>(
   attributes: TurnTraceAttributes,
   fn: (trace: TurnTrace) => Promise<T>,
 ): Promise<T> {
+  // Before anything is traced: the name this turn's prompts will contain has to
+  // be redactable by the time the spans are exported.
+  rememberLeadName(attributes.leadName);
+
   const active = state().registration;
   if (active === null) return fn(NO_TRACE);
 

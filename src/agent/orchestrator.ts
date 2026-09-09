@@ -1,6 +1,6 @@
 import { streamText, type ModelMessage } from "ai";
 import { getConfig } from "../core/config.ts";
-import { modelTelemetry, withTurnTrace } from "../core/langfuse.ts";
+import { modelTelemetry, rememberLeadName, withTurnTrace } from "../core/langfuse.ts";
 import { createLogger } from "../core/logging.ts";
 import { handoffDecision, shouldProposeMeeting, type HandoffReason } from "../domain/handoff.ts";
 import { looksLikeInjection, looksLikeSteering } from "../domain/injection.ts";
@@ -411,6 +411,7 @@ export async function runTurn(options: RunTurnOptions): Promise<TurnResult> {
         conversationId: loaded.conversation.id,
         channel: loaded.lead.channel,
         intent: loaded.lead.intent,
+        leadName: loaded.conversation.slots.name,
         // Recomputed here rather than read out of `run`: `nextQuestion` is pure,
         // and the trace wants the slot the script was on *before* the turn.
         pendingSlot:

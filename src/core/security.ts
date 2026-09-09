@@ -156,7 +156,7 @@ export function maskText(text: string): string {
 /** Each word keeps its first letter; the rest is one flat `***`, not a
  * length-preserving mask — a six-letter and a three-letter name must not be
  * distinguishable from the mask alone. */
-function maskName(value: string): string {
+export function maskName(value: string): string {
   const words = value.trim().split(/\s+/).filter((word) => word.length > 0);
   if (words.length === 0) return value;
   return words.map((word) => `${word[0]}***`).join(" ");

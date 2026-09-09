@@ -365,11 +365,42 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
   ("Que legal que você está focada na Zona Sul! 😊 Pra eu te ajudar melhor, qual
   faixa de preço…") — the debounce, the claim and the commit all through HTTP.
 
+- T033 — `src/app/api/chat/[conversationId]/events/route.ts`, the SSE stream.
+  **The cookie authorises it, never the URL**: the conversation is derived from the
+  signed session and the `conversationId` in the path is only checked for equality,
+  so guessing another lead's id buys nothing without the HMAC (`401` with no
+  cookie, `403` on a mismatch — both verified by curl). A `message` notification
+  carries an id and the row is re-read scoped by the conversation before a byte
+  reaches the client; a notification whose `agencyId` is not this stream's is
+  dropped, because `NOTIFY` reaches every replica regardless of tenant. Event ids
+  are message ids, so `Last-Event-ID` is a cursor into `messages`. Each pulse
+  writes both a `: ping` comment (for proxies) and the contract's `pulse` event
+  (which the widget counts). Cleanup runs on `request.signal` abort and on
+  `cancel()`, and every open stream registers a `goodbye` closure in a
+  process-level set drained by a `prependListener` on SIGTERM/SIGINT.
+  Verified by curl against a real turn: `retry`/`: open`, `pulse`, three `chunk`
+  events as the guards cleared each sentence, then the `message` event carrying the
+  persisted bubble and its id, then pulses. Reconnecting with the lead message's id
+  as `Last-Event-ID` replayed exactly the agent message that followed.
+  **Known limitation, dev server only.** On `docker compose restart app` the
+  handler runs and logs `closing SSE streams {streams: 1}` — the frame is enqueued
+  — but Next's dev server tears the socket down before the stream's reader pulls
+  it, so the `goodbye` does not reach the wire. `next start` drains in-flight
+  responses and would; either way the widget sees the connection drop and
+  `EventSource` reconnects with its last id, which is the behaviour FR-048 asks
+  the *widget* for. Do not "fix" this by writing the goodbye earlier.
+  `tests/integration/sse-replay.test.ts`, 7 tests, no model: the cursor returning
+  both later messages in order, an id already seen returning nothing, an invented
+  id replaying nothing rather than everything, an id from another conversation
+  refused as a cursor, `loadChatHistory` returning the whole transcript (SC-005),
+  and the HTTP route itself replaying to a reconnecting client. It cleans up its
+  own rows, so the demo database stays the demo database.
+
 ## In flight
 - Nothing.
 
 ## Next step
-T033 — the SSE route `GET /api/chat/[conversationId]/events` (group C).
+T034 — the public page `src/app/(public)/chat/[agencySlug]/page.tsx` (group C).
 
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus

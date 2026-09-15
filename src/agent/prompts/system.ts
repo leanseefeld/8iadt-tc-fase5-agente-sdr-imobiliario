@@ -168,7 +168,19 @@ function task(input: TurnPromptInput): string {
   // The cards are rendered from the search result, under this message. Anything
   // the model writes about a specific imóvel is prose the lead can already read
   // off the card — and prose is exactly where an invented price comes from.
-  if (input.suggestions !== undefined && input.suggestions.count > 0) {
+  // One result and three results are different sentences, not the same sentence
+  // with a different number in it. The plural form asked the model to say
+  // "separou 1 opções ... qual delas", which is broken Portuguese, so it wrote
+  // its own plural prose over a single card and promised more than the lead
+  // could see.
+  if (input.suggestions !== undefined && input.suggestions.count === 1) {
+    return `\nSua tarefa nesta mensagem: diga em UMA frase que encontrou um imóvel que combina
+com o que a pessoa contou, e pergunte o que ela achou dele. Fale sempre no singular:
+é UM imóvel só, e prometer mais do que apareceu na tela é o pior jeito de começar.
+NÃO descreva o imóvel, não cite preço, bairro nem código: o card aparece logo abaixo
+da sua mensagem e a pessoa consegue ler tudo nele.`;
+  }
+  if (input.suggestions !== undefined && input.suggestions.count > 1) {
     return `\nSua tarefa nesta mensagem: diga em UMA frase que separou ${input.suggestions.count} ` +
       `opções que combinam com o que a pessoa contou, e pergunte qual delas chamou mais atenção.
 NÃO descreva os imóveis, não cite preço, bairro nem código: os cards aparecem logo abaixo

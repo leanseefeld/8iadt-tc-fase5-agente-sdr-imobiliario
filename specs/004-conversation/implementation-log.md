@@ -825,6 +825,31 @@ it — restart the container or you are testing the old closure.
 None of this breaks SC-010, SC-011 or SC-012. It is the gap between a contract
 written before the code and the code that answered it.
 
+**Four more, 15/09/2026, all found by the developer reading Langfuse** — which is
+the argument for the observability profile paying for itself:
+
+- `conversation.turn` carried **no input and no output** while every child span
+  had both: the row for a whole turn was the one blank row in its own trace. It
+  now takes the lead's message in and the reply out (`896e2ff`).
+- `tool.searchProperties` had **no output at all** — `recordToolSpans` only ever
+  set an input. So "what did the agent put on the lead's screen?" was answerable
+  nowhere: `model.reply` is forbidden from naming a property, and the codes in the
+  arguments say nothing about what they were. Tool spans now take an optional
+  result; the search fills it with code, title, price, bedrooms, neighbourhood.
+  Not persisted — the transcript row must not become a copy of the catalog.
+- **Tool names were masked as people.** `endsWith("name")` is what catches
+  `leadName` without enumerating the data model, and it also caught the AI SDK's
+  `toolName`: traces read `"toolName": "u***"` where `updateSlots` belonged.
+  `commitTurn` already sidestepped this when persisting; the span mask now does
+  too, via a small set of machinery keys. Three tests in `masking.test.ts`.
+- **One result read as several.** The suggestion task interpolated the count into
+  a single plural sentence, so one match instructed the model to say "separou 1
+  opções ... qual delas" — broken Portuguese in the plural, which a model smooths
+  into plural prose above exactly one card (`a9be313`). Now a separate singular
+  branch. A **4-bedroom rental** is the only search in the seeded catalog that
+  returns exactly one row (`PER-0003`) — that is the case to use when testing this
+  path; every other realistic filter returns three.
+
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus
   branches (`urgency === immediate` vs. the investment return/ticket condition)

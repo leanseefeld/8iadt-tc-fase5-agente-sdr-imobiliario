@@ -412,6 +412,7 @@ export async function runTurn(options: RunTurnOptions): Promise<TurnResult> {
         channel: loaded.lead.channel,
         intent: loaded.lead.intent,
         leadName: loaded.conversation.slots.name,
+        leadText: unansweredText(loaded),
         // Recomputed here rather than read out of `run`: `nextQuestion` is pure,
         // and the trace wants the slot the script was on *before* the turn.
         pendingSlot:
@@ -429,7 +430,12 @@ export async function runTurn(options: RunTurnOptions): Promise<TurnResult> {
           traceId: options.traceId ?? trace.traceId,
         });
         if (result.status === "committed") {
-          trace.finish({ score: result.score, stage: result.stage, outcome: result.outcome });
+          trace.finish({
+            score: result.score,
+            stage: result.stage,
+            outcome: result.outcome,
+            reply: result.reply,
+          });
         }
         return result;
       },
@@ -662,6 +668,20 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     toolCalls.push({
       name: "searchProperties",
       arguments: { codes: search.properties.map((property) => property.code) },
+      // The span's output, not the message's: what actually went on the lead's
+      // screen, readable without joining three ids against the catalog by hand.
+      // Deliberately not persisted — `contracts/chat-api.md` keeps the card a
+      // property of the reply rather than a copy of the catalog in every row.
+      result: {
+        count: search.properties.length,
+        properties: search.properties.map((property) => ({
+          code: property.code,
+          title: property.title,
+          price: property.price,
+          bedrooms: property.bedrooms,
+          neighborhood: property.neighborhood,
+        })),
+      },
     });
   }
   const propertyIds = search.properties.map((property) => property.id);

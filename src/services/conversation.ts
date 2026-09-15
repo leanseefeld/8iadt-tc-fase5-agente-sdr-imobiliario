@@ -519,6 +519,14 @@ export interface CommittedToolCall {
   name: string;
   /** Masked before it is written — a tool argument can carry a name or a phone. */
   arguments: unknown;
+  /**
+   * What the tool returned, for its span's output only. **Not persisted**: the
+   * message metadata keeps carrying `{ name, arguments }` alone, because a
+   * transcript row must not become a copy of the catalog
+   * (`contracts/chat-api.md` §5). A trace, on the other hand, is exactly where
+   * "what did the agent put on the screen?" should be answerable.
+   */
+  result?: unknown;
 }
 
 export interface CommitTurnInput {
@@ -597,6 +605,7 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
     (input.toolCalls ?? []).map((call) => ({
       name: call.name,
       attributes: { arguments: call.arguments },
+      ...(call.result === undefined ? {} : { result: call.result }),
     })),
   );
 

@@ -157,3 +157,26 @@ test("masks a payload carrying an id and a telephone side by side", () => {
 test("masks a bare name through its key, the way an event payload does", () => {
   assert.deepEqual(maskPII({ name: "Camila" }), { name: "C***" });
 });
+
+/**
+ * Traces came back reading `"toolName": "u***"` where `updateSlots` belonged,
+ * which makes a trace unreadable in exactly the place you go to read it. The
+ * suffix rule stays broad; the machinery keys are the exception.
+ */
+test("leaves an AI SDK toolName alone", () => {
+  assert.deepEqual(maskPII({ toolName: "updateSlots" }), { toolName: "updateSlots" });
+});
+
+test("still masks the person-name keys the data model uses", () => {
+  assert.deepEqual(maskPII({ name: "Camila Duarte", leadName: "Ana Souza" }), {
+    name: "C*** D***",
+    leadName: "A*** S***",
+  });
+});
+
+test("leaves the other machinery keys alone", () => {
+  assert.deepEqual(maskPII({ modelName: "gemma-4-e4b", fileName: "seed.ts" }), {
+    modelName: "gemma-4-e4b",
+    fileName: "seed.ts",
+  });
+});

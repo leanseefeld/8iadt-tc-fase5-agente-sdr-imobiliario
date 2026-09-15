@@ -338,6 +338,11 @@ export interface TurnTraceAttributes {
    * attribute — it is the one thing here that must not be traced.
    */
   leadName: string | null;
+  /**
+   * What the lead said, as the turn's input. Masked like every other payload,
+   * and redacted of the name above.
+   */
+  leadText: string;
 }
 
 /** What the turn learns about itself on the way out (contract §1). */
@@ -345,6 +350,8 @@ export interface TurnOutcome {
   score: number;
   stage: string;
   outcome: string;
+  /** The reply the lead received — the turn's output on the trace. */
+  reply: string;
 }
 
 export interface TurnTrace {
@@ -408,6 +415,11 @@ export async function withTurnTrace<T>(
               finish: (outcome) =>
                 safely("turn outcome", () => {
                   span.update({
+                    // The turn's output. Without it `conversation.turn` is the
+                    // one span in the trace with nothing to read, and the
+                    // Langfuse row for a whole turn shows blank input/output
+                    // while its children show everything.
+                    output: outcome.reply,
                     metadata: {
                       "turn.score": outcome.score,
                       "turn.stage": outcome.stage,
@@ -418,6 +430,7 @@ export async function withTurnTrace<T>(
             };
             safely("turn attributes", () => {
               span.update({
+                input: attributes.leadText,
                 metadata: {
                   "turn.intent": attributes.intent,
                   "turn.pending_slot": attributes.pendingSlot ?? "none",
@@ -536,6 +549,13 @@ export interface ToolSpan {
   name: string;
   /** The call's own arguments; masked by the span processor like everything else. */
   attributes: Record<string, unknown>;
+  /**
+   * What the tool returned. Optional because most of these tools return
+   * nothing worth reading — but `searchProperties` does, and without it the
+   * one question the trace exists to answer ("what did the agent put on the
+   * lead's screen?") has no answer anywhere in Langfuse.
+   */
+  result?: unknown;
 }
 
 /**
@@ -555,7 +575,14 @@ export function recordToolSpans(calls: readonly ToolSpan[]): void {
   for (const call of calls) {
     safely("tool span", () => {
       tracing
-        .startObservation(`tool.${call.name}`, { input: call.attributes }, { asType: "tool" })
+        .startObservation(
+          `tool.${call.name}`,
+          {
+            input: call.attributes,
+            ...(call.result === undefined ? {} : { output: call.result }),
+          },
+          { asType: "tool" },
+        )
         .end();
     });
   }

@@ -169,12 +169,37 @@ export function maskName(value: string): string {
 type SensitiveKind = "name" | "phone" | "email" | "contact";
 
 /**
+ * Keys that end in `name` but never hold a person's.
+ *
+ * The suffix rule below is deliberately broad — it is what catches `leadName`
+ * without a list of every field the data model might grow. The cost is that it
+ * also catches the machinery: an AI SDK tool-call payload carries `toolName`,
+ * and traces came back reading `"toolName": "u***"` where `updateSlots`
+ * belonged, which makes a trace unreadable in exactly the place you go to read
+ * it. `commitTurn` already sidesteps this when it persists a tool call; the
+ * span mask needed the same knowledge.
+ */
+const NON_PERSON_NAME_KEYS = new Set([
+  "toolname",
+  "functionname",
+  "modelname",
+  "schemaname",
+  "providername",
+  "filename",
+  "hostname",
+  "eventname",
+  "tracename",
+  "stepname",
+]);
+
+/**
  * Case-insensitive suffix match, so `leadName` and `contactPhone` are caught
  * alongside the bare `name`/`phone`/`email`/`contact` keys the data model
  * uses directly.
  */
 function sensitiveKeyKind(key: string): SensitiveKind | null {
   const lower = key.toLowerCase();
+  if (NON_PERSON_NAME_KEYS.has(lower)) return null;
   if (lower.endsWith("name")) return "name";
   if (lower.endsWith("phone")) return "phone";
   if (lower.endsWith("email")) return "email";

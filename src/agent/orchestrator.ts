@@ -668,20 +668,12 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     toolCalls.push({
       name: "searchProperties",
       arguments: { codes: search.properties.map((property) => property.code) },
-      // The span's output, not the message's: what actually went on the lead's
-      // screen, readable without joining three ids against the catalog by hand.
-      // Deliberately not persisted — `contracts/chat-api.md` keeps the card a
-      // property of the reply rather than a copy of the catalog in every row.
-      result: {
-        count: search.properties.length,
-        properties: search.properties.map((property) => ({
-          code: property.code,
-          title: property.title,
-          price: property.price,
-          bedrooms: property.bedrooms,
-          neighborhood: property.neighborhood,
-        })),
-      },
+      // The span's output: the ids of what went on the lead's screen, and
+      // nothing more. Titles and prices would make the trace readable without
+      // a lookup, but every span is storage the developer pays for forever and
+      // the catalog row is one join away — the id is the part that cannot be
+      // recovered after the fact.
+      result: { propertyIds: search.properties.map((property) => property.id) },
     });
   }
   const propertyIds = search.properties.map((property) => property.id);

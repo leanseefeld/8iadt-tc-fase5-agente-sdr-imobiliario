@@ -946,5 +946,5 @@ Probe scripts are not in the repo; they are twenty lines of `curl` against
   the migrations but never the orchestrator; the first chat turn is where it would
   surface. The reset recipe is therefore four steps, not three:
   `docker compose down -v && docker compose up -d && docker compose exec app npm ci
-  && docker compose exec app npm run db:seed`. Group F's `db:reset` should truncate
-  instead of destroying volumes, or rebuild the image.
+  && docker compose exec app npm run db:seed`. Group F owns this now: **T056b**, a `db:reset` that truncates
+  instead of destroying volumes.

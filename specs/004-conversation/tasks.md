@@ -104,7 +104,7 @@ description: "Task list for the conversation slice"
 
 ## Phase 8: Polish and acceptance
 
-- [ ] T054 Write `tests/integration/scenario-purchase.test.ts` — Cenário 1 through `services/conversation.ts` against the local model, asserting SC-001, SC-003, SC-004 and the `proposeMeeting` call at the end
+- [x] T054 Write `tests/integration/scenario-purchase.test.ts` — Cenário 1 through `services/conversation.ts` against the local model, asserting SC-001, SC-003, SC-004 and the `proposeMeeting` call at the end
 - [ ] T055 [P] Write `tests/integration/scenario-investment.test.ts` — Cenário 2, asserting SC-002, SC-003, no catalog search, and `proposeMeeting` called for a call with a specialist
 - [ ] T056 [P] Write `tests/integration/turn-persistence.test.ts` — idempotency (SC-008), the message budget, the provider-outage fallback (SC-009), and `unanswered-turns` recovering a turn left with a stale `processingSince`
 - [ ] T056b Add an `npm run db:reset` script that truncates and re-seeds **without** destroying volumes — `docker compose down -v` removes the `node_modules` volume where spec 004's dependencies live, so the recipe in circulation leaves the worker dead on `ERR_MODULE_NOT_FOUND` while the app still reports healthy. Document it in the README alongside the widget URL (T058)

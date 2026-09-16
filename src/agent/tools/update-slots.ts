@@ -27,9 +27,10 @@ import {
 const DESCRIPTIONS: Record<SlotKey | "intent", string> = {
   intent:
     "purchase para comprar, rental para alugar, investment para investir. " +
-    "Quem procura imóvel sem dizer a finalidade está comprando: use purchase. " +
-    "Só use rental se a pessoa falar em alugar ou aluguel, e investment se ela " +
-    "falar em investir, renda, rentabilidade ou retorno.",
+    "Preencha só quando a pessoa disser o que ela quer fazer. Se a frase for uma " +
+    'pergunta, ou começar com "se", "e se", "caso" ou "seria", ela está supondo, ' +
+    "não decidindo: intent é null mesmo que as palavras comprar, alugar ou investir " +
+    "apareçam. Se ela descreve uma busca real por imóvel sem dizer a finalidade, é purchase.",
   priceMax: "Orçamento máximo em reais, número inteiro. \"700 mil\" é 700000",
   bedrooms: "Número mínimo de quartos",
   neighborhoods: "Bairros ou regiões citados, separados por vírgula. Vazio = aberto a sugestões",

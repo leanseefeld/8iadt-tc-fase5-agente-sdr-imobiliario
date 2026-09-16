@@ -2,6 +2,11 @@
  * Extraction eval — how often does a turn read a lead's message correctly?
  *
  * Run:  docker compose exec -T app node evals/extraction.mjs [--runs 5]
+ *       ... evals/extraction.mjs --prompt-file evals/candidate.txt
+ *
+ * `--prompt-file` swaps the system prompt for a candidate while everything else
+ * — cases, repair, gate, scoring — stays identical, which is the only way to
+ * compare two prompts and believe the difference.
  *
  * What it is for. The extraction is the one place where a sampler decides
  * whether the agent understood someone, so changing its prompt, its schema or
@@ -63,7 +68,7 @@ async function inParallel(items, worker, limit = CONCURRENCY) {
 }
 
 /** One extraction call, shaped exactly as `agent/orchestrator.extract` shapes it. */
-async function extractOnce(config, testCase) {
+async function extractOnce(config, testCase, systemPrompt) {
   const messages = [
     ...testCase.history.map((entry) => ({
       role: entry.role === "lead" ? "user" : "assistant",
@@ -83,7 +88,7 @@ async function extractOnce(config, testCase) {
       temperature: TEMPERATURE,
       max_tokens: MAX_OUTPUT_TOKENS,
       response_format: { type: "json_object" },
-      messages: [{ role: "system", content: extractionSystemPrompt() }, ...messages],
+      messages: [{ role: "system", content: systemPrompt }, ...messages],
     }),
   });
 
@@ -166,21 +171,29 @@ function grade(text, testCase) {
 // Reporting
 // ---------------------------------------------------------------------------
 
+function readFlag(argv, name) {
+  const at = argv.indexOf(name);
+  return at === -1 ? undefined : argv[at + 1];
+}
+
 function parseRuns(argv) {
-  const flag = argv.indexOf("--runs");
-  const value = flag === -1 ? NaN : Number(argv[flag + 1]);
+  const value = Number(readFlag(argv, "--runs"));
   return Number.isInteger(value) && value > 0 ? value : 5;
 }
 
 async function main() {
   const config = getConfig();
   const runsPerCase = parseRuns(process.argv);
+  const promptFile = readFlag(process.argv, "--prompt-file");
+  const systemPrompt = promptFile === undefined
+    ? extractionSystemPrompt()
+    : await readFile(promptFile, "utf8");
   const { cases } = JSON.parse(await readFile(CASES_PATH, "utf8"));
 
   const jobs = cases.flatMap((testCase) =>
     Array.from({ length: runsPerCase }, () => testCase),
   );
-  const outputs = await inParallel(jobs, (testCase) => extractOnce(config, testCase));
+  const outputs = await inParallel(jobs, (testCase) => extractOnce(config, testCase, systemPrompt));
 
   const tally = new Map(cases.map((c) => [c.id, { pass: 0, fail: 0, unparseable: 0, problems: [] }]));
   const audit = [];
@@ -196,7 +209,10 @@ async function main() {
 
   await writeFile(OUTPUT_PATH, audit.map((row) => JSON.stringify(row)).join("\n") + "\n");
 
-  console.log(`model ${config.MODEL_ID}  temperature ${TEMPERATURE}  ${runsPerCase} runs per case\n`);
+  console.log(
+    `model ${config.MODEL_ID}  temperature ${TEMPERATURE}  ${runsPerCase} runs per case  ` +
+      `prompt ${promptFile ?? "(shipped)"}\n`,
+  );
 
   let passed = 0;
   for (const [id, row] of tally) {

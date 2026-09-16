@@ -293,20 +293,28 @@ export const SLOT_HINTS: Record<Askable, string> = {
 /**
  * The extraction prompt, rendered once from `EXTRACTION_FIELDS`.
  *
- * Three measurements shaped this. It used to be a chat call with three tools and
- * `toolChoice: "required"`: over 53 real calls **38% came back as prose and no
- * tool call at all**, the model answering the lead instead of reading the
- * message. Sending a JSON *schema* instead was worse — oMLX accepts one and then
- * fails to constrain to it, answering with a bare `["zona sul"]` until the token
- * ceiling on most calls and on every single one at temperature 0. Plain JSON
- * mode with the field guide written out here parsed 30 of 30 and got every
- * value right, including the two that the model had been getting wrong.
+ * Three measurements shaped the *shape* of it. It used to be a chat call with
+ * three tools and `toolChoice: "required"`: over 53 real calls **38% came back
+ * as prose and no tool call at all**. Sending a JSON schema instead was worse —
+ * oMLX accepts one and then fails to constrain to it. Plain JSON mode with the
+ * field guide written out here parsed 30 of 30 and got every value right.
  *
- * The guide is generated from the field definitions rather than written twice,
- * so a description can never drift from the key it describes.
+ * A fourth measurement shaped the *words*. A lead who writes "kkkk" was being
+ * read as a buyer, and "se eu quisesse alugar, vocês teriam algo?" as a renter —
+ * both of them systematic, 0 out of 8 on the eval, and both expensive: `intent`
+ * is immutable once set, so a joke could lock someone into the wrong script.
+ * Naming the non-answers, and telling `intent` outright that a question or a
+ * conditional is someone supposing rather than deciding, took the eval from
+ * 128/144 to 140/144 with no case failing on meaning.
  *
- * It takes no arguments, and that is deliberate: a prompt that does not change
- * is a prompt the server's prefix cache can keep.
+ * The order is deliberate. What to record comes first, because refusing to
+ * record is the easier failure to teach and a prompt that only says "be careful"
+ * produces a model that records nothing — an earlier draft of exactly this
+ * stopped reading "na zona sul". The refusals come second, and the field guide
+ * last, so each field's own rule sits next to the field.
+ *
+ * It takes no arguments, and that is deliberate too: a prompt that does not
+ * change is a prompt the server's prefix cache can keep.
  */
 export function extractionSystemPrompt(): string {
   const guide = EXTRACTION_FIELDS.map(
@@ -318,8 +326,26 @@ export function extractionSystemPrompt(): string {
   return [
     "Você lê mensagens de uma conversa imobiliária em português e devolve um objeto JSON.",
     "Você não conversa, não responde à pessoa e não escreve frases.",
+    "",
+    "Quando a pessoa diz o que procura — finalidade, bairro ou região, valor, quartos,",
+    "prazo, nome, contato — registre, mesmo que ela diga tudo de uma vez e sem ser",
+    "perguntada. É para isso que você existe.",
+    "",
+    "Fora isso, a pergunta é uma só, campo por campo: esta mensagem diz isso? Se não",
+    "disser, o campo é null. Preencher um campo que a pessoa não disse é o pior erro",
+    "possível: alguém será atendido com base em algo que nunca falou.",
+    "",
+    "Não são afirmações, e sozinhas valem um objeto inteiro de null:",
+    '- risada, emoji ou interjeição — "kkkk", "haha", "😂", "hmm"',
+    "- brincadeira, provocação, ironia, elogio ou reclamação",
+    "- pergunta que ela faz a você; número dentro de pergunta é seu, não dela",
+    '- hipótese ou condição — "se eu quisesse", "e se fosse", "seria possível" —',
+    "  supor uma coisa não é querer essa coisa",
+    "- assunto que não é o imóvel dela",
+    "",
     "Responda com UM objeto JSON e nada mais, com exatamente estas chaves:",
     ...guide,
+    "",
     "Use null para tudo que a pessoa não disse. Não adivinhe, não complete, não deduza.",
   ].join("\n");
 }

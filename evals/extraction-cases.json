@@ -215,6 +215,166 @@
       "expect": {
         "priceMax": 1500000
       }
+    },
+    {
+      "id": "emoji-only",
+      "why": "No words at all. Nothing can be read from it.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar um apartamento"
+        },
+        {
+          "role": "agent",
+          "content": "Qual faixa de preço você tem em mente?"
+        }
+      ],
+      "known": {
+        "intent": "purchase"
+      },
+      "message": "😂😂😂",
+      "pending": "priceMax",
+      "expect": {}
+    },
+    {
+      "id": "teasing-the-agent",
+      "why": "Banter about the agent, not about the property.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar um apartamento"
+        },
+        {
+          "role": "agent",
+          "content": "Qual faixa de preço você tem em mente?"
+        }
+      ],
+      "known": {
+        "intent": "purchase"
+      },
+      "message": "você é um robô né? kkk",
+      "pending": "priceMax",
+      "expect": {}
+    },
+    {
+      "id": "provocation",
+      "why": "A challenge, not an answer. Nothing about the search changed.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar um apartamento"
+        },
+        {
+          "role": "agent",
+          "content": "Qual faixa de preço você tem em mente?"
+        }
+      ],
+      "known": {
+        "intent": "purchase"
+      },
+      "message": "aposto que você não sabe nada de imóveis",
+      "pending": "priceMax",
+      "expect": {}
+    },
+    {
+      "id": "sarcasm",
+      "why": "Sentiment, not information.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar um apartamento"
+        },
+        {
+          "role": "agent",
+          "content": "Qual faixa de preço você tem em mente?"
+        }
+      ],
+      "known": {
+        "intent": "purchase"
+      },
+      "message": "nossa, que atendimento incrível",
+      "pending": "priceMax",
+      "expect": {}
+    },
+    {
+      "id": "hypothetical-mentions-renting",
+      "why": "The hardest one: 'alugar' appears, but as a hypothesis, not as this person's intent.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Oi"
+        },
+        {
+          "role": "agent",
+          "content": "Você está procurando um imóvel para comprar, para alugar ou para investir?"
+        }
+      ],
+      "known": {},
+      "message": "se eu quisesse alugar, vocês teriam algo?",
+      "pending": "intent",
+      "expect": {}
+    },
+    {
+      "id": "question-back",
+      "why": "A question is not an answer, and the number in it is ours, not theirs.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar um apartamento"
+        },
+        {
+          "role": "agent",
+          "content": "Qual faixa de preço você tem em mente?"
+        }
+      ],
+      "known": {
+        "intent": "purchase"
+      },
+      "message": "qual o mais barato que vocês têm?",
+      "pending": "priceMax",
+      "expect": {}
+    },
+    {
+      "id": "off-topic-small-talk",
+      "why": "Conversation, not qualification.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar um apartamento"
+        },
+        {
+          "role": "agent",
+          "content": "Qual faixa de preço você tem em mente?"
+        }
+      ],
+      "known": {
+        "intent": "purchase"
+      },
+      "message": "você viu o jogo ontem?",
+      "pending": "priceMax",
+      "expect": {}
+    },
+    {
+      "id": "vague-number-without-a-unit",
+      "why": "A bare number under a price question is an answer; under small talk it is not. Here the question was asked, so it is.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar um apartamento"
+        },
+        {
+          "role": "agent",
+          "content": "Qual faixa de preço você tem em mente?"
+        }
+      ],
+      "known": {
+        "intent": "purchase"
+      },
+      "message": "uns 600",
+      "pending": "priceMax",
+      "expect": {
+        "priceMax": 600000
+      }
     }
   ]
 }

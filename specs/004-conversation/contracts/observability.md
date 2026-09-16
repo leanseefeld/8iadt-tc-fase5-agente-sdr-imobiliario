@@ -15,12 +15,16 @@ registered at all** — the cheapest possible form of "absent changes nothing".
 | | |
 |---|---|
 | Name | `conversation.turn` |
-| Started by | `services/conversation.ts`, around the whole turn |
+| Started by | `agent/orchestrator.ts`, around the whole turn |
 | Ends | after the transaction commits, whatever the outcome |
 | Langfuse session id | `conversation.id` |
 | Langfuse user id | masked lead id (principle VIII — never the raw uuid alone) |
+| Input | the lead's unanswered message(s), joined |
+| Output | the reply, as the lead received it |
 
-**Attributes** (every span in the trace inherits them):
+**Attributes.** The first four are propagated, so they are on the trace and every
+span in it. The `turn.*` rows are set on the `conversation.turn` span itself,
+which is where a reader looks for them.
 
 | Attribute | Example | Notes |
 |---|---|---|
@@ -32,22 +36,35 @@ registered at all** — the cheapest possible form of "absent changes nothing".
 | `turn.pending_slot` | `bedrooms` | the slot the deterministic question targets |
 | `turn.score` | `55` | recomputed value at the end of the turn |
 | `turn.stage` | `new` \| `qualifying` \| `qualified` | the lead's pipeline stage (`modelo-de-dados.md` §7) — `handoff` is never a value here, it is an outcome, not a stage |
-| `turn.outcome` | `replied` \| `fallback` \| `handoff` \| `meeting_proposed` \| `opted_out` \| `budget_exceeded` \| `replayed` | one value, always set |
+| `turn.outcome` | `replied` \| `fallback` \| `handoff` \| `meeting_proposed` \| `opted_out` | set on every turn that commits; a turn that throws before committing has none, and is not a turn the lead saw |
 
 ## 2. Child spans
 
 | Span | Kind | When | Attributes beyond the inherited set |
 |---|---|---|---|
-| `model.reply` | generation | The streaming call that produces the reply | `model.id`, `provider.base_url` (host only), `usage.input_tokens`, `usage.output_tokens`, `latency.ms`, `retry.count`, `error.code` |
-| `model.recover_slot` | generation | Only when the extraction tool was skipped | as above, plus `slot` |
-| `tool.updateSlots` | tool | Per invocation | `slots.changed` (key list, values masked) |
-| `tool.searchProperties` | tool | Per invocation | `filters` (slot-derived), `results.count`, `results.codes` |
-| `tool.requestHandoff` | tool | Per invocation | `reason` |
+| `model.extract` | generation | The tool call that reads the lead's message into slots | `model.id`, `provider.base_url` (host only), `latency.ms`, `finish.reason`, and `usage` — input, output, `cache_read`, `reasoning` |
+| `model.reply` | generation | The streaming call that produces the reply | as above |
+| `model.recover_slot` | generation | Only when the extraction missed the pending slot (FR-011) | as above |
+| `tool.updateSlots` | tool | Per invocation | input: the call's arguments, masked |
+| `tool.searchProperties` | tool | Per invocation | input: the codes; output: `propertyIds` |
+| `tool.recoverSlot` | tool | Per invocation | input: the recovered slot |
+| `tool.proposeMeeting` | tool | Per invocation | input: `kind`, `status` |
+| `tool.requestHandoff` | tool | Per invocation | input: the call's arguments |
 | `tool.optOut` | tool | Per invocation | — |
-| `guard.rejected` | event on the trace | A reply guard replaced or truncated the reply | `guard` (`language` \| `two_questions` \| `unbacked_money` \| `leak`) |
 
-Tool spans are produced by the AI SDK's tool instrumentation; the attribute rows
-above are what this project adds to them.
+Tool spans are written by `commitTurn` from the list it is about to persist, not
+by the AI SDK: this agent invokes its tools from code, so the SDK never sees them
+execute. Each carries the call's arguments as its input; only `searchProperties`
+has an output worth storing, and it stores ids rather than catalog rows.
+
+`usage` is reported because the provider is asked for it — a streaming
+OpenAI-compatible response carries none unless the request sets
+`stream_options.include_usage`. `cache_read` is the prefix-cache hit
+(`prompt_tokens_details.cached_tokens`).
+
+**A span name not in this table is a defect, not an extension.** `model.call` in
+particular means a model call reached the provider with no telemetry name, which
+has meant a registration bug every time it has appeared; it logs a warning.
 
 ## 3. Masking
 
@@ -56,12 +73,23 @@ as the logger's serializer — one rule, both sinks, principle VIII. It masks:
 
 | Kind | Rule | Example |
 |---|---|---|
-| Phone | keep the last 4 digits | `(11) 9****-1234` |
+| Phone | keep the last two digits, in a fixed shape | `(11) *****-**21` |
 | E-mail | keep the first character and the domain | `c***@gmail.com` |
-| Person name | keep the first name, mask the rest | `Camila S.` |
-| Free text | phone- and e-mail-shaped substrings replaced in place | applies to message bodies |
+| Person name | first letter of each word, then `***` | `C*** D***` |
+| Free text | phone- and e-mail-shaped substrings replaced in place, **and** the lead's own name once the conversation knows it | applies to message bodies, prompts and completions |
 
-Property addresses are **not** masked: they are catalog data, not lead data.
+The masks are not length-preserving: a six-letter and a three-letter name must not
+be distinguishable from the mask alone.
+
+Two things the key-aware rule does **not** cover, by design. Property addresses are
+catalog data, not lead data, and stay readable. And keys that end in `name` but hold
+no person — `toolName`, `modelName`, `fileName` — are exempt, or a trace reads
+`"toolName": "u***"` where `updateSlots` belongs.
+
+The free-text name redaction has one residual: on the turn where a lead first types
+their name, the extraction prompt is built before anything knows a name is in it.
+Every later turn is covered. Decided by the developer on 09/09/2026, over the
+alternative of not recording prompts at all.
 
 ## 4. What is not traced
 
@@ -79,8 +107,10 @@ span. Principle VII's stated non-goal — no evals, no scoring harness — holds
 
 ## 6. Events carry the trace
 
-Every row this slice writes to `events` sets `actorType = 'agent'`, `actorUserId =
-null`, and `traceId` to this turn's Langfuse trace id — the timeline in the lead's
+Every row a **turn** writes to `events` sets `actorType = 'agent'`, `actorUserId =
+null`, and `traceId` to this turn's Langfuse trace id. Rows written on the inbound
+path instead of inside a turn — `lead.created`, `lead.consented` — carry no trace
+id, because at that point there is no turn and no trace — the timeline in the lead's
 file links straight to the trace from any event, not only from the message. This
 holds whether or not a tracer is registered: `traceId` is simply `null` when
 Langfuse is unconfigured, same as any other absent value (FR-050).

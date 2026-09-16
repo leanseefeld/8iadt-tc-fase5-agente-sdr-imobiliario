@@ -40,7 +40,7 @@ import {
   noMatchReply,
   refusalReply,
 } from "./prompts/fallback.ts";
-import { extractionSystemPrompt, turnSystemPrompt } from "./prompts/system.ts";
+import { REPLY_SYSTEM_PROMPT, extractionSystemPrompt, turnBriefing } from "./prompts/system.ts";
 import { getJsonModel, modelCall } from "./provider.ts";
 import { plausiblyAnswers, recoverSlot } from "./recovery.ts";
 import { runProposeMeeting, runSearchProperties } from "./tools/index.ts";
@@ -183,6 +183,43 @@ function toModelMessages(turn: LoadedTurn, limit?: number): ModelMessage[] {
     trimmed.push({ role: "user", content: unansweredText(turn) });
   }
   return trimmed;
+}
+
+/**
+ * Puts the turn's briefing immediately before the lead's own words, inside the
+ * last user turn.
+ *
+ * Two constraints decide the shape. AI SDK 7 refuses a `system` message inside
+ * `messages` ("use the instructions option instead"), and Gemma's template wants
+ * the roles to alternate, so the briefing cannot be a message of its own either
+ * way. It therefore rides in the final user turn, fenced and labelled, with the
+ * lead's text last — instructions, then the thing to answer.
+ *
+ * The caching property survives intact, which is the whole reason for the move:
+ * everything before this last turn is byte-identical to the previous call, so
+ * the server's prefix cache keeps the entire conversation instead of discarding
+ * it behind a system prompt that changed. The labels also matter on their own —
+ * the model is told which half is ours and which half is the lead's, and the
+ * lead's half is the half it must answer.
+ */
+function briefed(messages: ModelMessage[], briefing: string): ModelMessage[] {
+  const fenced = (leadText: string) =>
+    [
+      "[CONTEXTO PARA VOCÊ — instruções do sistema, não é mensagem da pessoa]",
+      briefing,
+      "",
+      "[MENSAGEM DA PESSOA — responda a isto]",
+      leadText,
+    ].join("\n");
+
+  const last = messages.at(-1);
+  if (last === undefined || last.role !== "user") {
+    return [...messages, { role: "user", content: fenced("") }];
+  }
+  return [
+    ...messages.slice(0, -1),
+    { role: "user", content: fenced(last.content as string) },
+  ];
 }
 
 /** FR-044: one turn answers every lead message left unanswered, together. */
@@ -344,7 +381,8 @@ function drain(buffer: string, final: boolean): { ready: string[]; rest: string 
 
 interface PhraseInput {
   turn: LoadedTurn;
-  system: string;
+  /** This turn's volatile half, delivered at the end rather than at the top. */
+  briefing: string;
   question: Question | null;
   pendingSlot: Askable | null;
   nextSlot: Askable | null;
@@ -389,8 +427,8 @@ async function phrase(input: PhraseInput): Promise<PhrasedReply> {
     const stream = streamText({
       ...modelCall(),
       ...modelTelemetry("model.reply"),
-      system: input.system,
-      messages: toModelMessages(input.turn),
+      system: REPLY_SYSTEM_PROMPT,
+      messages: briefed(toModelMessages(input.turn), input.briefing),
     });
 
     outer: for await (const part of stream.fullStream) {
@@ -815,7 +853,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   const lead = figuresIn(`${leadText} ${turn.history.map((m) => m.content).join(" ")}`);
   const phrased = await phrase({
     turn,
-    system: turnSystemPrompt({
+    briefing: turnBriefing({
       intent,
       slots,
       filled: filledThisTurn,

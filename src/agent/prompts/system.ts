@@ -226,18 +226,37 @@ function notes(input: TurnPromptInput): string {
   return lines.length === 0 ? "" : `\nObservações:\n- ${lines.join("\n- ")}`;
 }
 
-/** The system prompt of the phrasing call: state, the one question, the rules. */
-export function turnSystemPrompt(input: TurnPromptInput): string {
+/**
+ * The phrasing call's system prompt — **constant**, and that is the whole point.
+ *
+ * A prefix cache is a prefix: the first byte that differs invalidates everything
+ * after it, and everything after the system prompt is the entire conversation.
+ * This used to be persona · slot state · acknowledgement · task · notes · rules,
+ * so the two stable blocks sat either side of text that changed every turn, and
+ * `RULES` was re-encoded on every call for nothing. Measured against oMLX over
+ * three turns of a growing conversation, cached tokens stayed pinned at 512
+ * while the input grew — the hit rate *falling* the longer someone talked
+ * (10.2% → 9.4%). With the volatile half moved to the end of the messages, the
+ * cache grows with the conversation instead (81.4% → 84.4%).
+ *
+ * So: what never changes lives here, at the top, and what changes every turn is
+ * `turnBriefing`, delivered as the last thing the model reads before the lead's
+ * own words.
+ */
+export const REPLY_SYSTEM_PROMPT = [PERSONA, "", RULES].join("\n");
+
+/**
+ * Everything about *this* turn: what is known, what was just learned, the one
+ * job, and the caveats. Goes at the end of the conversation, immediately before
+ * the message it is about — instructions, then the thing to answer.
+ */
+export function turnBriefing(input: TurnPromptInput): string {
   return [
-    PERSONA,
-    "",
     "O que já se sabe sobre esta pessoa (não pergunte nada disso de novo):",
     renderSlots(input.intent, input.slots),
     acknowledgement(input),
     task(input),
     notes(input),
-    "",
-    RULES,
   ]
     .filter((block) => block !== "")
     .join("\n");

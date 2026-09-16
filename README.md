@@ -140,6 +140,7 @@ O roteiro completo de validação — um comando por critério de aceite — est
 | `docs/` | Arquitetura real, decisões e restrições | **Sim** |
 | `specs/` | Especificações por funcionalidade | **Sim**, para a funcionalidade que descrevem |
 | `reference/` | Material de ideação inicial | **Não** — ver [`reference/README.md`](reference/README.md) |
+| `evals/` | Medição da extração — ver [`evals/README.md`](evals/README.md) | Não |
 | `AGENTS.md` | Briefing para agentes de código | Sim |
 
 > ⚠️ `reference/` descreve um desenho anterior em Python que **não será
@@ -153,6 +154,7 @@ O roteiro completo de validação — um comando por critério de aceite — est
 - [Decisões técnicas](docs/arquitetura/adr/decisoes.md) — o que foi decidido e com que consequências
 - [Decisões pendentes](docs/decisoes-pendentes.md) — o que ainda não foi decidido
 - [Backlog](specs/BACKLOG.md) — fatias de trabalho e rastreabilidade com o enunciado
+- [Evals](evals/README.md) — quanto o agente acerta ao ler uma mensagem, e o que essas medições já decidiram
 
 ---
 

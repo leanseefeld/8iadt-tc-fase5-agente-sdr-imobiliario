@@ -15,8 +15,56 @@ resolveu.
 
 ## Em aberto
 
-_(vazio em 05/09/2026 — todas as perguntas do registro original foram decididas
-pelo desenvolvedor em sessão de planejamento; ver abaixo)_
+### 6. Roteamento multiagente — decidir **antes** da spec 006
+
+**Pergunta:** a conversa continua sendo conduzida por uma única máquina de slots,
+ou passa a ter um roteador na frente do orquestrador, que classifica o que a
+mensagem está fazendo — respondendo, refinando a busca, perguntando sobre um
+imóvel, agendando, ou apenas conversando — e despacha para o fluxo certo?
+
+**Por que agora.** O modelo de slots de hoje é monotônico de propósito: um slot
+preenchido nunca é sobrescrito (FR-010), a busca roda uma única vez no turno que
+completa o roteiro, e `nextQuestion` sempre tem uma próxima pergunta para
+empurrar. Isso descreve **qualificação**, e só. O que vem depois dela —
+navegar, refinar, comparar, remarcar — não tem representação nenhuma:
+
+- *"e na zona norte, tem algo?"* é lido como **não compreensão**. A extração lê o
+  bairro corretamente, `mergeSlots` descarta porque o slot já está preenchido,
+  nada foi aprendido, o agente pede desculpas por não ter entendido e o contador
+  de fallback anda em direção a um handoff. Existe um escudo parcial
+  (`cardsJustShown`), mas dura exatamente um turno.
+- *"pode ser quinta em vez de quarta?"* é o mesmo problema com outra roupa: uma
+  revisão de um fato já confirmado, que um estado write-once não sabe expressar.
+
+**O que depende disso.** A spec 006 inteira — remarcação é revisão, e o
+follow-up é composto **sem mensagem do lead em trânsito**, algo que `phrase()`
+hoje não sabe fazer (está soldado a um turno com mensagens sem resposta e a um
+`ReplySink`). A spec 005 depende em menor grau: o resumo para o corretor diz "o
+que este lead quer", que com slots monotônicos é a primeira coisa que ele disse,
+não a atual. O item 15 (RAG) só se paga se a busca puder ser repetida e refinada.
+O item 16 do backlog *é* esta pergunta, em tamanho grande.
+
+**Opções, da menor para a maior:**
+
+1. **Só tornar os critérios revisáveis.** Separar *fatos de qualificação*
+   (`intent`, `urgency`, `investorProfile`, `returnExpectation`, `name`,
+   `contact`) — write-once, alimentam o score e o resumo — de *critérios de
+   busca* (`priceMax`, `bedrooms`, `neighborhoods`) — revisáveis, alimentam
+   `SearchCriteria`, que já existe como tipo próprio. A busca volta a rodar
+   quando um critério muda. Resolve o caso do bairro sem nenhuma máquina nova.
+2. **Fase na conversa.** `conversations.phase`: qualificando → navegando →
+   agendando. Cada fase com a sua própria regra de "o que fazer agora"; a máquina
+   de slots conduz apenas na primeira.
+3. **Roteador de verdade.** O modelo classifica o que a mensagem está fazendo e o
+   código despacha. Mantém o princípio V — o modelo *lê*, o código *decide* — e é
+   a mesma divisão já usada para `askedForHuman`.
+
+**Risco a evitar:** trocar isto por um laço de agente genérico. O determinismo é
+a tese do projeto e o que sustenta as defesas contra manipulação e a promessa de
+nunca repetir uma pergunta.
+
+**Quem decide:** o desenvolvedor, antes de abrir a spec 006. Levantado em
+16/09/2026 a partir do comportamento observado em conversa real.
 
 ---
 

@@ -488,6 +488,100 @@ async function phrase(input: PhraseInput): Promise<PhrasedReply> {
 }
 
 // ---------------------------------------------------------------------------
+// Ending a turn
+// ---------------------------------------------------------------------------
+
+interface FinishInput {
+  turn: LoadedTurn;
+  context: RunContext;
+  reply: string;
+  /** True for a reply this code wrote: it still has to be paused for and sent. */
+  speak?: boolean;
+  intent: Intent;
+  slots: Slots;
+  filled: SlotKey[];
+  score: number;
+  qualified: boolean;
+  fallbackStreak: number;
+  question: Question | null;
+  outcome: TurnOutcomeName;
+  guard?: string | null;
+  handoffReason?: HandoffReason | null;
+  meeting?: "viewing" | "call" | null;
+  optedOut?: boolean;
+  toolCalls?: CommittedToolCall[];
+  propertyIds?: string[];
+  propertyCodes?: string[];
+}
+
+/**
+ * The one way a turn ends: commit, close the sink, report.
+ *
+ * Four paths reach here — a refusal, an opt-out, a handoff and the ordinary
+ * phrased reply — and each used to build the transaction and the `TurnResult`
+ * by hand. A hundred and fifty lines of four copies that had already drifted,
+ * and where a field added to one would have been forgotten in the other three.
+ * What actually differs between them is data, so it is arguments now.
+ *
+ * `speak` is the one real distinction left: a written reply has not been sent
+ * yet and still owes the lead FR-017's pause, while a phrased one streamed
+ * sentence by sentence as the guards cleared it.
+ */
+async function finish(input: FinishInput): Promise<TurnResult> {
+  const { turn, context } = input;
+
+  if (input.speak === true) {
+    await pauseBeforeFirstChunk(context.startedAt);
+    context.sink.chunk(input.reply);
+  }
+
+  const committed = await commitTurn({
+    turn,
+    reply: input.reply,
+    intent: input.intent,
+    slots: input.slots,
+    filled: input.filled,
+    score: input.score,
+    qualified: input.qualified,
+    fallbackStreak: input.fallbackStreak,
+    handoffReason: input.handoffReason ?? null,
+    optedOut: input.optedOut ?? false,
+    guard: input.guard ?? null,
+    toolCalls: input.toolCalls ?? [],
+    // Absent rather than empty: `commitTurn` writes the key only when there are
+    // cards, and no search is not the same thing as a search that found nothing.
+    ...(input.propertyIds !== undefined && input.propertyIds.length > 0
+      ? { propertyIds: input.propertyIds }
+      : {}),
+    traceId: context.traceId ?? null,
+    now: context.now,
+  });
+
+  context.sink.done();
+
+  return {
+    status: "committed",
+    conversationId: turn.conversation.id,
+    messageId: committed.messageId,
+    repliesToMessageId: committed.repliesToMessageId,
+    reply: input.reply,
+    intent: input.intent,
+    slots: input.slots,
+    filled: input.filled,
+    score: committed.score,
+    qualified: input.qualified,
+    question: input.question,
+    guard: input.guard ?? null,
+    handoffReason: input.handoffReason ?? null,
+    meeting: input.meeting ?? null,
+    propertyCodes: input.propertyCodes ?? [],
+    events: committed.events,
+    outcome: input.outcome,
+    stage: committed.leadStatus,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // The turn
 // ---------------------------------------------------------------------------
 
@@ -591,13 +685,13 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   // token spent. No slot moves, because no extraction ran — which is FR-030's
   // "changes no slot" as a property of the control flow rather than a promise.
   if (looksLikeInjection(leadText)) {
-    await pauseBeforeFirstChunk(context.startedAt);
-    const refusal = refusalReply(pending);
-    context.sink.chunk(refusal);
+    log.info({ conversationId: turn.conversation.id }, "input layer refused an override attempt");
 
-    const refused = await commitTurn({
+    return finish({
       turn,
-      reply: refusal,
+      context,
+      reply: refusalReply(pending),
+      speak: true,
       intent: before.intent,
       slots: before.slots,
       filled: [],
@@ -605,34 +699,10 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       qualified: isQualified(before.intent, before.slots),
       // Not a misunderstanding: the message was understood perfectly well.
       fallbackStreak: turn.conversation.fallbackStreak,
-      guard: "injectionInput",
-      traceId: context.traceId ?? null,
-      now: context.now,
-    });
-    context.sink.done();
-
-    log.info({ conversationId: turn.conversation.id }, "input layer refused an override attempt");
-
-    return {
-      status: "committed",
-      conversationId: turn.conversation.id,
-      messageId: refused.messageId,
-      repliesToMessageId: refused.repliesToMessageId,
-      reply: refusal,
-      intent: before.intent,
-      slots: before.slots,
-      filled: [],
-      score: refused.score,
-      qualified: isQualified(before.intent, before.slots),
       question: pending,
       guard: "injectionInput",
-      handoffReason: null,
-      meeting: null,
-      propertyCodes: [],
-      events: refused.events,
       outcome: "replied",
-      stage: refused.leadStatus,
-    };
+    });
   }
 
   // 1 · extract
@@ -688,45 +758,22 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   // written down (`OPT_OUT_REPLY`), the flag and the closed conversation are
   // `commitTurn`'s, and the turn ends here.
   if (extraction.optedOut) {
-    await pauseBeforeFirstChunk(context.startedAt);
-    context.sink.chunk(OPT_OUT_REPLY);
-
-    const closed = await commitTurn({
+    return finish({
       turn,
+      context,
       reply: OPT_OUT_REPLY,
+      speak: true,
       intent: merged.intent,
       slots: merged.slots,
       filled: [],
       score: scoreLead(merged.intent, merged.slots),
       qualified: isQualified(merged.intent, merged.slots),
       fallbackStreak: 0,
+      question: null,
       optedOut: true,
       toolCalls,
-      traceId: context.traceId ?? null,
-      now: context.now,
-    });
-    context.sink.done();
-
-    return {
-      status: "committed",
-      conversationId: turn.conversation.id,
-      messageId: closed.messageId,
-      repliesToMessageId: closed.repliesToMessageId,
-      reply: OPT_OUT_REPLY,
-      intent: merged.intent,
-      slots: merged.slots,
-      filled: [],
-      score: closed.score,
-      qualified: isQualified(merged.intent, merged.slots),
-      question: null,
-      guard: null,
-      handoffReason: null,
-      meeting: null,
-      propertyCodes: [],
-      events: closed.events,
       outcome: "opted_out",
-      stage: closed.leadStatus,
-    };
+    });
   }
 
   // 3 · compute — every decision below is made here, never by the model
@@ -807,46 +854,22 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   // gets silence until a person arrives. `handoffReply` names the limitation and
   // says who is coming, in both flavours, and costs no model call.
   if (handoffReason !== null) {
-    await pauseBeforeFirstChunk(context.startedAt);
-    const reply = handoffReply(handoffReason);
-    context.sink.chunk(reply);
-
-    const paused = await commitTurn({
+    return finish({
       turn,
-      reply,
+      context,
+      reply: handoffReply(handoffReason),
+      speak: true,
       intent,
       slots,
       filled: filledThisTurn,
       score,
       qualified,
       fallbackStreak,
+      question: null,
       handoffReason,
       toolCalls,
-      traceId: context.traceId ?? null,
-      now: context.now,
-    });
-    context.sink.done();
-
-    return {
-      status: "committed",
-      conversationId: turn.conversation.id,
-      messageId: paused.messageId,
-      repliesToMessageId: paused.repliesToMessageId,
-      reply,
-      intent,
-      slots,
-      filled: filledThisTurn,
-      score,
-      qualified,
-      question: null,
-      guard: null,
-      handoffReason,
-      meeting: null,
-      propertyCodes: [],
-      events: paused.events,
       outcome: "handoff",
-      stage: paused.leadStatus,
-    };
+    });
   }
 
   // 4 · phrase
@@ -896,8 +919,9 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   // such, or SC-007 would have nothing to read afterwards.
   const guard = phrased.guard ?? (steering ? "steering" : null);
 
-  const committed = await commitTurn({
+  return finish({
     turn,
+    context,
     reply,
     intent,
     slots,
@@ -905,34 +929,13 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     score,
     qualified,
     fallbackStreak,
-    handoffReason,
-    ...(propertyIds.length > 0 ? { propertyIds } : {}),
-    guard,
-    toolCalls,
-    traceId: context.traceId ?? null,
-    now: context.now,
-  });
-
-  context.sink.done();
-
-  return {
-    status: "committed",
-    conversationId: turn.conversation.id,
-    messageId: committed.messageId,
-    repliesToMessageId: committed.repliesToMessageId,
-    reply,
-    intent,
-    slots,
-    filled: filledThisTurn,
-    score,
-    qualified,
     question,
     guard,
     handoffReason,
     meeting,
+    toolCalls,
+    propertyIds,
     propertyCodes: search.properties.map((property) => property.code),
-    events: committed.events,
     outcome: meeting !== null ? "meeting_proposed" : notUnderstood ? "fallback" : "replied",
-    stage: committed.leadStatus,
-  };
+  });
 }

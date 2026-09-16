@@ -109,7 +109,7 @@ description: "Task list for the conversation slice"
 - [x] T056 [P] Write `tests/integration/turn-persistence.test.ts` (plus `provider-outage.test.ts`, split out because SC-009 needs the configuration to name a dead provider and configuration is parsed once per process) — idempotency (SC-008), the message budget, the provider-outage fallback (SC-009), and `unanswered-turns` recovering a turn left with a stale `processingSince`
 - [x] T056b Add an `npm run db:reset` script that truncates and re-seeds **without** destroying volumes — `docker compose down -v` removes the `node_modules` volume where spec 004's dependencies live, so the recipe in circulation leaves the worker dead on `ERR_MODULE_NOT_FOUND` while the app still reports healthy. Document it in the README alongside the widget URL (T058)
 - [x] T057 Confirm `npm run lint` and `docker build --target build .` both pass — the dependency rule and the only type-checking gate this project has
-- [ ] T058 Update `README.md` with the widget URL and the observability profile, and mark item 004 in `specs/BACKLOG.md`
+- [x] T058 Update `README.md` with the widget URL and the observability profile, and mark item 004 in `specs/BACKLOG.md`
 
 ## Dependencies & Execution Order
 

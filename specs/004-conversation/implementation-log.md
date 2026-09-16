@@ -12,7 +12,7 @@ describes, so a fresh lead can resume from `git log` plus this file alone.
 | C | T028–T037 (channel, notifier, SSE, widget) | widget screenshot; SC-005 reload check | done |
 | D | T038–T047 (search tool, cards, handoff, opt-out, budget) | SC-004, SC-006, SC-007 by hand | done |
 | E | T048–T053 (Langfuse, observability profile) | SC-010..012; memory total recorded | done |
-| F | T054–T058 (scenario tests, lint, build, README) | both suites green, build green | next |
+| F | T054–T058 (scenario tests, lint, build, README) | both suites green, build green | done |
 
 ## Done
 - T001 — `ai@7.0.93`, `@ai-sdk/openai-compatible@3.0.44`, `@ai-sdk/react@4.0.96`,

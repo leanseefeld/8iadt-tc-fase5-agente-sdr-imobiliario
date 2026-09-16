@@ -15,45 +15,55 @@ import { getConfig } from "../core/config.ts";
  */
 
 /**
- * oMLX takes the thinking switch only in the request body, and the OpenAI
- * compatible provider has no generic "extra body fields" option — its
- * `providerOptions` are a fixed four. So the body is rewritten in the one place
- * the SDK does expose: its `fetch`. Verified against oMLX on 08/09/2026;
- * `reasoning_content` comes back on the reply and belongs to the trace, never
- * to the widget.
+ * Extra fields on the request body, for the two things this provider's typed
+ * options cannot express.
+ *
+ * The OpenAI-compatible provider has a fixed set of `providerOptions` and no
+ * generic "extra body fields" escape hatch, so the body is rewritten in the one
+ * place the SDK does expose: its `fetch`.
+ *
+ * - `chat_template_kwargs.enable_thinking` is how oMLX takes the thinking switch,
+ *   verified 08/09/2026; the reply then carries `reasoning_content`.
+ * - `response_format: { type: "json_object" }` is how the extraction asks for
+ *   JSON. Not `json_schema`: oMLX accepts a schema and then fails to constrain
+ *   to it — measured over 96 calls, the model answered with a bare
+ *   `["zona sul"]` and ran to the token ceiling on most of them, and at
+ *   temperature 0 it did so every single time. Plain JSON mode, with the field
+ *   guide in the prompt, parsed 30 out of 30 with no wrong values.
  */
-async function fetchWithThinking(
-  input: Parameters<typeof fetch>[0],
-  init?: Parameters<typeof fetch>[1],
-): Promise<Response> {
-  if (init === undefined || typeof init.body !== "string") return fetch(input, init);
+function rewritingFetch(extra: Record<string, unknown>) {
+  return async function fetchWithExtras(
+    input: Parameters<typeof fetch>[0],
+    init?: Parameters<typeof fetch>[1],
+  ): Promise<Response> {
+    if (init === undefined || typeof init.body !== "string") return fetch(input, init);
 
-  let body: unknown;
-  try {
-    body = JSON.parse(init.body);
-  } catch {
-    return fetch(input, init);
-  }
-  if (body === null || typeof body !== "object" || Array.isArray(body)) {
-    return fetch(input, init);
-  }
+    let body: unknown;
+    try {
+      body = JSON.parse(init.body);
+    } catch {
+      return fetch(input, init);
+    }
+    if (body === null || typeof body !== "object" || Array.isArray(body)) {
+      return fetch(input, init);
+    }
 
-  const withThinking = { ...body, chat_template_kwargs: { enable_thinking: true } };
-  return fetch(input, { ...init, body: JSON.stringify(withThinking) });
+    return fetch(input, { ...init, body: JSON.stringify({ ...body, ...extra }) });
+  };
 }
 
-function buildProvider() {
+function buildProvider(extra: Record<string, unknown>) {
   const config = getConfig();
   const header = config.PROVIDER_AUTH_HEADER;
+  const thinking = config.MODEL_THINKING ? { chat_template_kwargs: { enable_thinking: true } } : {};
+  const rewrites = { ...thinking, ...extra };
 
   return createOpenAICompatible({
     name: "sdr-provider",
     baseURL: config.PROVIDER_BASE_URL,
     // Off by default in this provider, and without it `generateObject` sends no
     // `response_format` at all and every structured call fails to parse.
-    // Verified against oMLX on 08/09/2026: a `json_schema` response format comes
-    // back as clean JSON. A gateway that lacks it degrades to the same failure
-    // `agent/recovery.ts` already treats as "the slot stays empty".
+    // `agent/recovery.ts`'s one-field schema is what still relies on it.
     supportsStructuredOutputs: true,
     // Sends `stream_options: { include_usage: true }`. Both model calls in this
     // agent stream, and a streaming OpenAI-compatible response carries **no**
@@ -68,16 +78,26 @@ function buildProvider() {
     ...(header === undefined
       ? { apiKey: config.PROVIDER_API_KEY }
       : { headers: { [header]: config.PROVIDER_API_KEY } }),
-    ...(config.MODEL_THINKING ? { fetch: fetchWithThinking } : {}),
+    ...(Object.keys(rewrites).length === 0 ? {} : { fetch: rewritingFetch(rewrites) }),
   });
 }
 
 let provider: ReturnType<typeof buildProvider> | undefined;
+let jsonProvider: ReturnType<typeof buildProvider> | undefined;
 
 /** The configured chat model. `modelId` is for the rare call that needs another. */
 export function getModel(modelId?: string): LanguageModel {
-  provider ??= buildProvider();
+  provider ??= buildProvider({});
   return provider.chatModel(modelId ?? getConfig().MODEL_ID);
+}
+
+/**
+ * The same model, asked to answer in JSON. Used by the extraction, which parses
+ * the text itself — see `rewritingFetch` for why the schema is not sent.
+ */
+export function getJsonModel(): LanguageModel {
+  jsonProvider ??= buildProvider({ response_format: { type: "json_object" } });
+  return jsonProvider.chatModel(getConfig().MODEL_ID);
 }
 
 export interface ModelCall {

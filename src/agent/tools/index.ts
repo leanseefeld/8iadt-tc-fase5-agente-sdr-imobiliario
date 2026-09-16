@@ -23,22 +23,14 @@ import { optOut } from "./opt-out.ts";
  * forbids it for `investment`, neither of which may come from a tool argument, so
  * it is built from the turn's own context and invoked from code.
  *
- * `requestHandoff` and `optOut` ride along on the extraction call, and that is
- * deliberate: both are things the lead *said*, so the call that reads the lead's
- * message is the call that should notice them. Neither decides anything — the
- * decision is `domain/handoff.ts` and the write is `commitTurn`.
+ * `requestHandoff` and `optOut` are **not** offered to the model any more. They
+ * were tools on the extraction call until that call became one `generateObject`
+ * (see `agent/tools/update-slots.ts`); both are now booleans on the extraction
+ * schema, which is the same idea with none of the tool-choice unreliability.
+ * They stay exported because the names are the vocabulary of the transcript and
+ * of `contracts/observability.md` §2, and because a channel that one day lets a
+ * model drive them will want the declared form back.
  */
-
-/**
- * The tools offered during the extraction call — the three things a lead's
- * message can be: an answer, a request for a person, or a request to be left
- * alone. `toolChoice: "required"` makes the model pick one of them, and
- * `updateSlots` with every field null is the "none of the above" it falls back
- * to.
- */
-export function extractionTools(): ToolSet {
-  return { updateSlots, requestHandoff, optOut };
-}
 
 /**
  * Every tool the agent has, whether or not the model may pick it. The scheduling

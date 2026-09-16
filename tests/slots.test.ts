@@ -12,6 +12,7 @@ import {
   type Slots,
   type Intent,
   type QualificationState,
+  hasEvidence,
 } from "../src/domain/slots.ts";
 
 /** No DB, no model — pure functions over the script and the merge rules. */
@@ -163,4 +164,27 @@ test("isQualified is false while one qualifying slot is still empty", () => {
 
 test("isQualified is false while the intent is undefined, regardless of slot state", () => {
   assert.equal(isQualified("undefined", EMPTY_SLOTS), false);
+});
+
+// --- the evidence gate (FR-010, structurally) --------------------------------
+
+test("hasEvidence accepts a prazo the lead actually raised", () => {
+  assert.equal(hasEvidence("urgency", "Preciso me mudar em até 2 meses"), true);
+  assert.equal(hasEvidence("urgency", "ainda estou pesquisando"), true);
+  assert.equal(hasEvidence("urgency", "tenho pressa"), true);
+});
+
+test("hasEvidence rejects a prazo nobody mentioned", () => {
+  // The message that made this necessary: three slots and not one word of prazo.
+  assert.equal(
+    hasEvidence("urgency", "Quero comprar apartamento de 2 quartos na zona sul até 700 mil"),
+    false,
+  );
+});
+
+test("hasEvidence reads the investor slots the same way", () => {
+  assert.equal(hasEvidence("investorProfile", "é minha primeira aplicação"), true);
+  assert.equal(hasEvidence("investorProfile", "quero algo em Moema"), false);
+  assert.equal(hasEvidence("returnExpectation", "quero renda de aluguel"), true);
+  assert.equal(hasEvidence("returnExpectation", "quero 3 quartos"), false);
 });

@@ -25,10 +25,14 @@ import {
  */
 
 const DESCRIPTIONS: Record<SlotKey | "intent", string> = {
-  intent: "purchase para comprar, rental para alugar, investment para investir",
+  intent:
+    "purchase para comprar, rental para alugar, investment para investir. " +
+    "Quem procura imóvel sem dizer a finalidade está comprando: use purchase. " +
+    "Só use rental se a pessoa falar em alugar ou aluguel, e investment se ela " +
+    "falar em investir, renda, rentabilidade ou retorno.",
   priceMax: "Orçamento máximo em reais, número inteiro. \"700 mil\" é 700000",
   bedrooms: "Número mínimo de quartos",
-  neighborhoods: "Bairros ou regiões citados. Lista vazia = aberto a sugestões",
+  neighborhoods: "Bairros ou regiões citados, separados por vírgula. Vazio = aberto a sugestões",
   urgency: "immediate até 3 meses, soon de 3 a 12 meses, exploring sem prazo",
   investorProfile: "firstTime se é a primeira aplicação em imóveis, experienced se já investe",
   ticket: "Valor do aporte em reais, número inteiro",
@@ -42,6 +46,85 @@ const DESCRIPTIONS: Record<SlotKey | "intent", string> = {
  * without inventing the other eight, which is the failure this shape prevents.
  */
 const field = <K extends SlotKey>(key: K) => slotsSchema.shape[key].nullish().describe(DESCRIPTIONS[key]);
+
+/**
+ * The fields the extraction asks for — the one definition of them.
+ *
+ * Deliberately *not* a JSON Schema handed to the provider. oMLX accepts a
+ * `json_schema` response format and then fails to constrain the model to it:
+ * measured over 96 calls, most answered with a bare `["zona sul"]` and ran to
+ * the token ceiling, and at temperature 0 every single one did. Plain JSON mode
+ * with these descriptions rendered into the prompt parsed 30 of 30 with no wrong
+ * values, so this list feeds `extractionSystemPrompt` and nothing else sends a
+ * schema anywhere.
+ *
+ * Types are therefore advisory: what comes back is whatever the model wrote, and
+ * the repair stays where it already was — `normalizeExtraction` turns what the
+ * model clearly meant into what the slot accepts, and `mergeSlots` drops the
+ * rest. The model is asked for intent, never for a type.
+ */
+export interface ExtractionField {
+  key: keyof Extracted;
+  description: string;
+  /** The closed set, when there is one — rendered into the prompt. */
+  values?: readonly string[];
+}
+
+export const EXTRACTION_FIELDS: readonly ExtractionField[] = [
+  { key: "intent", description: DESCRIPTIONS.intent, values: ["purchase", "rental", "investment"] },
+  { key: "priceMax", description: DESCRIPTIONS.priceMax },
+  { key: "bedrooms", description: DESCRIPTIONS.bedrooms },
+  { key: "neighborhoods", description: DESCRIPTIONS.neighborhoods },
+  { key: "urgency", description: DESCRIPTIONS.urgency, values: ["immediate", "soon", "exploring"] },
+  {
+    key: "investorProfile",
+    description: DESCRIPTIONS.investorProfile,
+    values: ["firstTime", "experienced"],
+  },
+  { key: "ticket", description: DESCRIPTIONS.ticket },
+  {
+    key: "returnExpectation",
+    description: DESCRIPTIONS.returnExpectation,
+    values: ["income", "appreciation", "both", "undecided"],
+  },
+  { key: "name", description: DESCRIPTIONS.name },
+  { key: "contact", description: DESCRIPTIONS.contact },
+  {
+    key: "askedForHuman",
+    description:
+      "true SÓ se a pessoa pediu explicitamente para falar com um corretor, um humano, " +
+      "uma pessoa de verdade ou um atendente. Reclamar, discordar, não entender ou mudar " +
+      "de assunto NÃO é pedir. Na dúvida, false.",
+  },
+  {
+    key: "optOut",
+    description:
+      "true SÓ se a pessoa pediu para não receber mais mensagens, para sair ou para ser " +
+      "removida do contato. Na dúvida, false.",
+  },
+];
+
+export interface Extracted {
+  intent: string | null;
+  priceMax: number | null;
+  bedrooms: number | null;
+  neighborhoods: string[] | null;
+  urgency: string | null;
+  investorProfile: string | null;
+  ticket: number | null;
+  returnExpectation: string | null;
+  name: string | null;
+  contact: string | null;
+  askedForHuman: boolean;
+  optOut: boolean;
+}
+
+/** The model writes `true`, `"true"` or `"sim"`; all three mean the same thing. */
+export function isTrue(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return false;
+  return ["true", "sim", "yes", "1"].includes(value.trim().toLowerCase());
+}
 
 export const updateSlotsInputSchema = z.object({
   intent: intentSchema.nullish().describe(DESCRIPTIONS.intent),

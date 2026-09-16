@@ -1,3 +1,4 @@
+import { EXTRACTION_FIELDS } from "../tools/update-slots.ts";
 import {
   QUESTIONS,
   type Askable,
@@ -271,33 +272,35 @@ export const SLOT_HINTS: Record<Askable, string> = {
 };
 
 /**
- * The extraction call is a different job and gets a different prompt: no persona,
- * no voice, one instruction. It must produce a `updateSlots` call and nothing else.
+ * The extraction prompt, rendered once from `EXTRACTION_FIELDS`.
+ *
+ * Three measurements shaped this. It used to be a chat call with three tools and
+ * `toolChoice: "required"`: over 53 real calls **38% came back as prose and no
+ * tool call at all**, the model answering the lead instead of reading the
+ * message. Sending a JSON *schema* instead was worse — oMLX accepts one and then
+ * fails to constrain to it, answering with a bare `["zona sul"]` until the token
+ * ceiling on most calls and on every single one at temperature 0. Plain JSON
+ * mode with the field guide written out here parsed 30 of 30 and got every
+ * value right, including the two that the model had been getting wrong.
+ *
+ * The guide is generated from the field definitions rather than written twice,
+ * so a description can never drift from the key it describes.
+ *
+ * It takes no arguments, and that is deliberate: a prompt that does not change
+ * is a prompt the server's prefix cache can keep.
  */
-export function extractionSystemPrompt(intent: Intent, slots: Slots, pending: Askable | null): string {
-  const asked = pending === null ? null : QUESTIONS[pending];
+export function extractionSystemPrompt(): string {
+  const guide = EXTRACTION_FIELDS.map(
+    (field) =>
+      `- ${field.key}: ${field.description}` +
+      (field.values === undefined ? "" : ` (um de: ${field.values.join(", ")})`),
+  );
+
   return [
-    "Você extrai dados de uma conversa imobiliária em português. Você não conversa.",
-    "",
-    "Chame UMA ferramenta:",
-    "- updateSlots: o caso normal, com o que a ÚLTIMA mensagem da pessoa informou.",
-    "  Use null para tudo que a pessoa não disse. Não adivinhe o que ela não falou.",
-    "  Se a mensagem não informar nada, chame updateSlots com todos os campos null.",
-    "- requestHandoff: SÓ se a pessoa pedir explicitamente para falar com um corretor,",
-    "  com um humano, com uma pessoa de verdade ou com um atendente.",
-    "- optOut: SÓ se a pessoa pedir para não receber mais mensagens, para sair ou para",
-    "  ser removida do contato.",
-    "",
-    "Reclamar, discordar, não entender ou mudar de assunto NÃO é pedir corretor nem sair:",
-    "nesses casos use updateSlots.",
-    "",
-    "Como ler cada campo:",
-    ...(Object.keys(SLOT_HINTS) as Askable[]).map((slot) => `- ${slot}: ${SLOT_HINTS[slot]}`),
-    "",
-    "Já registrado (não repita, não altere):",
-    renderSlots(intent, slots),
-    asked === null ? "" : `\nA última pergunta feita foi: "${asked}"`,
-  ]
-    .filter((block) => block !== "")
-    .join("\n");
+    "Você lê mensagens de uma conversa imobiliária em português e devolve um objeto JSON.",
+    "Você não conversa, não responde à pessoa e não escreve frases.",
+    "Responda com UM objeto JSON e nada mais, com exatamente estas chaves:",
+    ...guide,
+    "Use null para tudo que a pessoa não disse. Não adivinhe, não complete, não deduza.",
+  ].join("\n");
 }

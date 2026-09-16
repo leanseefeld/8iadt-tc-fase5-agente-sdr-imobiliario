@@ -98,6 +98,50 @@ export const SLOT_TOPIC_WORDS: Record<Askable, readonly string[]> = {
   contact: ["telefone", "whatsapp", "e-mail", "email", "contato", "celular", "número"],
 };
 
+/**
+ * The closed-set slots, and the words that count as the lead having raised them.
+ *
+ * These three are the ones a model invents. A number cannot be hallucinated into
+ * a message that contains no number, but `urgency: "exploring"` can be assumed
+ * about anyone — and it was: asked to read "quero comprar apartamento de 2
+ * quartos na zona sul até 700 mil", the model filled a prazo the lead had not
+ * mentioned, which skipped the question the script was about to ask. Prompting
+ * against it halved the rate and did not remove it, so the structural layer
+ * decides instead (constitution V).
+ *
+ * Only these three, and only because they are always spoken in words. A gate
+ * like this over `priceMax` would throw away a perfectly good "até uns 700 mil",
+ * which names no topic word at all.
+ */
+export const EVIDENCE_WORDS: Record<"urgency" | "investorProfile" | "returnExpectation", readonly string[]> = {
+  urgency: [
+    ...SLOT_TOPIC_WORDS.urgency,
+    "mes", "meses", "semana", "semanas", "dia", "dias", "ano", "anos",
+    "ja", "agora", "imediato", "imediata", "logo", "rapido", "correndo",
+    "pesquisando", "olhando", "futuro", "calma", "sem pressa",
+  ],
+  investorProfile: [
+    ...SLOT_TOPIC_WORDS.investorProfile,
+    "investi", "investindo", "imoveis", "aplicacao", "aplicar", "iniciante", "veterano",
+  ],
+  returnExpectation: [
+    ...SLOT_TOPIC_WORDS.returnExpectation,
+    "alugar", "lucro", "ganho", "ganhar", "vender", "revenda", "longo prazo",
+  ],
+};
+
+/**
+ * Did the lead's own words raise this slot at all? Used to drop a closed-set
+ * value the model supplied about a topic nobody mentioned.
+ */
+export function hasEvidence(slot: keyof typeof EVIDENCE_WORDS, text: string): boolean {
+  const present = new Set(tokenize(text));
+  const whole = normalize(text);
+  return EVIDENCE_WORDS[slot].some((word) =>
+    word.includes(" ") ? whole.includes(normalize(word)) : present.has(normalize(word)),
+  );
+}
+
 /** Accent-stripped lower case, so the tables above need only one spelling. */
 export function normalize(text: string): string {
   return text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();

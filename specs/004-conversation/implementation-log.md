@@ -897,6 +897,49 @@ change to what the model reads, not only to where it reads it from.
 Probe scripts are not in the repo; they are twenty lines of `curl` against
 `/v1/chat/completions` reading `usage.prompt_tokens_details.cached_tokens`.
 
+## The evidence gate, and why it is not the model's job — 16/09/2026
+
+The extraction fills closed-set slots about topics nobody raised (`urgency:
+"exploring"` for someone who never mentioned prazo), which skips the question the
+script was on. Prompting against it halved the rate and did not remove it, so the
+structural layer decides. Two designs were measured.
+
+**The reported bug first, because it is the important one.** A lead answered
+`"inicial"` to *"Você precisa se mudar em breve ou ainda é uma pesquisa
+inicial?"*. The extraction read `urgency: "exploring"` correctly; the word list
+has `pesquisando` and not `inicial`, so the gate dropped it, the turn learned
+nothing, `notUnderstood` fired, and the agent told the lead it had not understood
+a message it had understood perfectly — while incrementing the streak that hands
+a conversation to a person. A lead answering a closed question **echoes the
+question's own words**, and no vocabulary list will ever contain them all. So the
+gate is waived for the slot the script just asked about, and a turn whose only
+loss was a distrusted value no longer counts as a misunderstanding.
+
+**The developer's idea: let the model supply the evidence.** Two forms — the model
+lists which keys the person actually mentioned, or it quotes the exact excerpt
+behind each filled key (verified in code as a substring of the real message).
+Measured over 80 runs with *one* prompt asking for both, so all three gates judge
+the same model output and extraction variance cannot confound the comparison:
+
+| Gate | accepted an unsupported value | wrongly refused a real one |
+|---|---|---|
+| word list + pending-slot waiver (shipped) | 0 | 10 |
+| model lists `mencionados` | 0 | 25 |
+| model quotes, verified as a substring | 0 | 25 |
+
+**None of the three ever invented.** An earlier note here claimed the model-supplied
+evidence "still produced wrong values"; that rested on one leak in 42 runs and was
+over-read — it does not reproduce. The real difference is recall: asked to vouch
+for a slot it has just filled, this model declines about a quarter of the time,
+including on `"inicial"` itself. So the idea fails on the same axis as the bug it
+would have had to fix, only harder. The quote form fails differently again: the
+model paraphrases rather than copying, so verification cannot match it.
+
+Kept the word list because it is cheaper, deterministic and unit-testable — but
+the margin comes from the waiver, not from the vocabulary, and the list is still
+narrow. Its failure mode is now safe: the agent re-asks without claiming
+incomprehension.
+
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus
   branches (`urgency === immediate` vs. the investment return/ticket condition)

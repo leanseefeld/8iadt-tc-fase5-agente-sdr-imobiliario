@@ -17,7 +17,8 @@
     "test:integration": "INTEGRATION=1 node --test tests/integration/*.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node src/db/migrate.ts",
-    "db:seed": "node src/db/seed/index.ts"
+    "db:seed": "node src/db/seed/index.ts",
+    "db:reset": "node src/db/reset.ts && node src/db/seed/index.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.44",

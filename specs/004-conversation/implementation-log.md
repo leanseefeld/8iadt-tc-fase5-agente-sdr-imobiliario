@@ -850,6 +850,53 @@ the argument for the observability profile paying for itself:
   returns exactly one row (`PER-0003`) — that is the case to use when testing this
   path; every other realistic filter returns three.
 
+## Prefix caching: the system prompt is in the wrong place — measured 15/09/2026
+
+The developer asked whether rebuilding the system prompt from the slot state each
+turn breaks KV caching. It does, and the cost is larger than it looks, because
+**a prefix cache is a prefix**: the first byte that differs invalidates everything
+after it, and today everything after it is the whole conversation.
+
+`turnSystemPrompt` is `PERSONA · slot state · acknowledgement · task · notes ·
+RULES`. Only the first block is stable, so the two big stable blocks — PERSONA at
+the top and RULES at the bottom — are separated by text that changes every turn,
+and RULES is re-encoded on every call for no reason.
+
+Measured against oMLX directly (`gemma-4-e4b-it-OptiQ-4bit`), three turns of a
+growing conversation, `prompt_tokens_details.cached_tokens`:
+
+| Layout | turn 1 | turn 2 | turn 3 |
+|---|---|---|---|
+| A — volatile state inside the system prompt (today) | 0 (0%) | 512 (10.2%) | 512 (9.4%) |
+| B — stable system, state as the last message | 512 (11.1%) | 4096 (81.4%) | 4608 (84.4%) |
+
+The signature of A is that `cached` stays **constant** while the input grows, so
+the hit *rate* falls the longer someone talks. That is exactly what the running
+app shows: `cache_read` pinned at 2048 for every `model.reply` and 2560 for every
+`model.extract` while input climbed 2397 → 2630.
+
+**A second finding, worth more than the first.** The turn makes two calls with two
+different system prompts, and oMLX's cache behaves as a single slot: they evict
+each other. Giving both calls one shared stable prefix and moving the
+call-specific instruction to the final message turns the second call of a turn
+into an almost free one — it reuses the cache the first call just warmed:
+
+| Layout | extract | reply |
+|---|---|---|
+| C — different system prompts (today's shape) | 1024 (24.6%) | 1024 (25.5%) |
+| D — one shared prefix, instruction last | 4608 (88.1%) | 5120 (97.9%) |
+
+**Costs, before anyone implements this.** A shared prefix means the reply call
+carries the extraction call's tool definitions, which is input it does not need
+and a model seeing tools it must not call. And the reported `prompt_tokens` are
+~4x what the prompt text can account for (a 2.1 kB prompt reporting 2400 tokens),
+unexplained — so treat these as relative comparisons, not absolute costs. Reply
+quality has to be re-verified against SC-003 after any such move: this is a
+change to what the model reads, not only to where it reads it from.
+
+Probe scripts are not in the repo; they are twenty lines of `curl` against
+`/v1/chat/completions` reading `usage.prompt_tokens_details.cached_tokens`.
+
 ## Ambiguities resolved while writing T004–T006 (frozen API doc did not spell these out)
 - **Score cap.** The weight table never states whether the two `+15` bonus
   branches (`urgency === immediate` vs. the investment return/ticket condition)

@@ -239,6 +239,8 @@ interface Extraction {
   optedOut: boolean;
   /** The extraction produced at least one non-null slot. */
   saidSomething: boolean;
+  /** Closed-set slots the evidence gate refused — understood, but not trusted. */
+  dropped: SlotKey[];
   failed: boolean;
 }
 
@@ -247,6 +249,7 @@ const NOTHING: Extraction = {
   leadAskedForHuman: false,
   optedOut: false,
   saidSomething: false,
+  dropped: [],
   failed: true,
 };
 
@@ -295,18 +298,32 @@ function parseExtraction(text: string): Record<string, unknown> | null {
  * who had said nothing about prazo, which skipped the very question the script
  * was on. Only the three word-spoken slots are gated — see `EVIDENCE_WORDS`.
  */
-function withoutInventedSlots(extracted: SlotExtraction, leadText: string): SlotExtraction {
+function withoutInventedSlots(
+  extracted: SlotExtraction,
+  leadText: string,
+  pending: Askable | null,
+): { slots: SlotExtraction; dropped: SlotKey[] } {
   const kept: Record<string, unknown> = { ...extracted };
+  const dropped: SlotKey[] = [];
+
   for (const slot of ["urgency", "investorProfile", "returnExpectation"] as const) {
     if (kept[slot] === undefined) continue;
+    // The script just asked about this slot, so an answer to it is grounded by
+    // the exchange and needs no vocabulary of its own. This is the common case
+    // and the one the word list is worst at: someone answering "inicial" to
+    // "...ou ainda é uma pesquisa inicial?" is echoing the question, and the
+    // gate dropped it, told them it had not understood, and counted a fallback.
+    if (slot === pending) continue;
     if (hasEvidence(slot, leadText)) continue;
     log.info({ slot, value: kept[slot] }, "dropped a slot the lead never raised");
+    dropped.push(slot);
     delete kept[slot];
   }
-  return kept as SlotExtraction;
+
+  return { slots: kept as SlotExtraction, dropped };
 }
 
-async function extract(turn: LoadedTurn): Promise<Extraction> {
+async function extract(turn: LoadedTurn, pending: Askable | null): Promise<Extraction> {
   const config = getConfig();
 
   for (let attempt = 1; attempt <= EXTRACTION_ATTEMPTS; attempt++) {
@@ -327,7 +344,8 @@ async function extract(turn: LoadedTurn): Promise<Extraction> {
         continue;
       }
 
-      const extracted = withoutInventedSlots(normalizeExtraction(object), unansweredText(turn));
+      const gated = withoutInventedSlots(normalizeExtraction(object), unansweredText(turn), pending);
+      const extracted = gated.slots;
       const askedForHuman = isTrue(object.askedForHuman);
       const optedOut = isTrue(object.optOut);
 
@@ -344,6 +362,7 @@ async function extract(turn: LoadedTurn): Promise<Extraction> {
         leadAskedForHuman: askedForHuman,
         optedOut,
         saidSomething: Object.keys(extracted).length > 0,
+        dropped: gated.dropped,
         failed: false,
       };
     } catch (error) {
@@ -706,7 +725,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   }
 
   // 1 · extract
-  const extraction = await extract(turn);
+  const extraction = await extract(turn, pending?.slot ?? null);
   const toolCalls: CommittedToolCall[] = [...extraction.calls];
 
   // 2 · merge, in code
@@ -798,8 +817,16 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
 
   // FR-023/FR-027: a turn that read a real message and learned nothing is a
   // fallback, and two in a row are a handoff.
+  // A slot the evidence gate refused is not a message nobody understood: the
+  // extraction read it, the code declined to trust it. Saying "não entendi" over
+  // that is a lie to the lead, and counting it toward FR-027's streak hands a
+  // working conversation to a person for nothing.
   const notUnderstood =
-    !learnedSomething && plausiblyAnswers(leadText) && !cardsJustShown && !steering;
+    !learnedSomething &&
+    extraction.dropped.length === 0 &&
+    plausiblyAnswers(leadText) &&
+    !cardsJustShown &&
+    !steering;
   const fallbackStreak = notUnderstood ? turn.conversation.fallbackStreak + 1 : 0;
   const handoffReason = handoffDecision({
     leadAskedForHuman: extraction.leadAskedForHuman,

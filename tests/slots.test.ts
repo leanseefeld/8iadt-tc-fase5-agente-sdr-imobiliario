@@ -188,3 +188,13 @@ test("hasEvidence reads the investor slots the same way", () => {
   assert.equal(hasEvidence("returnExpectation", "quero renda de aluguel"), true);
   assert.equal(hasEvidence("returnExpectation", "quero 3 quartos"), false);
 });
+
+test("hasEvidence does NOT recognise the question's own vocabulary", () => {
+  // Deliberate, and the reason the orchestrator waives the gate for the slot the
+  // script just asked about. Someone answering "inicial" to "...ou ainda é uma
+  // pesquisa inicial?" is echoing the question — the strongest evidence there
+  // is — and this word list cannot see it. Relying on the list alone told a lead
+  // we had not understood them and counted a fallback toward a handoff.
+  assert.equal(QUESTIONS.urgency.includes("inicial"), true);
+  assert.equal(hasEvidence("urgency", "inicial"), false);
+});

@@ -1,5 +1,4 @@
 import pino, { type Logger } from "pino";
-import { getConfig } from "./config.ts";
 import { maskPII, maskText } from "./security.ts";
 
 /**
@@ -16,11 +15,32 @@ import { maskPII, maskText } from "./security.ts";
 
 export type ProcessName = "app" | "worker";
 
+const LEVELS = ["trace", "debug", "info", "warn", "error", "fatal"] as const;
+
+/**
+ * Read straight from the environment rather than through `getConfig`, and this
+ * is deliberate twice over.
+ *
+ * A logger has to work *before* the configuration is known — including while
+ * reporting that the configuration is invalid, which `getConfig` cannot do
+ * because it throws. And every module that keeps a `const log = createLogger()`
+ * at its top would otherwise parse and validate the whole environment merely by
+ * being imported: `next build` collects route metadata with no environment
+ * present, so the build failed on five missing keys it never needed.
+ *
+ * The level is the only thing this file wants from the environment, and an
+ * unreadable one is not worth failing over.
+ */
+function logLevel(): (typeof LEVELS)[number] {
+  const configured = process.env.LOG_LEVEL;
+  return LEVELS.find((level) => level === configured) ?? "info";
+}
+
 let root: Logger | undefined;
 
 function rootLogger(): Logger {
   root ??= pino({
-    level: getConfig().LOG_LEVEL,
+    level: logLevel(),
     timestamp: pino.stdTimeFunctions.isoTime,
     formatters: {
       level: (label) => ({ level: label }),

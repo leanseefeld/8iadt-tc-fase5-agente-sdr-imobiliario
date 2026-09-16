@@ -1,3 +1,31 @@
+# Shared by langfuse-web and langfuse-worker (T051) — merged in below, with
+# langfuse-web adding the NEXTAUTH_* pair on top. Kept as one block so the two
+# services can't drift apart on the connection strings they both dial.
+x-langfuse-env: &langfuse-env
+  DATABASE_URL: postgresql://sdr:sdr@db:5432/langfuse
+  CLICKHOUSE_URL: http://clickhouse:8123
+  CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+  CLICKHOUSE_USER: default
+  CLICKHOUSE_PASSWORD: clickhouse
+  CLICKHOUSE_CLUSTER_ENABLED: "false"
+  REDIS_CONNECTION_STRING: redis://redis:6379
+  LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+  LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+  LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
+  LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: miniosecret
+  LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+  TELEMETRY_ENABLED: "false"
+  # Keeps V8's heap inside mem_limit instead of growing until the container
+  # is OOM-killed.
+  NODE_OPTIONS: --max-old-space-size=768
+  # Local-development-only fixed values, not read from .env: this profile is
+  # opt-in observability tooling, not part of the application's own config
+  # contract (src/core/config.ts). Never used outside a developer's machine.
+  SALT: 3eeadb6727a2fe2d508f751daae3ec72
+  ENCRYPTION_KEY: d7fdaab5ba68ee3ac0f722b5190c84722820fffb5a56aea38f4f56160f89674d
+
 services:
   db:
     image: postgres:17-alpine
@@ -9,6 +37,10 @@ services:
       - "${DB_PORT:-55432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # T052: Langfuse gets its own database inside this same container
+      # (ADR 13) instead of a second Postgres. Only runs on a fresh volume —
+      # see scripts/db/01-langfuse-db.sql for the existing-volume path.
+      - ./scripts/db:/docker-entrypoint-initdb.d:ro
     healthcheck:
       # The whole of FR-003. Neither process carries retry code, because
       # nothing starts until this passes.
@@ -50,7 +82,7 @@ services:
       migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:${APP_PORT:-3000}/api/health/ready > /dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${APP_PORT:-3000}/api/health/ready > /dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -74,13 +106,135 @@ services:
       migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:${WORKER_HEALTH_PORT:-3001}/health/ready > /dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${WORKER_HEALTH_PORT:-3001}/health/ready > /dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 6
       start_period: 15s
 
+  # --- Observability profile (T051, ADR 13) --------------------------------
+  # `docker compose up -d` with no profile starts none of this. Bring it up
+  # explicitly with `docker compose --profile observability up -d`. Five
+  # containers standing in for upstream Langfuse v3's six-service stack — its
+  # Postgres is folded into the existing `db` container instead (T052). Every
+  # `mem_limit` below is fixed and summed by hand against the 6 GiB cap in
+  # ADR 13: 1536 + 1200 + 2048 + 256 + 512 MiB = 5552 MiB, comfortably under
+  # it — the cap is a cap, not a target. The
+  # Docker VM here has 7.65 GiB total and app/db/worker already use ~1.1 GiB,
+  # so don't raise these without checking with the lead first.
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3-alpine
+    profiles: ["observability"]
+    mem_limit: 2g
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: clickhouse
+      CLICKHOUSE_DB: default
+    # ClickHouse opens a lot of file handles even at this scale; the image's
+    # default ulimit starves it under load.
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      # Caps ClickHouse's own memory accounting to match mem_limit above,
+      # instead of relying on the cgroup OOM-killer as the only backstop.
+      - ./scripts/clickhouse/low-memory.xml:/etc/clickhouse-server/config.d/low-memory.xml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8123/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    profiles: ["observability"]
+    mem_limit: 256m
+    # Langfuse only uses Redis as a queue/cache, never as a durable store, so
+    # capping memory and evicting under pressure is safe.
+    command: ["redis-server", "--maxmemory", "192mb", "--maxmemory-policy", "allkeys-lru"]
+
+  minio: # S3-compatible store for Langfuse's batched event exports.
+    image: minio/minio:latest
+    profiles: ["observability"]
+    mem_limit: 512m
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: miniosecret
+    # No dedicated bucket-provisioning step in this stack, so create the
+    # bucket Langfuse expects before minio starts serving. The image's own
+    # entrypoint execs straight into `minio`, so both entrypoint and command
+    # need overriding together — command alone gets read as a minio
+    # sub-command ("sh") and fails immediately.
+    entrypoint: sh
+    command: ["-c", "mkdir -p /data/langfuse && minio server /data"]
+    volumes:
+      - minio_data:/data
+    # Not published on the host: nothing outside the compose network talks to
+    # minio directly, only langfuse-web/worker do.
+
+  langfuse-web:
+    image: langfuse/langfuse:3
+    profiles: ["observability"]
+    # Measured, not guessed: at 1200m / 768 MB of heap this container dies with
+    # "Ineffective mark-compacts near heap limit" before it ever serves the
+    # sign-in page. The UI is the memory-hungry half of Langfuse; the worker is
+    # not, and keeps the smaller pair of numbers.
+    mem_limit: 1536m
+    ports:
+      - "${LANGFUSE_UI_PORT:-3102}:3000"
+    environment:
+      <<: *langfuse-env
+      NODE_OPTIONS: --max-old-space-size=1024
+      # Langfuse's own headless bootstrap: the organisation, the project and
+      # its API keys exist the first time this container starts, so the
+      # developer copies two fixed strings into `.env` instead of clicking
+      # through a sign-up form. All local-only, like the block at the top.
+      LANGFUSE_INIT_ORG_ID: sdr-local
+      LANGFUSE_INIT_ORG_NAME: SDR local
+      LANGFUSE_INIT_PROJECT_ID: sdr-imobiliario
+      LANGFUSE_INIT_PROJECT_NAME: sdr-imobiliario
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: pk-lf-sdr-local-0000000000000000
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: sk-lf-sdr-local-0000000000000000
+      LANGFUSE_INIT_USER_EMAIL: dev@example.com
+      LANGFUSE_INIT_USER_NAME: dev
+      LANGFUSE_INIT_USER_PASSWORD: langfuse-local-dev
+      # The two keys langfuse-worker doesn't need: only the web UI serves
+      # sign-in.
+      NEXTAUTH_SECRET: o65RdzYjh8RHcudeFeFUSpkm75g8ip1ufSjmuK9C1t4=
+      NEXTAUTH_URL: http://localhost:${LANGFUSE_UI_PORT:-3102}
+    depends_on:
+      db:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    profiles: ["observability"]
+    mem_limit: 1200m
+    environment:
+      <<: *langfuse-env
+    depends_on:
+      db:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+
 volumes:
   pgdata:
   node_modules:
   next_cache:
+  clickhouse_data:
+  minio_data:

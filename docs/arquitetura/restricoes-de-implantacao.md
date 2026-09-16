@@ -163,6 +163,28 @@ valores concretos dos limites vivem no `docker-compose.yml` e são ajustados pel
 spec 004. Se o teto se mostrar apertado, Langfuse Cloud é a saída: duas
 variáveis de ambiente.
 
+**Medido em 09/09/2026** (spec 004, T053), com o profile no ar e uma conversa
+completa gravada, via `docker stats --no-stream`:
+
+| Serviço | `mem_limit` | Uso medido |
+|---|---|---|
+| `clickhouse` | 2048 MiB | 1143 MiB |
+| `langfuse-web` | 1536 MiB | 978 MiB |
+| `langfuse-worker` | 1200 MiB | 373 MiB |
+| `minio` | 512 MiB | 86 MiB |
+| `redis` | 256 MiB | 15 MiB |
+| **Total do profile** | **5552 MiB (5,42 GiB)** | **2594 MiB (2,53 GiB)** |
+
+Os limites declarados somam 5552 MiB, abaixo do teto de 6 GiB do ADR 13, e o
+uso real fica em menos da metade disso. Com `app`, `worker` e `db` somados, o
+sistema inteiro com observabilidade ligada ocupa **3,26 GiB** dos 7,65 GiB da
+VM — SC-012 satisfeito com folga.
+
+Dois números foram descobertos por tentativa, não estimados: `langfuse-web`
+morre com *"Ineffective mark-compacts near heap limit"* abaixo de 1536 MiB, e o
+ClickHouse dimensiona os próprios caches pela memória do **host**, ignorando o
+`mem_limit`, até ser morto pelo cgroup — daí o `scripts/clickhouse/low-memory.xml`.
+
 ---
 
 ## 5. Webhook do Telegram

@@ -93,9 +93,13 @@ docker compose up
 | Serviço | Endereço |
 |---|---|
 | Aplicação | http://localhost:3100 |
+| **Chat do lead** | **http://localhost:3100/chat/demo** |
 | Saúde da aplicação | http://localhost:3100/api/health · `/api/health/ready` |
 | Saúde do worker | http://localhost:3101/health · `/health/ready` |
 | Postgres | `localhost:55432` |
+
+O chat é a demonstração: abra `/chat/demo` no celular ou numa janela estreita,
+aceite o termo e converse. `demo` é o *slug* da imobiliária semeada.
 
 As portas evitam de propósito as mais disputadas (3000, 5432, 8000, 8001, 80) para
 o projeto conviver com outros na mesma máquina. Para movê-las, altere `APP_PORT`,
@@ -120,6 +124,40 @@ docker compose exec app npm test
 docker compose exec app npm run lint
 ```
 
+A suíte de integração fala com o banco e com o modelo local, e por isso é lenta e
+fica atrás de uma variável:
+
+```bash
+docker compose exec app npm run test:integration
+```
+
+Quanto o agente acerta ao **ler** uma mensagem é medido à parte, com rótulos
+revisáveis — ver [`evals/README.md`](evals/README.md):
+
+```bash
+docker compose exec app node evals/extraction.mjs --runs 8
+```
+
+**Voltar o banco ao estado de demonstração** (esvazia e semeia de novo; não
+destrói volume nenhum, ao contrário de `docker compose down -v`, que levaria
+junto o volume de `node_modules` e deixaria o worker sem dependências):
+
+```bash
+docker compose exec app npm run db:reset
+```
+
+**Observabilidade** — as *traces* de cada turno, desligadas por padrão:
+
+```bash
+docker compose --profile observability up -d
+```
+
+A interface do Langfuse sobe em http://localhost:3102. Os limites de memória e o
+que cada contêiner consome estão em
+[restrições de implantação](docs/arquitetura/restricoes-de-implantacao.md) §4. A
+aplicação funciona igual com o profile desligado — é assim que a demonstração
+costuma rodar.
+
 A imagem de produção é construída fora do Compose, sem os volumes de
 desenvolvimento:
 
@@ -140,6 +178,7 @@ O roteiro completo de validação — um comando por critério de aceite — est
 | `docs/` | Arquitetura real, decisões e restrições | **Sim** |
 | `specs/` | Especificações por funcionalidade | **Sim**, para a funcionalidade que descrevem |
 | `reference/` | Material de ideação inicial | **Não** — ver [`reference/README.md`](reference/README.md) |
+| `evals/` | Medição da extração — ver [`evals/README.md`](evals/README.md) | Não |
 | `AGENTS.md` | Briefing para agentes de código | Sim |
 
 > ⚠️ `reference/` descreve um desenho anterior em Python que **não será
@@ -153,6 +192,7 @@ O roteiro completo de validação — um comando por critério de aceite — est
 - [Decisões técnicas](docs/arquitetura/adr/decisoes.md) — o que foi decidido e com que consequências
 - [Decisões pendentes](docs/decisoes-pendentes.md) — o que ainda não foi decidido
 - [Backlog](specs/BACKLOG.md) — fatias de trabalho e rastreabilidade com o enunciado
+- [Evals](evals/README.md) — quanto o agente acerta ao ler uma mensagem, e o que essas medições já decidiram
 
 ---
 

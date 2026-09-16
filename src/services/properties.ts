@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, ilike, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, ilike, inArray, lte, sql } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
 import { agencies, properties } from "../db/schema.ts";
 import { searchAndRank, type RankingCandidate } from "../domain/property-ranking.ts";
@@ -178,4 +178,29 @@ export async function searchProperties(agencyId: string, criteria: SearchCriteri
   });
 
   return ranked.map((candidate) => toProperty(byId.get(candidate.id)!));
+}
+
+/**
+ * The rows behind a set of ids, in the order asked for — what the chat widget
+ * needs to render the cards of a reply it loaded from history or was pushed over
+ * SSE. `messages.metadata.propertyIds` holds ids and nothing else (the card is a
+ * property of the reply, not a copy of the catalog), so the row has to be read
+ * back, and it is read back **scoped by agency**: an id from another tenant
+ * simply is not in the result.
+ *
+ * `isActive` is deliberately not required here. A property delisted after it was
+ * suggested still has to render in the transcript it appears in — a bubble that
+ * loses its card on a reload would be a hole in a conversation the lead
+ * remembers.
+ */
+export async function findPropertiesByIds(agencyId: string, ids: string[]): Promise<Property[]> {
+  if (ids.length === 0) return [];
+
+  const rows = await getDb()
+    .select()
+    .from(properties)
+    .where(and(eq(properties.agencyId, agencyId), inArray(properties.id, ids)));
+
+  const byId = new Map(rows.map((row) => [row.id, toProperty(row)]));
+  return ids.map((id) => byId.get(id)).filter((property): property is Property => property !== undefined);
 }

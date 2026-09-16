@@ -17,6 +17,22 @@ const flag = z
   .default("false")
   .transform((value) => value === "true");
 
+/**
+ * `CHAT_TYPING_DELAY_MS` is a range, not a number — a fixed pause reads as a
+ * machine. Written `min-max`; `0-0` disables the pause, which is what the
+ * scenario tests set. Parsed here so `channels/web.ts` receives two numbers
+ * and no string handling of its own.
+ */
+const millisecondRange = z
+  .string()
+  .regex(/^\d+\s*[-\u2013]\s*\d+$/, "expected a range like 300-800")
+  .default("300-800")
+  .transform((value) => {
+    const [minMs, maxMs] = value.split(/\s*[-\u2013]\s*/).map(Number);
+    return { minMs, maxMs };
+  })
+  .refine(({ minMs, maxMs }) => minMs <= maxMs, "the low end must not exceed the high end");
+
 export const configSchema = z.object({
   // Model provider
   PROVIDER_BASE_URL: z.url(),
@@ -24,6 +40,24 @@ export const configSchema = z.object({
   MODEL_ID: z.string().min(1),
   MODEL_TIMEOUT_MS: positiveInt.default(30_000),
   MODEL_MAX_RETRIES: z.coerce.number().int().min(0).default(2),
+  // Header name carrying the key when the endpoint refuses
+  // `Authorization: Bearer`. Absent means Bearer — the third and last provider
+  // variable ADR 16 permits.
+  PROVIDER_AUTH_HEADER: z.string().min(1).optional(),
+  MODEL_THINKING: flag,
+  // Defaulted after parsing, because the default depends on MODEL_THINKING:
+  // reasoning tokens count against this ceiling, and 600 leaves nothing for
+  // the answer once the model thinks first.
+  MODEL_MAX_OUTPUT_TOKENS: positiveInt.optional(),
+  MODEL_HISTORY_WINDOW: positiveInt.default(12),
+
+  // Conversation
+  CHAT_DEBOUNCE_MS: positiveInt.default(3_000),
+  CHAT_MESSAGE_BUDGET: positiveInt.default(60),
+  CHAT_BUDGET_WINDOW_MINUTES: positiveInt.default(30),
+  CHAT_MAX_MESSAGE_CHARS: positiveInt.default(1_000),
+  CHAT_TYPING_DELAY_MS: millisecondRange,
+  SSE_PULSE_INTERVAL_MS: positiveInt.default(15_000),
 
   // Database
   DATABASE_URL: z
@@ -56,6 +90,9 @@ export const configSchema = z.object({
   LANGFUSE_PUBLIC_KEY: z.string().min(1).optional(),
   LANGFUSE_SECRET_KEY: z.string().min(1).optional(),
   LANGFUSE_BASE_URL: z.url().optional(),
+  // Read by docker-compose.yml, like DB_PORT — declared here because the
+  // schema is the authoritative key set.
+  LANGFUSE_UI_PORT: port.default(3102),
   FOLLOWUP_WINDOW_START: time.default("09:00"),
   FOLLOWUP_WINDOW_END: time.default("20:00"),
   FOLLOWUP_TIMEZONE: z.string().min(1).default("America/Sao_Paulo"),
@@ -63,7 +100,15 @@ export const configSchema = z.object({
   FOLLOWUP_MAX_ATTEMPTS: positiveInt.default(3),
 });
 
-export type Config = z.infer<typeof configSchema>;
+/**
+ * `MODEL_MAX_OUTPUT_TOKENS` is optional in the schema and always present after
+ * `loadConfig`, which is what this intersection says.
+ */
+export type Config = z.infer<typeof configSchema> & { MODEL_MAX_OUTPUT_TOKENS: number };
+
+/** contracts/config.md: 600, or 2000 once reasoning tokens share the budget. */
+const OUTPUT_TOKENS_DEFAULT = 600;
+const OUTPUT_TOKENS_DEFAULT_THINKING = 2_000;
 
 export const configKeys: string[] = Object.keys(configSchema.shape);
 
@@ -91,7 +136,14 @@ function withoutBlanks(env: Record<string, string | undefined>): Record<string, 
 
 export function loadConfig(env: Record<string, string | undefined>): Config {
   const parsed = configSchema.safeParse(withoutBlanks(env));
-  if (parsed.success) return parsed.data;
+  if (parsed.success) {
+    return {
+      ...parsed.data,
+      MODEL_MAX_OUTPUT_TOKENS:
+        parsed.data.MODEL_MAX_OUTPUT_TOKENS ??
+        (parsed.data.MODEL_THINKING ? OUTPUT_TOKENS_DEFAULT_THINKING : OUTPUT_TOKENS_DEFAULT),
+    };
+  }
 
   const problems = parsed.error.issues
     .map((issue) => `  ${issue.path.join(".") || "(root)"}: ${issue.message}`)

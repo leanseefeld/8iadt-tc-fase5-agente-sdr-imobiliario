@@ -1,0 +1,380 @@
+{
+  "note": "Labels are the contract of this eval. Change them only on purpose, in a commit that says why. `history` alternates lead/agent exactly as the transcript would, so the question the script just asked is real rather than asserted. `known` is the slot state the turn starts from: the extraction re-states it constantly and `mergeSlots` ignores that, so re-stating a known value is not an error — contradicting one is. `expect` is what this message must add; anything filled beyond `known` and `expect` is invention.",
+  "cases": [
+    {
+      "id": "volunteers-three-slots",
+      "why": "The opening message of Cenário 1. Three slots are given; nothing is said about prazo, and filling one skips a scripted question.",
+      "history": [],
+      "known": {},
+      "message": "Quero comprar apartamento de 2 quartos na zona sul até 700 mil",
+      "pending": "intent",
+      "expect": {
+        "intent": "purchase",
+        "priceMax": 700000,
+        "bedrooms": 2,
+        "neighborhoods": [
+          "zona sul"
+        ]
+      }
+    },
+    {
+      "id": "answers-the-question-with-its-own-word",
+      "why": "The reported bug: the lead echoes the question's own vocabulary. No word list contains every question's words, so the gate must be waived for the pending slot.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero alugar 3 quartos na zona oeste até 7 mil"
+        },
+        {
+          "role": "agent",
+          "content": "Você precisa se mudar em breve ou ainda é uma pesquisa inicial?"
+        }
+      ],
+      "known": {
+        "intent": "rental",
+        "bedrooms": 3,
+        "neighborhoods": [
+          "zona oeste"
+        ],
+        "priceMax": 7000
+      },
+      "message": "inicial",
+      "pending": "urgency",
+      "expect": {
+        "urgency": "exploring"
+      }
+    },
+    {
+      "id": "answers-urgency-plainly",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar na zona sul"
+        },
+        {
+          "role": "agent",
+          "content": "Você precisa se mudar em breve ou ainda é uma pesquisa inicial?"
+        }
+      ],
+      "known": {
+        "intent": "purchase",
+        "neighborhoods": [
+          "zona sul"
+        ]
+      },
+      "message": "Preciso me mudar em até 2 meses",
+      "pending": "urgency",
+      "expect": {
+        "urgency": "immediate"
+      }
+    },
+    {
+      "id": "terse-answer-needs-the-question-for-meaning",
+      "why": "\"2\" means nothing without the question above it. This is what a single-message harness cannot test.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar na zona sul até 700 mil"
+        },
+        {
+          "role": "agent",
+          "content": "Quantos quartos você precisa?"
+        }
+      ],
+      "known": {
+        "intent": "purchase",
+        "priceMax": 700000,
+        "neighborhoods": [
+          "zona sul"
+        ]
+      },
+      "message": "2",
+      "pending": "bedrooms",
+      "expect": {
+        "bedrooms": 2
+      }
+    },
+    {
+      "id": "asks-for-a-person",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar um apartamento"
+        },
+        {
+          "role": "agent",
+          "content": "Qual faixa de preço você tem em mente?"
+        }
+      ],
+      "known": {
+        "intent": "purchase"
+      },
+      "message": "Prefiro falar com um corretor de verdade",
+      "pending": "priceMax",
+      "expect": {
+        "askedForHuman": true
+      }
+    },
+    {
+      "id": "complains-without-asking-for-a-person",
+      "why": "The near-miss for askedForHuman. Frustration is not a request for a human, and treating it as one pauses a live conversation.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar um apartamento"
+        },
+        {
+          "role": "agent",
+          "content": "Qual faixa de preço você tem em mente?"
+        }
+      ],
+      "known": {
+        "intent": "purchase"
+      },
+      "message": "Que pergunta chata, você não entende nada mesmo",
+      "pending": "priceMax",
+      "expect": {}
+    },
+    {
+      "id": "opts-out",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar um apartamento"
+        },
+        {
+          "role": "agent",
+          "content": "Qual faixa de preço você tem em mente?"
+        }
+      ],
+      "known": {
+        "intent": "purchase"
+      },
+      "message": "Não quero mais receber mensagens",
+      "pending": "priceMax",
+      "expect": {
+        "optOut": true
+      }
+    },
+    {
+      "id": "noise-is-not-an-answer",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Oi"
+        },
+        {
+          "role": "agent",
+          "content": "Você está procurando um imóvel para comprar, para alugar ou para investir?"
+        }
+      ],
+      "known": {},
+      "message": "kkkk",
+      "pending": "intent",
+      "expect": {}
+    },
+    {
+      "id": "investment-profile-raised-plainly",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero investir em imóveis"
+        },
+        {
+          "role": "agent",
+          "content": "É a sua primeira aplicação em imóveis ou você já investe no setor?"
+        }
+      ],
+      "known": {
+        "intent": "investment"
+      },
+      "message": "É a primeira vez",
+      "pending": "investorProfile",
+      "expect": {
+        "investorProfile": "firstTime"
+      }
+    },
+    {
+      "id": "price-in-words",
+      "why": "normalizeExtraction's job, not the model's: \"um milhão e meio\" has to survive as a number.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar uma casa"
+        },
+        {
+          "role": "agent",
+          "content": "Qual faixa de preço você tem em mente?"
+        }
+      ],
+      "known": {
+        "intent": "purchase"
+      },
+      "message": "Até 1,5 milhão",
+      "pending": "priceMax",
+      "expect": {
+        "priceMax": 1500000
+      }
+    },
+    {
+      "id": "emoji-only",
+      "why": "No words at all. Nothing can be read from it.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar um apartamento"
+        },
+        {
+          "role": "agent",
+          "content": "Qual faixa de preço você tem em mente?"
+        }
+      ],
+      "known": {
+        "intent": "purchase"
+      },
+      "message": "😂😂😂",
+      "pending": "priceMax",
+      "expect": {}
+    },
+    {
+      "id": "teasing-the-agent",
+      "why": "Banter about the agent, not about the property.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar um apartamento"
+        },
+        {
+          "role": "agent",
+          "content": "Qual faixa de preço você tem em mente?"
+        }
+      ],
+      "known": {
+        "intent": "purchase"
+      },
+      "message": "você é um robô né? kkk",
+      "pending": "priceMax",
+      "expect": {}
+    },
+    {
+      "id": "provocation",
+      "why": "A challenge, not an answer. Nothing about the search changed.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar um apartamento"
+        },
+        {
+          "role": "agent",
+          "content": "Qual faixa de preço você tem em mente?"
+        }
+      ],
+      "known": {
+        "intent": "purchase"
+      },
+      "message": "aposto que você não sabe nada de imóveis",
+      "pending": "priceMax",
+      "expect": {}
+    },
+    {
+      "id": "sarcasm",
+      "why": "Sentiment, not information.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar um apartamento"
+        },
+        {
+          "role": "agent",
+          "content": "Qual faixa de preço você tem em mente?"
+        }
+      ],
+      "known": {
+        "intent": "purchase"
+      },
+      "message": "nossa, que atendimento incrível",
+      "pending": "priceMax",
+      "expect": {}
+    },
+    {
+      "id": "hypothetical-mentions-renting",
+      "why": "The hardest one: 'alugar' appears, but as a hypothesis, not as this person's intent.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Oi"
+        },
+        {
+          "role": "agent",
+          "content": "Você está procurando um imóvel para comprar, para alugar ou para investir?"
+        }
+      ],
+      "known": {},
+      "message": "se eu quisesse alugar, vocês teriam algo?",
+      "pending": "intent",
+      "expect": {}
+    },
+    {
+      "id": "question-back",
+      "why": "A question is not an answer, and the number in it is ours, not theirs.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar um apartamento"
+        },
+        {
+          "role": "agent",
+          "content": "Qual faixa de preço você tem em mente?"
+        }
+      ],
+      "known": {
+        "intent": "purchase"
+      },
+      "message": "qual o mais barato que vocês têm?",
+      "pending": "priceMax",
+      "expect": {}
+    },
+    {
+      "id": "off-topic-small-talk",
+      "why": "Conversation, not qualification.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar um apartamento"
+        },
+        {
+          "role": "agent",
+          "content": "Qual faixa de preço você tem em mente?"
+        }
+      ],
+      "known": {
+        "intent": "purchase"
+      },
+      "message": "você viu o jogo ontem?",
+      "pending": "priceMax",
+      "expect": {}
+    },
+    {
+      "id": "vague-number-without-a-unit",
+      "why": "A bare number under a price question is an answer; under small talk it is not. Here the question was asked, so it is.",
+      "history": [
+        {
+          "role": "lead",
+          "content": "Quero comprar um apartamento"
+        },
+        {
+          "role": "agent",
+          "content": "Qual faixa de preço você tem em mente?"
+        }
+      ],
+      "known": {
+        "intent": "purchase"
+      },
+      "message": "uns 600",
+      "pending": "priceMax",
+      "expect": {
+        "priceMax": 600000
+      }
+    }
+  ]
+}

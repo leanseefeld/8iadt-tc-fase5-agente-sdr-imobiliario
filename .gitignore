@@ -43,3 +43,4 @@ pgdata/
 # Agent local state — skills and shared settings ARE committed, personal ones are not
 .claude/settings.local.json
 .cursor/settings.local.json
+evals/last-run.jsonl

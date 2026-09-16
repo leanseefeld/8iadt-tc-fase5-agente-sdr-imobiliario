@@ -236,6 +236,16 @@ function minutesFromNow(minutes: number): Date {
   return new Date(Date.now() + minutes * 60_000);
 }
 
+/**
+ * Every demo conversation ends on the **agent's** message, and that is an
+ * invariant, not a stylistic choice: spec 004's `unanswered-turns` consumer
+ * answers any conversation whose last message is the lead's, so a transcript
+ * seeded the other way is rewritten by the worker within one sweep and the demo
+ * data stops looking like the screenshot it was written to be. Ending on the
+ * agent also puts each demo lead where it claims to be — the warm and cold leads
+ * are waiting on the *lead*, which is exactly why the cold one carries
+ * `followupState: "pending"`.
+ */
 function demoLeads(): DemoLead[] {
   return [
     {
@@ -261,6 +271,13 @@ function demoLeads(): DemoLead[] {
         { role: "lead", content: "Até uns 900 mil", minutesAgo: 175 },
         { role: "agent", content: "Perfeito, encontrei algumas opções. Quer marcar uma visita amanhã às 15h?", minutesAgo: 60 },
         { role: "lead", content: "Pode ser sim!", minutesAgo: 55 },
+        {
+          role: "agent",
+          content:
+            "Combinado, Camila! Já confirmei a visita com o corretor e ele te encontra lá. " +
+            "Se precisar remarcar, é só me escrever por aqui.",
+          minutesAgo: 54,
+        },
       ],
       events: [
         { type: "lead.created", actorType: "system", minutesAgo: 181, payload: { channel: "web" } },
@@ -297,6 +314,13 @@ function demoLeads(): DemoLead[] {
         { role: "lead", content: "Até 650 mil", minutesAgo: 35 },
         { role: "agent", content: "Entendido. Quantos quartos você precisa?", minutesAgo: 34 },
         { role: "lead", content: "2 quartos tá bom", minutesAgo: 20 },
+        {
+          role: "agent",
+          content:
+            "Anotado, dois quartos. Tem algum bairro ou região específica em mente, " +
+            "ou está aberto a sugestões?",
+          minutesAgo: 19,
+        },
       ],
       events: [
         { type: "lead.created", actorType: "system", minutesAgo: 41, payload: { channel: "web" } },
@@ -322,6 +346,11 @@ function demoLeads(): DemoLead[] {
         { role: "lead", content: "Oi, procuro apê pra alugar", minutesAgo: 2 * 24 * 60 },
         { role: "agent", content: "Oi! Até quanto você pretende pagar de aluguel?", minutesAgo: 2 * 24 * 60 - 1 },
         { role: "lead", content: "Uns 3500", minutesAgo: 2 * 24 * 60 - 5 },
+        {
+          role: "agent",
+          content: "Perfeito, anotado. Quantos quartos você precisa?",
+          minutesAgo: 2 * 24 * 60 - 6,
+        },
       ],
       events: [
         { type: "lead.created", actorType: "system", minutesAgo: 2 * 24 * 60 + 1, payload: { channel: "web" } },

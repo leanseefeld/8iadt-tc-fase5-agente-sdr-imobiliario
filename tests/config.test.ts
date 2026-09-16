@@ -24,6 +24,35 @@ test("fills documented defaults for optional keys", () => {
   assert.equal(config.LOG_LEVEL, "info");
   assert.equal(config.WATCHPACK_POLLING, false);
   assert.equal(config.FOLLOWUP_TIMEZONE, "America/Sao_Paulo");
+  assert.equal(config.MODEL_HISTORY_WINDOW, 12);
+  assert.equal(config.CHAT_DEBOUNCE_MS, 3_000);
+  assert.equal(config.CHAT_MESSAGE_BUDGET, 60);
+  assert.equal(config.CHAT_BUDGET_WINDOW_MINUTES, 30);
+  assert.equal(config.CHAT_MAX_MESSAGE_CHARS, 1_000);
+  assert.equal(config.SSE_PULSE_INTERVAL_MS, 15_000);
+  assert.equal(config.LANGFUSE_UI_PORT, 3102);
+  assert.equal(config.MODEL_THINKING, false);
+  assert.equal(config.PROVIDER_AUTH_HEADER, undefined);
+});
+
+// The one default that is not a constant: reasoning tokens are spent from the
+// same ceiling, so 600 would leave the answer empty.
+test("MODEL_MAX_OUTPUT_TOKENS defaults higher when thinking is on", () => {
+  assert.equal(loadConfig(valid).MODEL_MAX_OUTPUT_TOKENS, 600);
+  assert.equal(loadConfig({ ...valid, MODEL_THINKING: "true" }).MODEL_MAX_OUTPUT_TOKENS, 2_000);
+  assert.equal(
+    loadConfig({ ...valid, MODEL_THINKING: "true", MODEL_MAX_OUTPUT_TOKENS: "900" })
+      .MODEL_MAX_OUTPUT_TOKENS,
+    900,
+  );
+});
+
+test("CHAT_TYPING_DELAY_MS parses into a range, and 0-0 disables the pause", () => {
+  assert.deepEqual(loadConfig(valid).CHAT_TYPING_DELAY_MS, { minMs: 300, maxMs: 800 });
+  assert.deepEqual(loadConfig({ ...valid, CHAT_TYPING_DELAY_MS: "0-0" }).CHAT_TYPING_DELAY_MS, {
+    minMs: 0,
+    maxMs: 0,
+  });
 });
 
 // FR-019 / SC-007: every required key, absent or blank, stops the process with a
@@ -50,6 +79,9 @@ const malformed: Array<[string, string]> = [
   ["WORKER_SWEEP_INTERVAL_MS", "-1"],
   ["LOG_LEVEL", "chatty"],
   ["FOLLOWUP_WINDOW_START", "9am"],
+  ["CHAT_TYPING_DELAY_MS", "300"],
+  ["CHAT_TYPING_DELAY_MS", "800-300"],
+  ["MODEL_MAX_OUTPUT_TOKENS", "0"],
 ];
 
 for (const [key, value] of malformed) {

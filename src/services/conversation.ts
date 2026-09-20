@@ -752,8 +752,13 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
 
 export interface OutboundRecord {
   conversationId: string;
-  /** `broker` once spec 005 lets a person answer on the same stream. */
+  /** `broker` when a person answered from the panel (spec 005). */
   role?: "agent" | "broker";
+  /**
+   * The broker who wrote it. Stored on the message so the transcript can name
+   * the author (FR-029) and so a `broker` row is never mistaken for the agent's.
+   */
+  userId?: string;
   content: string;
   propertyIds?: string[];
   /** Hand the conversation to a person as part of this write (FR-028). */
@@ -781,7 +786,11 @@ export async function recordOutboundMessage(
   const now = input.now ?? new Date();
 
   const [conversation] = await db
-    .select({ id: conversations.id, agencyId: conversations.agencyId })
+    .select({
+      id: conversations.id,
+      agencyId: conversations.agencyId,
+      leadId: conversations.leadId,
+    })
     .from(conversations)
     .where(eq(conversations.id, input.conversationId))
     .limit(1);
@@ -802,13 +811,31 @@ export async function recordOutboundMessage(
         role: input.role ?? "agent",
         content: input.content,
         repliesToMessageId: lastLead?.id ?? null,
-        metadata:
-          input.propertyIds !== undefined && input.propertyIds.length > 0
+        metadata: {
+          ...(input.propertyIds !== undefined && input.propertyIds.length > 0
             ? { propertyIds: input.propertyIds }
-            : {},
+            : {}),
+          ...(input.userId !== undefined ? { userId: input.userId } : {}),
+        },
         createdAt: now,
       })
       .returning({ id: messages.id });
+
+    // A broker's reply is a turn of the conversation, so the summariser sees it
+    // (spec 005 FR-008). Without this, a conversation a person handled would
+    // keep the summary it had before they arrived.
+    if (input.role === "broker") {
+      await tx.insert(events_).values({
+        agencyId: conversation.agencyId,
+        leadId: conversation.leadId,
+        conversationId: conversation.id,
+        type: "conversation.turn",
+        actorType: "user",
+        actorUserId: input.userId ?? null,
+        payload: { messageId: written.id },
+        createdAt: now,
+      });
+    }
 
     await tx
       .update(conversations)

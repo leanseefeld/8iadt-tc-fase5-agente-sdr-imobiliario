@@ -17,13 +17,13 @@ Schema: `docs/arquitetura/modelo-de-dados.md`. No table or column added.
 
 | type | payload | when |
 |---|---|---|
-| `lead.qualified` | `{ score }` | First move to `qualified` (in `commitTurn`) |
 | `conversation.assumed` / `conversation.returned` | `{ userId }` | Assume / return |
 | `lead.status_changed` | `{ from, to }` | Broker changes stage |
 | `summary.updated` | `{}` | Summary stored |
 
 `handoff.requested`, agent-stage `lead.status_changed` (004) and `lead.reassigned`
-(003) already exist.
+(003) already exist. `lead.qualified` is **not** written here — it moves with the
+scoring rules to ADR 20's spec, and the qualification tile reads `leads.status`.
 
 ## Indexes — migration 0002
 
@@ -35,5 +35,5 @@ create index leads_queue_idx on leads (agency_id, assigned_broker_id, score desc
 
 ## Derived, never stored
 
-Temperature (`temperature(score)`), qualified (`isQualified`), *Aguardando
-corretor* (`paused` and `heldByUserId` null).
+Temperature (`temperature(score)` — read, never computed here), *Aguardando
+corretor* (`paused` with `heldByUserId` null).

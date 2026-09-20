@@ -2,11 +2,13 @@
 
 Types are indicative; the compiler is the authority.
 
-## 1 · Domain rules — delivered by 004
+## 1 · Domain rules
 
-`domain/score.ts` (`scoreLead`, `temperature`), `domain/handoff.ts`
-(`handoffDecision`, `shouldProposeMeeting`), `domain/slots.ts` (`isQualified`).
-Added here: `domain/lead-status.ts` — `canTransition(from, to)` / `assertTransition`.
+This slice owns one: `domain/lead-status.ts` — `canTransition(from, to)` /
+`assertTransition(from, to)` for the FR-007 stages a broker may set.
+
+It *reads* `temperature(score)` from `domain/score.ts` to render a row. Scoring,
+qualification, handoff and meeting rules belong to ADR 20's spec, not here.
 
 ## 2 · Services and Server Actions
 
@@ -21,7 +23,7 @@ listLeads(scope, q: { filter: 'todos'|'ao_vivo'|'aguardando'|'visita_marcada'|'s
 getLeadDetail(scope, leadId): Promise<LeadDetail | null>;   // null when out of scope
 
 // services/metrics.ts
-getFunnelMetrics(scope): Promise<FunnelMetrics>;
+getFunnelMetrics(scope): Promise<FunnelMetrics>;   // qualification rate from leads.status
 
 // services/handoff.ts
 assumeConversation(scope, leadId, userId): Promise<Result>;

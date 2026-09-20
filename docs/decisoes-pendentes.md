@@ -82,6 +82,26 @@ qualquer mensagem que não preenche slot conta como não compreensão. O mesmo o
 no meio do roteiro: *"Moema ou Vila Mariana"* depois de *"zona sul"* virou fallback.
 A spec 006 não funciona sobre isto — *"pode ser sábado?"* é exatamente esse caso.
 
+### 8. Pesos do score, faixas e sinal do investidor — ficam com a spec do ADR 20
+
+**Contexto.** O [ADR 20](arquitetura/adr/decisoes.md#20-the-lead-score-is-uncapped-and-compounding)
+fixou as **regras** do score; os números não. Decidido em 20/09/2026 que a 005 sobe
+com os scores de hoje (inclusive os da seed, que não batem com a fórmula) e que a
+spec que implementar o ADR 20 — a "007" — resolve tudo isto de uma vez:
+
+1. **Pesos exatos**, e como o orçamento faz o score passar de 100.
+2. **"Quanto mais caro o imóvel, maior"** — lido como o orçamento do próprio lead
+   (`priceMax` / `ticket`). Confirmar ou corrigir.
+3. **Faixas de temperatura** novas, já que 100 deixou de ser teto.
+4. **Piso 50** para aluguel com horizonte de ~2 meses: piso absoluto ou mínimo
+   dentro da faixa quente?
+5. **Sinal de interesse do investidor** — proposta do brainstorm registrada no ADR
+   20 (horizonte ≤ 6 meses 1.0; capital líquido 0.8; aceite da ligação com canal e
+   janela 0.6), ainda **não aceita**.
+6. **Recalcular a seed** e reescrever `tests/score.test.ts`.
+
+**Quem decide:** o desenvolvedor, ao abrir a spec 007. Registrado em 20/09/2026.
+
 ---
 
 ## Resolvidas

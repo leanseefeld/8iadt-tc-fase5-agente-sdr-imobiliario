@@ -219,6 +219,8 @@ interface SeedEvent {
 
 interface DemoLead {
   externalId: "seed-hot" | "seed-warm" | "seed-cold";
+  /** Which seeded broker owns it. Spec 005's "Meus leads" is empty otherwise. */
+  owner: "ana" | "bruno";
   name: string;
   phone: string;
   email: string;
@@ -250,6 +252,7 @@ function demoLeads(): DemoLead[] {
   return [
     {
       externalId: "seed-hot",
+      owner: "ana",
       name: "Camila Andrade",
       phone: "11988887777",
       email: "camila.andrade@example.com",
@@ -297,6 +300,7 @@ function demoLeads(): DemoLead[] {
     },
     {
       externalId: "seed-warm",
+      owner: "bruno",
       name: "Rafael Souza",
       phone: "11977776666",
       email: "rafael.souza@example.com",
@@ -332,6 +336,7 @@ function demoLeads(): DemoLead[] {
     },
     {
       externalId: "seed-cold",
+      owner: "ana",
       name: "Julia Martins",
       phone: "11966665555",
       email: "julia.martins@example.com",
@@ -362,7 +367,7 @@ function demoLeads(): DemoLead[] {
   ];
 }
 
-async function seedLeads(agencyId: string, brokerId: string): Promise<void> {
+async function seedLeads(agencyId: string, brokers: { ana: string; bruno: string }): Promise<void> {
   for (const demo of demoLeads()) {
     const [existing] = await db
       .select({ id: leads.id })
@@ -386,12 +391,12 @@ async function seedLeads(agencyId: string, brokerId: string): Promise<void> {
         intent: demo.intent,
         status: demo.status,
         score: demo.score,
+        assignedBrokerId: brokers[demo.owner],
         consentAt: firstMessageAt,
         doNotContact: false,
       })
       .returning({ id: leads.id });
 
-    const lastMessage = demo.messages[demo.messages.length - 1];
     const lastLeadMessage = [...demo.messages].reverse().find((m) => m.role === "lead");
     const lastAgentMessage = [...demo.messages].reverse().find((m) => m.role === "agent");
 
@@ -406,12 +411,16 @@ async function seedLeads(agencyId: string, brokerId: string): Promise<void> {
         slots: demo.slots,
         lastLeadMessageAt: lastLeadMessage ? minutesFromNow(-lastLeadMessage.minutesAgo) : null,
         lastAgentMessageAt: lastAgentMessage ? minutesFromNow(-lastAgentMessage.minutesAgo) : null,
-        previewLine: lastMessage.content,
+        // Deliberately null: the preview line is a *summary* of the conversation
+        // (spec 005), not a copy of its last message. The worker fills it from
+        // the `conversation.turn` events written below, which is also the
+        // cheapest end-to-end proof that the summariser runs.
       })
       .returning({ id: conversations.id });
 
     let previousLeadMessageId: string | null = null;
     let lastInsertedId: string | null = null;
+    const agentMessageIds: Array<{ id: string; minutesAgo: number }> = [];
     for (const message of demo.messages) {
       // Annotated, not inferred: `previousLeadMessageId` is narrowed by the
       // assignment three lines below, so inferring `inserted` from a `.values()`
@@ -428,8 +437,27 @@ async function seedLeads(agencyId: string, brokerId: string): Promise<void> {
         .returning({ id: messages.id });
       lastInsertedId = inserted.id;
       if (message.role === "lead") previousLeadMessageId = inserted.id;
+      if (message.role === "agent") {
+        agentMessageIds.push({ id: inserted.id, minutesAgo: message.minutesAgo });
+      }
     }
     void lastInsertedId;
+
+    // One `conversation.turn` per agent message, left unprocessed on purpose:
+    // it is the summariser's outbox (spec 005 FR-008), so a freshly seeded
+    // database produces real summaries on the worker's first sweep.
+    for (const agentMessage of agentMessageIds) {
+      await db.insert(events).values({
+        agencyId,
+        leadId: lead.id,
+        conversationId: conversation.id,
+        type: "conversation.turn",
+        actorType: "agent",
+        actorUserId: null,
+        payload: { messageId: agentMessage.id },
+        createdAt: minutesFromNow(-agentMessage.minutesAgo),
+      });
+    }
 
     for (const event of demo.events) {
       await db.insert(events).values({
@@ -449,7 +477,7 @@ async function seedLeads(agencyId: string, brokerId: string): Promise<void> {
         agencyId,
         leadId: lead.id,
         conversationId: conversation.id,
-        brokerId,
+        brokerId: brokers[demo.owner],
         scheduledAt: minutesFromNow(demo.appointment.minutesFromNow),
         type: "viewing",
         status: "confirmed",
@@ -462,9 +490,9 @@ async function seedLeads(agencyId: string, brokerId: string): Promise<void> {
 
 async function main(): Promise<void> {
   const agencyId = await seedAgency();
-  const { ana } = await seedUsers(agencyId);
+  const { ana, bruno } = await seedUsers(agencyId);
   await seedProperties(agencyId);
-  await seedLeads(agencyId, ana);
+  await seedLeads(agencyId, { ana, bruno });
 
   const [[agencyCount], [userCount], [propertyCount], [leadCount]] = await Promise.all([
     db.select({ count: sql<number>`count(*)::int` }).from(agencies),

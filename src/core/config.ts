@@ -93,6 +93,13 @@ export const configSchema = z.object({
   // Read by docker-compose.yml, like DB_PORT — declared here because the
   // schema is the authoritative key set.
   LANGFUSE_UI_PORT: port.default(3102),
+  // Broker surface (005). The dashboard reads the last two; the worker's
+  // summariser reads the first two.
+  SUMMARY_DEBOUNCE_SECONDS: positiveInt.default(20),
+  SUMMARY_BATCH_SIZE: positiveInt.default(10),
+  LEADS_PAGE_SIZE: positiveInt.default(25),
+  DASHBOARD_LIVE_WINDOW_MINUTES: positiveInt.default(10),
+
   FOLLOWUP_WINDOW_START: time.default("09:00"),
   FOLLOWUP_WINDOW_END: time.default("20:00"),
   FOLLOWUP_TIMEZONE: z.string().min(1).default("America/Sao_Paulo"),

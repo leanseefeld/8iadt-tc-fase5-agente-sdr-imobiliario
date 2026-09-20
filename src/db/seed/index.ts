@@ -394,6 +394,11 @@ async function seedLeads(agencyId: string, brokers: { ana: string; bruno: string
         assignedBrokerId: brokers[demo.owner],
         consentAt: firstMessageAt,
         doNotContact: false,
+        // Backdated with the transcript: a lead that arrived three hours ago
+        // must read that way, or every duration measured from it — spec 005's
+        // first-response median above all — is measured from the seed run.
+        createdAt: firstMessageAt,
+        updatedAt: firstMessageAt,
       })
       .returning({ id: leads.id });
 
@@ -409,6 +414,7 @@ async function seedLeads(agencyId: string, brokers: { ana: string; bruno: string
         status: "active",
         followupState: demo.followupState,
         slots: demo.slots,
+        createdAt: firstMessageAt,
         lastLeadMessageAt: lastLeadMessage ? minutesFromNow(-lastLeadMessage.minutesAgo) : null,
         lastAgentMessageAt: lastAgentMessage ? minutesFromNow(-lastAgentMessage.minutesAgo) : null,
         // Deliberately null: the preview line is a *summary* of the conversation

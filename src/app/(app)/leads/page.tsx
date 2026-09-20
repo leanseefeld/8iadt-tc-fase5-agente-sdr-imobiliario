@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/core/auth";
+import { getConfig } from "@/core/config";
 import { scopeForUser } from "@/services/auth";
 import { getFunnelMetrics } from "@/services/metrics";
 import { isLeadFilter, listLeads, type LeadFilter } from "@/services/leads";
@@ -9,6 +10,7 @@ import { FilterChips } from "./_components/FilterChips";
 import { MeusLeadsToggle } from "./_components/MeusLeadsToggle";
 import { SearchBox } from "./_components/SearchBox";
 import { LeadRow } from "./_components/LeadRow";
+import { LiveLeads } from "./_components/LiveLeads";
 import { buildHref, first, type SearchParamsRecord } from "./_components/query";
 import styles from "./leads.module.css";
 
@@ -52,6 +54,7 @@ export default async function LeadsPage({
 
   return (
     <div className={styles.page}>
+      <LiveLeads pulseIntervalMs={getConfig().SSE_PULSE_INTERVAL_MS} />
       <header className={styles.header}>
         <h1 className={styles.title}>Leads</h1>
         <MetricTiles metrics={metrics} />

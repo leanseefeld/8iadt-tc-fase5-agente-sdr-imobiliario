@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import {
   CHUNK_CHANNEL,
   MESSAGE_CHANNEL,
+  STATE_CHANNEL,
   closeNotifier,
   getNotifier,
   type ConversationNotification,
@@ -130,4 +131,63 @@ test("the notifier fans one publish out to every stream on that conversation", {
   await t.after(async () => {
     await closeNotifier();
   });
+});
+
+/**
+ * Spec 005. The dashboard watches a *list*, so it subscribes by agency and must
+ * receive what it cannot predict: a state change on any conversation of that
+ * agency, including one that produced no message at all.
+ */
+test("an agency subscriber receives state changes it never subscribed to by conversation", {
+  skip: !integration,
+}, async (t) => {
+  const agencyId = randomUUID();
+  const otherAgencyId = randomUUID();
+  const conversationId = randomUUID();
+
+  const mine = collector(1);
+  const theirs = collector(1);
+  const unsubscribeMine = getNotifier().subscribeAgency(agencyId, mine.listener);
+  const unsubscribeTheirs = getNotifier().subscribeAgency(otherAgencyId, theirs.listener);
+  t.after(async () => {
+    unsubscribeMine();
+    unsubscribeTheirs();
+    await closeNotifier();
+  });
+
+  await settle();
+  await getNotifier().publish(STATE_CHANNEL, { conversationId, agencyId, status: "paused" });
+  await mine.wait();
+
+  assert.equal(mine.seen.length, 1);
+  const [notification] = mine.seen;
+  assert.equal(notification.kind, "state");
+  assert.ok(notification.kind === "state");
+  assert.equal(notification.status, "paused");
+  assert.equal(notification.conversationId, conversationId);
+
+  await settle();
+  assert.equal(theirs.seen.length, 0, "another agency must stay asleep");
+});
+
+test("an agency subscriber also sees the message notifications of its agency", {
+  skip: !integration,
+}, async (t) => {
+  const agencyId = randomUUID();
+  const conversationId = randomUUID();
+  const messageId = randomUUID();
+
+  const dashboard = collector(1);
+  const unsubscribe = getNotifier().subscribeAgency(agencyId, dashboard.listener);
+  t.after(async () => {
+    unsubscribe();
+    await closeNotifier();
+  });
+
+  await settle();
+  await getNotifier().publish(MESSAGE_CHANNEL, { conversationId, agencyId, messageId });
+  await dashboard.wait();
+
+  assert.equal(dashboard.seen.length, 1);
+  assert.equal(dashboard.seen[0].kind, "message");
 });

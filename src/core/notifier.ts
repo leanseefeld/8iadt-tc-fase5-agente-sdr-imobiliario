@@ -45,6 +45,17 @@ export const MESSAGE_CHANNEL = "conversation_message";
 /** Written by the turn's `ReplySink`, sentence by sentence. Ephemeral. */
 export const CHUNK_CHANNEL = "conversation_chunk";
 
+/**
+ * A conversation changed hands or changed state without producing a message
+ * (spec 005): a broker assumed it, handed it back, or a summary landed. Ids and
+ * a status only — both the widget's stream and the dashboard's re-read the rows.
+ *
+ * It exists because the other two channels are message-shaped, and a takeover
+ * sends no message. Without it the widget would only learn it is being answered
+ * by a person once that person typed something (FR-034, SC-008).
+ */
+export const STATE_CHANNEL = "conversation_state";
+
 export interface MessageNotification {
   kind: "message";
   conversationId: string;
@@ -59,7 +70,14 @@ export interface ChunkNotification {
   text: string;
 }
 
-export type ConversationNotification = MessageNotification | ChunkNotification;
+export interface StateNotification {
+  kind: "state";
+  conversationId: string;
+  agencyId: string;
+  status: "active" | "paused" | "closed";
+}
+
+export type ConversationNotification = MessageNotification | ChunkNotification | StateNotification;
 
 export type NotificationListener = (notification: ConversationNotification) => void;
 
@@ -68,6 +86,13 @@ export interface Notifier {
   publish(channel: string, payload: Record<string, unknown>): Promise<void>;
   /** Returns the unsubscribe function. Call it on client disconnect. */
   subscribe(conversationId: string, listener: NotificationListener): () => void;
+  /**
+   * Every notification of one agency, for the broker dashboard: it watches a
+   * list, not a conversation, and cannot know in advance which conversation is
+   * about to move. Same contract — ids in, ids out, the row is re-read scoped
+   * before anything reaches a browser.
+   */
+  subscribeAgency(agencyId: string, listener: NotificationListener): () => void;
 }
 
 /**
@@ -106,21 +131,40 @@ function parse(channel: string, raw: string | undefined): ConversationNotificati
       ? { kind: "chunk", conversationId, agencyId, text: record.text }
       : null;
   }
+  if (channel === STATE_CHANNEL) {
+    const status = record.status;
+    return status === "active" || status === "paused" || status === "closed"
+      ? { kind: "state", conversationId, agencyId, status }
+      : null;
+  }
   return null;
 }
 
 class PostgresNotifier implements Notifier {
   private readonly listeners = new Map<string, Set<NotificationListener>>();
+  private readonly agencyListeners = new Map<string, Set<NotificationListener>>();
   private client: Client | undefined;
   private connecting: Promise<Client> | undefined;
   private reconnectDelay = RECONNECT_DELAY_MS;
   private closed = false;
 
   subscribe(conversationId: string, listener: NotificationListener): () => void {
-    let set = this.listeners.get(conversationId);
+    return this.register(this.listeners, conversationId, listener);
+  }
+
+  subscribeAgency(agencyId: string, listener: NotificationListener): () => void {
+    return this.register(this.agencyListeners, agencyId, listener);
+  }
+
+  private register(
+    into: Map<string, Set<NotificationListener>>,
+    key: string,
+    listener: NotificationListener,
+  ): () => void {
+    let set = into.get(key);
     if (set === undefined) {
       set = new Set();
-      this.listeners.set(conversationId, set);
+      into.set(key, set);
     }
     set.add(listener);
 
@@ -131,10 +175,10 @@ class PostgresNotifier implements Notifier {
     });
 
     return () => {
-      const current = this.listeners.get(conversationId);
+      const current = into.get(key);
       if (current === undefined) return;
       current.delete(listener);
-      if (current.size === 0) this.listeners.delete(conversationId);
+      if (current.size === 0) into.delete(key);
     };
   }
 
@@ -161,7 +205,11 @@ class PostgresNotifier implements Notifier {
     client.on("notification", (message: Notification) => {
       const parsed = parse(message.channel, message.payload);
       if (parsed === null) return;
-      for (const listener of this.listeners.get(parsed.conversationId) ?? []) {
+      const listeners = [
+        ...(this.listeners.get(parsed.conversationId) ?? []),
+        ...(this.agencyListeners.get(parsed.agencyId) ?? []),
+      ];
+      for (const listener of listeners) {
         // One bad listener must not cost the other streams their notification.
         try {
           listener(parsed);
@@ -184,6 +232,7 @@ class PostgresNotifier implements Notifier {
       await client.connect();
       await client.query(`listen ${MESSAGE_CHANNEL}`);
       await client.query(`listen ${CHUNK_CHANNEL}`);
+      await client.query(`listen ${STATE_CHANNEL}`);
     } catch (error) {
       this.connecting = undefined;
       await client.end().catch(() => {});
@@ -194,7 +243,10 @@ class PostgresNotifier implements Notifier {
     this.client = client;
     this.connecting = undefined;
     this.reconnectDelay = RECONNECT_DELAY_MS;
-    log.info({ channels: [MESSAGE_CHANNEL, CHUNK_CHANNEL] }, "listening for conversation events");
+    log.info(
+      { channels: [MESSAGE_CHANNEL, CHUNK_CHANNEL, STATE_CHANNEL] },
+      "listening for conversation events",
+    );
     return client;
   }
 
@@ -207,7 +259,7 @@ class PostgresNotifier implements Notifier {
   }
 
   private scheduleReconnect(): void {
-    if (this.closed || this.listeners.size === 0) return;
+    if (this.closed || (this.listeners.size === 0 && this.agencyListeners.size === 0)) return;
     const delay = this.reconnectDelay;
     this.reconnectDelay = Math.min(delay * 2, RECONNECT_MAX_DELAY_MS);
     const timer = setTimeout(() => {
@@ -220,6 +272,7 @@ class PostgresNotifier implements Notifier {
   async close(): Promise<void> {
     this.closed = true;
     this.listeners.clear();
+    this.agencyListeners.clear();
     const dying = this.client;
     this.client = undefined;
     this.connecting = undefined;

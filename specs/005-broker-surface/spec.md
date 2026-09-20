@@ -98,7 +98,7 @@ The worker summarises off the reply path; a slow or dead summariser costs the le
 - **FR-018**: Four tiles for the scope, cumulative: median first response (`lead.created` → first agent message), qualification rate (leads at `qualified` or beyond, over all leads), confirmed appointments, leads recovered by follow-up.
 - **FR-019**: Every query is scoped by agency. *Meus leads* narrows to the user's own leads and defaults from `scopeForUser().defaultOwnLeadsOnly`.
 - **FR-020**: The list MUST offer the filters *Ao vivo*, *Aguardando corretor*, *Visita marcada*, *Sem resposta*, the *Meus leads* toggle and a free-text search over name, phone, e-mail and preview line — all in the URL.
-- **FR-021**: A row MUST show a temperature dot and label, name or *Lead anônimo*, intent, the neighborhoods · price · bedrooms line, the preview line in quotes, a conversation chip (*Agente respondendo* · *<Nome> no comando* · *Aguardando corretor* · *Encerrada*), a stage chip, and a live dot when `lastLeadMessageAt` is within `DASHBOARD_LIVE_WINDOW_MINUTES`.
+- **FR-021**: A row MUST show a temperature dot and label, name or *Lead anônimo*, intent, the neighborhoods · price · bedrooms line, the preview line in quotes, a conversation chip (*Agente respondendo* · *<Nome> no comando* · *Aguardando corretor* · *Encerrada*), a stage chip (the pipeline stage; the *Visita `<dia> <hora>`* variant of `modelo-de-dados.md` §7 needs appointments and lands with 006), and a live dot when `lastLeadMessageAt` is within `DASHBOARD_LIVE_WINDOW_MINUTES`.
 - **FR-022**: Ordered by score descending, then last lead message descending, and paginated.
 - **FR-023**: The screen MUST update over an agency-scoped SSE stream — no polling — keeping scroll, filter, search and toggle.
 - **FR-024**: Temperature MUST be a colored dot **and** a word. No emoji on any dashboard surface.
@@ -132,7 +132,7 @@ Message (the `broker` role), Event (metrics, timeline, outbox).
 ## Success Criteria *(mandatory)*
 
 - **SC-002**: A broker identifies the top-priority lead within 20 seconds of load, without opening a panel.
-- **SC-003**: `/leads` renders under 1.5 s with 500 leads, and its query count does not grow with rows.
+- **SC-003**: `/leads` renders under 1.5 s with 500 leads, with a fixed number of queries per render — one for the list, one for the tiles, three for the panel — whatever the row count.
 - **SC-004**: *Meus leads* on shows only the user's own leads — by list, search and URL; off shows the agency.
 - **SC-005**: After a four-turn conversation goes quiet, summary and preview line are stored within two sweeps; the preview is at most 90 characters.
 - **SC-006**: With the provider stopped, every broker screen renders and the lead still gets 004's fallback reply.

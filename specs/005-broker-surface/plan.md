@@ -69,6 +69,7 @@ src/app/(app)/leads/  page.tsx · actions.ts · leads.module.css · _components/
 - **Live list**: `/api/leads/stream` subscribes by agency to `conversation_message` and `conversation_state` and forwards `{ conversationId }` only; the client calls `router.refresh()`, which re-reads through scoped services. Nothing the browser receives is anything the query would not already scope.
 - **Summariser claim**: an unlocked `group by conversation_id having max(created_at) < now() - debounce` (a lock cannot sit beside `group by`), then one transaction per conversation claiming its turn rows `for update skip locked`; zero rows means another worker has it. Summary, preview, `processed_at` and `summary.updated` land in that same transaction. On failure the turns are marked processed and the stored summary is left alone.
 - **Handoff**: assume is `update conversations set status='paused', held_by_user_id=$u where id=$c and held_by_user_id is null and status <> 'closed'`; zero rows fails with a pt-BR message. Every write publishes `conversation_state` after commit.
+- **Queries per render** (SC-003): one for the list, one for the tiles, three for the panel. No query inside a component, no N+1 over rows.
 - **Metrics**: one statement — `filter (where …)` aggregates plus `percentile_cont(0.5)` for the median.
 
 ## Not built

@@ -20,6 +20,7 @@ Schema: `docs/arquitetura/modelo-de-dados.md`. No table or column added.
 | `conversation.assumed` / `conversation.returned` | `{ userId }` | Assume / return |
 | `lead.status_changed` | `{ from, to }` | Broker changes stage |
 | `summary.updated` | `{}` | Summary stored |
+| `conversation.turn` | `{ messageId }` | A broker reply — so the summariser sees exchanges a person handled |
 
 `handoff.requested`, agent-stage `lead.status_changed` (004) and `lead.reassigned`
 (003) already exist. `lead.qualified` is **not** written here — it moves with the

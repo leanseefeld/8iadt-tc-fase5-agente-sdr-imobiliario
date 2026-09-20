@@ -92,6 +92,7 @@ kept open, replayable from `Last-Event-ID` on reconnect.
 |---|---|---|
 | `chunk` | `{ text }` | Sentence-sized pieces of the reply as the guards clear them |
 | `message` | `{ id, role, content, propertyIds?, repliesToMessageId?, createdAt }` | The turn's final, persisted agent (or broker) message |
+| `status` | `{ status: "active" \| "paused" \| "closed" }` | The conversation changed hands with no message written — a broker assumed it or handed it back (spec 005) |
 | `pulse` | `{}` | Every `SSE_PULSE_INTERVAL_MS`, keep-alive |
 | `goodbye` | `{}` | On `SIGTERM`, before the server closes the stream |
 

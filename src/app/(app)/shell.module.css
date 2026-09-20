@@ -6,6 +6,25 @@
 
 .shell {
   min-height: 100vh;
+  /*
+   * Temperature tokens (spec 005, T007). Defined here, not in
+   * `globals.css`, because the leads screen is the only consumer today; the
+   * shell wraps every authenticated route's content, so `.shell`'s
+   * descendants — `leads/leads.module.css` among them — inherit these like
+   * any other custom property. FR-024: colour is never the only signal, so
+   * every dot pairs one of these with the word (Quente/Morno/Frio).
+   */
+  --temp-hot: #dc2626;
+  --temp-warm: #d97706;
+  --temp-cold: #2563eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  .shell {
+    --temp-hot: #f87171;
+    --temp-warm: #fbbf24;
+    --temp-cold: #60a5fa;
+  }
 }
 
 .topBar {

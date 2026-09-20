@@ -223,4 +223,5 @@ sessão em janela de 30 minutos e por um turno por conversa (ver
 - [`restricoes-de-implantacao.md`](restricoes-de-implantacao.md) — o que não roda em contêiner local, e por quê
 - [`adr/decisoes.md`](adr/decisoes.md) — as decisões técnicas e suas consequências
 - [`../decisoes-pendentes.md`](../decisoes-pendentes.md) — o que ainda não foi decidido
+- [`../exploracoes/roteiro-por-topicos.md`](../exploracoes/roteiro-por-topicos.md) — exploração aberta: §5 passo 3 e §9 camada 1 (o código escolher a pergunta) estão em questão
 - [`configuracoes.md`](configuracoes.md) — registro das configurações que um dia viram painel de administração

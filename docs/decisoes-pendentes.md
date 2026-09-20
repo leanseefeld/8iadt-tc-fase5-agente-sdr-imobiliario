@@ -66,6 +66,22 @@ nunca repetir uma pergunta.
 **Quem decide:** o desenvolvedor, antes de abrir a spec 006. Levantado em
 16/09/2026 a partir do comportamento observado em conversa real.
 
+**Direção dada em 20/09/2026:** não corrigir a slot machine por partes. A
+alternativa a explorar é outra: o orquestrador entrega ao modelo os **tópicos que
+faltam, em ordem preferida**, mais o estado conhecido, e o modelo decide o que
+perguntar. Extração e resposta continuam separadas. A exploração está em
+[`exploracoes/roteiro-por-topicos.md`](exploracoes/roteiro-por-topicos.md) — é
+exploração, não decisão, e adotá-la exige **emendar o princípio V da
+constituição**, que é marcado como inegociável.
+
+**Evidência, 16/09/2026** (`scripts/probe-after-qualification.ts`, e4b local): o
+Cenário 1 completo seguido de *"Gostei do segundo, ele tem varanda?"* e *"E na zona
+norte, tem algo?"* termina em `handoff.requested {reason: fallback}` com score 100.
+Depois do roteiro, `shouldProposeMeeting` volta a propor a reunião em todo turno, e
+qualquer mensagem que não preenche slot conta como não compreensão. O mesmo ocorre
+no meio do roteiro: *"Moema ou Vila Mariana"* depois de *"zona sul"* virou fallback.
+A spec 006 não funciona sobre isto — *"pode ser sábado?"* é exatamente esse caso.
+
 ---
 
 ## Resolvidas
@@ -80,7 +96,8 @@ requisito.
 | 2 | Mecanismo de autenticação | **Cookie de sessão assinado, escrito à mão.** Usuários semeados com senha *hash*, dois papéis (`broker`, `salesManager`). Sem Auth.js. | [12](arquitetura/adr/decisoes.md#12-hand-rolled-signed-session-cookie) | 003 |
 | 3 | Hospedagem do Langfuse na demonstração | **Self-hosted por profile do Compose**, com limites de memória somando **≤ 6 GiB**, reaproveitando o Postgres do projeto. Latência de consulta não importa; captura precisa ser rápida. | [13](arquitetura/adr/decisoes.md#13-langfuse-self-hosted-under-a-memory-cap) | 004 |
 | 4 | Constantes do follow-up | Hipóteses iniciais viram padrão: janela 09:00–20:00 em `America/Sao_Paulo` fixo, 3 tentativas, intervalos crescentes. **Atraso da primeira tentativa em minutos** (não horas) para ser demonstrável, e botão "Disparar follow-up agora" na ficha do lead. | [15](arquitetura/adr/decisoes.md#15-follow-up-constants-and-the-demo-trigger) | 006 |
-| 5 | Gatilho de handoff | Três gatilhos determinísticos: lead pede pessoa; duas respostas seguidas sem entendimento (fallback); ou **score ≥ 70 com contato informado** — que na prática coincide com o fim do roteiro e a proposta de reunião. | [11](arquitetura/adr/decisoes.md#11-deterministic-lead-score) | 005 |
+| 5 | Gatilho de handoff | **Dois** gatilhos determinísticos: lead pede pessoa; duas respostas seguidas sem entendimento. O terceiro (quente com contato) caiu no ADR 19 — quente com contato **propõe reunião**, o agente segue no comando. | [11](arquitetura/adr/decisoes.md#11-deterministic-lead-score), [19](arquitetura/adr/decisoes.md#19-three-state-axes-agent-owned-booking-sse-over-postgres-notifications) | 004 |
+| 7 | Score: teto, pesos e interesse em imóvel | **Sem teto, sinais somam.** 100 = roteiro de compra completo com urgência imediata; orçamento maior pontua mais. Aluguel com horizonte de ~2 meses é quente com piso 50. Agendar aumenta; pedir humano não altera. Pesos exatos ficam com a spec que implementar. | [20](arquitetura/adr/decisoes.md#20-the-lead-score-is-uncapped-and-compounding) | a definir |
 
 Decisões novas tomadas na mesma sessão, sem pergunta prévia no registro:
 

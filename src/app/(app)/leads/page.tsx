@@ -4,7 +4,13 @@ import { getSession } from "@/core/auth";
 import { getConfig } from "@/core/config";
 import { scopeForUser } from "@/services/auth";
 import { getFunnelMetrics } from "@/services/metrics";
-import { getLeadDetail, isLeadFilter, listLeads, type LeadFilter } from "@/services/leads";
+import {
+  getLeadDetail,
+  isLeadFilter,
+  listAgencyBrokers,
+  listLeads,
+  type LeadFilter,
+} from "@/services/leads";
 import { MetricTiles } from "./_components/MetricTiles";
 import { FilterChips } from "./_components/FilterChips";
 import { MeusLeadsToggle } from "./_components/MeusLeadsToggle";
@@ -46,10 +52,12 @@ export default async function LeadsPage({
   const page = Math.max(1, Number(first(params.page)) || 1);
   const leadId = first(params.lead);
 
-  const [metrics, list, detail] = await Promise.all([
+  const [metrics, list, detail, brokers] = await Promise.all([
     getFunnelMetrics(scope),
     listLeads(scope, { filter, mine, userId: session.userId, search, page }),
     leadId ? getLeadDetail(scope, leadId) : Promise.resolve(null),
+    // Only a sales manager can reassign, so only a manager pays for the read.
+    session.role === "salesManager" ? listAgencyBrokers(scope) : Promise.resolve([]),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(list.total / list.pageSize));
@@ -126,6 +134,7 @@ export default async function LeadsPage({
         <LeadDrawer>
           <LeadPanel
             detail={detail}
+            brokers={brokers}
             currentUserId={session.userId}
             role={session.role}
             langfuseUiPort={getConfig().LANGFUSE_UI_PORT}

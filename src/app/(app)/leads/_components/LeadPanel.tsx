@@ -20,11 +20,13 @@ export function LeadPanel({
   detail,
   currentUserId,
   role,
+  brokers,
   langfuseUiPort,
 }: {
   detail: LeadDetail;
   currentUserId: string;
   role: UserRole;
+  brokers: Array<{ id: string; name: string }>;
   langfuseUiPort: number;
 }) {
   const heldByUserId = detail.conversation.heldByUserId;
@@ -90,6 +92,7 @@ export function LeadPanel({
           conversationStatus={detail.conversation.status}
           stage={detail.stage}
           role={role}
+          brokers={brokers}
         />
       </section>
 

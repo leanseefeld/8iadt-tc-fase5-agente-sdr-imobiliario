@@ -181,6 +181,23 @@ export async function listLeads(scope: LeadScope, query: LeadQuery): Promise<Lea
   };
 }
 
+/**
+ * The agency's brokers, for the manager's reassignment control (FR-037).
+ *
+ * It exists because the alternative shipped first and was worse: a text field
+ * asking a person to type a UUID. A control whose effect is not clear from its
+ * label is a defect under principle X, and an id is not a label.
+ */
+export async function listAgencyBrokers(
+  scope: LeadScope,
+): Promise<Array<{ id: string; name: string }>> {
+  return getDb()
+    .select({ id: users.id, name: users.name })
+    .from(users)
+    .where(and(eq(users.agencyId, scope.agencyId), eq(users.role, "broker")))
+    .orderBy(users.name);
+}
+
 export interface PanelMessage {
   id: string;
   role: "lead" | "agent" | "broker" | "system";

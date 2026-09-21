@@ -596,16 +596,6 @@
   color: inherit;
 }
 
-.textInput {
-  font: inherit;
-  font-size: 0.85rem;
-  padding: 0.4rem 0.5rem;
-  border-radius: 0.5rem;
-  border: 1px solid var(--field-border);
-  background: var(--surface);
-  color: inherit;
-}
-
 .actionMessage {
   font-size: 0.82rem;
   color: var(--muted);

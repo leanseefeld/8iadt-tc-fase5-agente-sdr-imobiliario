@@ -20,19 +20,28 @@ interface Props {
   conversationStatus: "active" | "paused" | "closed";
   stage: LeadStage;
   role: UserRole;
+  /** The agency's brokers; empty for anyone who cannot reassign. */
+  brokers: Array<{ id: string; name: string }>;
 }
 
 type Feedback = { text: string; error: boolean } | null;
 
 /**
  * FR-032 to FR-037, constitution X: Assumir/Devolver is the one primary
- * action; the stage move and the reassignment are secondary. A reassignment
- * needs the target broker's id — there is no broker picker in this slice
- * (no service exposes the agency's roster to `app/`), so a manager types the
- * id directly; a simplification, not a shortcut around the authorization
- * check, which still runs in `reassignLeadAction`.
+ * action; the stage move and the reassignment are secondary. The reassignment
+ * picks from the agency's brokers by name (`listAgencyBrokers`), and the
+ * authorization check still runs server-side in `reassignLeadAction` — the
+ * select decides what is easy to ask for, never what is allowed.
  */
-export function ActionsRow({ leadId, currentUserId, heldByUserId, conversationStatus, stage, role }: Props) {
+export function ActionsRow({
+  leadId,
+  currentUserId,
+  heldByUserId,
+  conversationStatus,
+  stage,
+  role,
+  brokers,
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [primaryMessage, setPrimaryMessage] = useState<Feedback>(null);
@@ -143,15 +152,20 @@ export function ActionsRow({ leadId, currentUserId, heldByUserId, conversationSt
               runReassign();
             }}
           >
-            <input
-              type="text"
-              className={styles.textInput}
-              placeholder="ID do novo corretor"
+            <select
+              className={styles.select}
               value={brokerId}
               onChange={(event) => setBrokerId(event.target.value)}
-              aria-label="ID do novo corretor"
-            />
-            <button type="submit" className={styles.secondaryButton} disabled={pending || brokerId.trim() === ""}>
+              aria-label="Transferir para"
+            >
+              <option value="">Transferir para…</option>
+              {brokers.map((broker) => (
+                <option key={broker.id} value={broker.id}>
+                  {broker.name}
+                </option>
+              ))}
+            </select>
+            <button type="submit" className={styles.secondaryButton} disabled={pending || brokerId === ""}>
               Transferir
             </button>
           </form>

@@ -358,6 +358,19 @@
     gap: 0.5rem;
   }
 
+  /*
+   * `align-items: flex-start` sizes a child to its content, and the
+   * qualification line is one long unbreakable string with an ellipsis — so it
+   * grew the row past the viewport instead of being clipped. Stretching the
+   * column back to the row's width is what makes the ellipsis do its job.
+   */
+  .rowMain,
+  .rowChips,
+  .rowTime {
+    align-self: stretch;
+    max-width: 100%;
+  }
+
   .rowChips {
     flex-direction: row;
     flex-wrap: wrap;

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { closePool, getPool } from "../../src/db/client.ts";
-import { getLeadDetail, listLeads } from "../../src/services/leads.ts";
+import { getLeadDetail, listAgencyBrokers, listLeads } from "../../src/services/leads.ts";
 import { getFunnelMetrics } from "../../src/services/metrics.ts";
 import type { LeadScope } from "../../src/services/auth.ts";
 
@@ -76,6 +76,19 @@ test("the leads queue is scoped by agency and filtered by Meus leads", {
     const scores = list.rows.map((row) => row.score);
     assert.deepEqual([...scores].sort((a, b) => b - a), scores);
     assert.equal(list.rows[0].temperature, "hot");
+  });
+
+  await t.test("the reassignment roster is the agency's brokers, by name", async () => {
+    const roster = await listAgencyBrokers(scope);
+    assert.deepEqual(
+      roster.map((broker) => broker.name),
+      ["Ana Ribeiro", "Bruno Castro"],
+      "the sales manager is not a target, and the order is alphabetical",
+    );
+    assert.deepEqual(
+      await listAgencyBrokers({ agencyId: randomUUID(), defaultOwnLeadsOnly: false }),
+      [],
+    );
   });
 
   await t.test("another agency sees nothing at all", async () => {

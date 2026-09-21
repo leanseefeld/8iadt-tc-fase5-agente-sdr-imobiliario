@@ -1,4 +1,5 @@
 import { Client, type Notification } from "pg";
+import { getPool } from "../db/client.ts";
 import { getConfig } from "./config.ts";
 import { createLogger } from "./logging.ts";
 
@@ -188,8 +189,15 @@ class PostgresNotifier implements Notifier {
       log.warn({ channel, bytes: body.length }, "notification payload too large, dropped");
       return;
     }
-    const client = await this.connection();
-    await client.query("select pg_notify($1, $2)", [channel, body]);
+    // Through the pool, deliberately, not through the `LISTEN` connection.
+    //
+    // Publishing needs a connection for the length of one statement; listening
+    // needs one for the life of the process. Tying them together meant any
+    // process that merely published — the worker's sweep, a Server Action —
+    // opened a long-lived socket it would never use, and Node then refused to
+    // exit while that socket was open. An integration run sat for twenty-six
+    // minutes after its last assertion for exactly this reason.
+    await getPool().query("select pg_notify($1, $2)", [channel, body]);
   }
 
   /** The one connection, built lazily and rebuilt after a drop. */

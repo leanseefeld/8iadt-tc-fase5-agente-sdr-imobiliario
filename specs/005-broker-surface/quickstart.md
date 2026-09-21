@@ -1,109 +1,50 @@
 # Quickstart: Broker Surface
 
-The acceptance script. Everything runs inside containers — the host has no usable
-Node. Run it top to bottom on a fresh `docker compose up -d`, with specs 002, 003
-and 004 merged and the seed applied.
+Run top to bottom on `docker compose up -d` after `docker compose exec app npm run db:reset`.
+Users: `ana@demo.com.br` (broker), `carla@demo.com.br` (manager), password `demo1234`.
 
-## 0 · Prerequisites
+## 1 · Queue — SC-002–SC-004
+
+1. `/leads` as Ana: four tiles, list by score. 006's tiles read `0`.
+2. *Meus leads* on shows only Ana's leads; off shows the agency. Filter, search and page 2 survive a reload.
+3. Rows: dot **and** word, *Lead anônimo* where unnamed, intent, qualification line, quoted preview, conversation chip, stage chip, live dot.
+4. As Carla the toggle starts off. As Ana with toggle on, a URL to Bruno's lead is not found; off, it opens.
+5. SC-003: insert 500 leads via `psql`, first paint < 1.5 s, same query count on pages 1 and 20; roll back.
+
+## 2 · Panel — SC-010
+
+1. Sections: header, RESUMO (IA) with time, QUALIFICAÇÃO, actions, CONVERSA, LINHA DO TEMPO.
+2. Empty slots *— não informado*; whole transcript; timeline in pt-BR with *ver trace* links.
+3. Escape and back close it; focus returns; list state kept. 390 px: full screen, no side scroll.
+
+## 3 · Summary — SC-005–SC-007, SC-011
+
+0. Set `WORKER_SWEEP_INTERVAL_MS=15000` in `.env` and `docker compose up -d worker`. At the
+   production default of 900000 a summary can take a quarter of an hour, which reads as broken.
+
+1. Four-turn widget conversation: within two sweeps the row has a preview (≤ 90 chars) and the panel a summary.
+1a. Send one more message with the panel open: the summary gains a pulsing mark saying it does not
+   include the latest messages, and the mark clears on the next sweep (SC-011).
+2. A message just sent: that conversation is skipped this sweep.
+3. `docker compose up -d --scale worker=2`; one `summary.updated` per conversation per batch. Scale back.
+4. Stop oMLX: widget falls back, screens render, sweep logs failure, summary unchanged.
+
+## 4 · Handoff — SC-008
+
+1. Widget open in another window. Ana assumes a `new` lead: the badge appears **with no message sent** (SC-008); the timeline names Ana.
+2. Lead message: no agent reply.
+3. Ana replies: widget shows it labelled as a person; row `role='broker'`.
+4. Carla assumes the same: fails with a message.
+5. Return: next lead message gets an agent reply.
+6. A lead nobody holds: reply box disabled, says why; a `paused` unheld one reads *Aguardando corretor*.
+
+## 5 · Gates
 
 ```bash
-docker compose up -d
-docker compose exec app npm run doctor        # provider reachable
-docker compose logs -f worker                 # keep this open in a second terminal
-```
-
-Sign in as `ana@demo.com.br` (broker) and `carla@demo.com.br` (sales manager),
-password `demo1234`.
-
-## 1 · Rules — SC-001
-
-```bash
+docker compose exec app npm run lint
+docker compose exec app npx tsc --noEmit
 docker compose exec app npm test
+docker compose exec app npm run test:integration
 ```
 
-`tests/scoring.test.ts` must cover both scripts, both bonuses, the cap at 100 and
-both band boundaries (39/40 and 69/70). Expect at least fifteen cases and no
-database or model involvement — the file runs with the containers stopped.
-
-## 2 · The queue — SC-002, SC-003, SC-004
-
-1. Open `/leads` as Ana. Four tiles, then a list ordered by score descending. The
-   confirmed-appointments and recovered tiles read `0` until spec 006 lands.
-2. Confirm *Meus leads* is on and only Ana's own leads show. Turn it off: the whole
-   agency appears. Click *Aguardando corretor*, reload the page: the filter and the
-   toggle are still applied and the URL still says so. Same for a search term and
-   page 2.
-3. Confirm every row shows a colored dot **and** a word (*Quente* · *Morno* ·
-   *Frio*), a name or *Lead anônimo*, the intent, the compact qualification line,
-   the preview line in quotes when there is one, a conversation chip (*Agente
-   respondendo* / *<Nome> no comando* / *Aguardando corretor* / *Encerrada*), a
-   stage chip, and a live dot on any lead whose last message is under
-   `DASHBOARD_LIVE_WINDOW_MINUTES` old.
-4. Sign in as Carla: *Meus leads* is off and the same screen lists the whole
-   agency. Sign back in as Ana and paste the URL of a lead assigned to Bruno with
-   `Meus leads` on — expect a not-found, not a panel; with it off, the panel opens.
-5. The seed carries three demo leads. For SC-003, bulk-insert 500 more into the same
-   agency from `psql` first; then the first paint is under 1.5 s and the query count
-   for the page does not change between page 1 and page 20. Roll them back after.
-
-## 3 · The panel — SC-010
-
-1. Open a lead. Sections in order: header, **RESUMO (IA)** with its timestamp,
-   **QUALIFICAÇÃO**, actions, **CONVERSA**, **LINHA DO TEMPO**.
-2. Every unfilled slot reads *— não informado*; the transcript holds the whole
-   conversation, never a truncated window. The timeline reads as Portuguese
-   sentences naming the actor, with times, never as `lead.qualified`; any entry with
-   a trace carries a *ver trace* link into Langfuse.
-3. Press Escape: the panel closes, focus returns to the row, and the list keeps its
-   filter, search and scroll. The back button does the same.
-4. At a 390 px viewport the panel fills the screen and nothing scrolls sideways.
-
-## 4 · Summary — SC-005, SC-006, SC-007
-
-1. Hold a four-turn conversation in the widget. Within one debounce plus one sweep,
-   the row gains a preview line and the panel a summary. Read it: natural pt-BR
-   addressed to a broker, and the preview line at most 90 characters.
-2. Send a message and check the worker log immediately — that conversation is
-   skipped this sweep. It is summarised on the next one.
-3. Concurrency:
-   ```bash
-   docker compose up -d --scale worker=2
-   docker compose exec db psql -U postgres -d sdr \
-     -c "select conversation_id, count(*) from events
-         where type='conversation.turn' and processed_at is null group by 1;"
-   ```
-   Let both sweep. Every conversation gets exactly one `summary.updated` per batch —
-   no duplicates, none skipped. Return to `--scale worker=1`.
-4. Stop oMLX. The widget still replies through 004's fallback, every broker screen
-   still renders, the sweep logs a failure and clears its turns, and the stored
-   summary is unchanged. Start oMLX again.
-
-## 5 · Handoff — SC-008
-
-1. Open a lead still `new`, with no assigned broker. Click *Assumir conversa* — this
-   works at any pipeline stage, not only after a handoff request. With the widget
-   open in another window, the conversation shows as paused, the badge *Falando com
-   um corretor* appears in the widget over its own SSE stream, and the timeline
-   records the takeover naming Ana as actor.
-2. Send a lead message from the widget: no agent reply, at all.
-3. Type in the reply box. The message arrives in the widget labelled as a person's,
-   stored with `role='broker'`, and delivered through the same `Notifier`/SSE path
-   the agent uses.
-4. As Carla, try to take over the same conversation: it fails with a message rather
-   than stealing it.
-5. Click *Devolver ao agente*. The next lead message gets an agent reply and the
-   timeline records the return.
-6. Open a lead nobody has taken over: the reply box is visible, disabled, and says
-   why; the row's conversation chip reads *Aguardando corretor* whenever the
-   conversation is `paused` with no holder, regardless of the lead's stage.
-
-## 6 · Gates
-
-```bash
-docker compose exec app npm run lint      # no db/ import under app/, domain/ isolated
-docker build --target build .             # the only type-check gate; not `npm run build`
-INTEGRATION=1 docker compose exec -e INTEGRATION=1 app npm test    # includes the oMLX summariser test
-```
-
-Then read the screen once more with SC-009 in hand: every string pt-BR, no emoji
-anywhere in the dashboard.
+Then SC-009: every string pt-BR, no emoji.

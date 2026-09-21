@@ -131,6 +131,16 @@
   border-bottom-left-radius: 0.3rem;
 }
 
+/* The one line that separates a person's reply from the agent's (FR-034). */
+.author {
+  display: block;
+  margin-bottom: 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent, #1d6f5c);
+}
+
 .leadBubble {
   align-self: flex-end;
   background: var(--lead);

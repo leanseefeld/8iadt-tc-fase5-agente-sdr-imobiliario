@@ -170,7 +170,15 @@ e nunca pergunta um preenchido.
 
 ---
 
-## 3. Score (ADR 11)
+## 3. Score (ADR 11 — **superado pelo ADR 20**)
+
+> **Atenção, quem for implementar:** a tabela abaixo e o teto de 100 **não valem
+> mais**. O [ADR 20](adr/decisoes.md#20-the-lead-score-is-uncapped-and-compounding)
+> (20/09/2026) tornou o score **sem teto e cumulativo**, com 100 calibrado como
+> "roteiro de compra completo com urgência imediata" e pontuação maior conforme o
+> orçamento. As faixas de temperatura também serão refeitas. Os pesos exatos ficam
+> com a spec que implementar o ADR 20; até lá esta tabela descreve só o que o
+> código faz hoje.
 
 Função pura `scoreLead(intent, slots)` em `domain/`, recalculada a cada turno.
 

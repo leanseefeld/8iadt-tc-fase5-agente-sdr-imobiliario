@@ -132,6 +132,15 @@ export async function GET(
           return;
         }
 
+        // A broker assumed the conversation or handed it back. No message was
+        // written, so there is nothing to re-read and nothing to replay — the
+        // status itself is the whole event, and the widget needs it to show
+        // "Falando com um corretor" (spec 005 FR-034, SC-008).
+        if (notification.kind === "state") {
+          send("status", { status: notification.status });
+          return;
+        }
+
         // Ids only: the row is re-read, scoped by conversation, before anything
         // is written to the client (FR-047).
         void readMessages(conversationId, [notification.messageId])

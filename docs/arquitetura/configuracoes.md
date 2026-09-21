@@ -19,8 +19,9 @@ cria uma chave acrescenta a linha aqui no mesmo commit.
 | `SSE_PULSE_INTERVAL_MS` | `15000` | global | 004 | pulso de keep-alive nos streams |
 | `LANGFUSE_UI_PORT` | `3102` | global | 004 | porta do host em que a interface do Langfuse é publicada (só o Compose lê) |
 | `SUMMARY_DEBOUNCE_SECONDS` | `20` | agência | 005 | espera após o último turno antes de resumir |
+| `SUMMARY_BATCH_SIZE` | `10` | global | 005 | conversas resumidas por varredura |
+| `LEADS_PAGE_SIZE` | `25` | agência | 005 | linhas por página em `/leads` |
 | `DASHBOARD_LIVE_WINDOW_MINUTES` | `10` | agência | 005 | "ao vivo" = última mensagem do lead dentro da janela |
-| `DASHBOARD_REFRESH_MS` | via SSE | agência | 005 | atualização do painel |
 | `SCHEDULING_MIN_NOTICE_MINUTES` | `120` | agência | 006 | antecedência mínima de uma visita |
 | `SCHEDULING_PREFERRED_TIMES` | `10:00,14:00,16:30` | agência | 006 | ordem de preferência dos horários propostos |
 | Disponibilidade por corretor | seg–sex 09–18 | usuário | 006 | `users.availability`, editável na agenda |

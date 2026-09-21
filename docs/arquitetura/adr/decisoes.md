@@ -437,3 +437,52 @@ status enum (simpler schema, wrong model).
 **Consequences.** Schema gains a handful of columns before any code exists,
 which is the cheapest moment. The pitch tells a normal CRM funnel story. The
 scalability limits of NOTIFY are documented honestly in `visao-geral.md`.
+
+## 20. The lead score is uncapped and compounding
+
+**Accepted 2026-09-20.** Resolves pending decision 7 and amends ADR 11, whose
+weight table and cap at 100 no longer hold. `modelo-de-dados.md` §3 is superseded
+and carries a banner saying so; the exact weights are fixed by the spec that
+implements this, not here.
+
+**Context.** The score existed to rank a queue, and it stopped doing that. A
+finished purchase script with immediate urgency already reached the cap, so every
+later signal — the lead pointing at a property, agreeing to a visit — added
+nothing. Two leads a broker would treat differently scored the same 100.
+
+**Decision.** Rules, not a formula:
+
+- **No cap.** Signals compound, and the number is open-ended on purpose.
+- **Calibration.** A complete purchase script with `urgency = immediate` is
+  **100**. Above it, a larger budget scores higher, so 100 is a reference point
+  rather than a ceiling.
+- **Budget** means the lead's own `priceMax` / `ticket` — what they said they
+  would spend — not the price of a property they happened to look at. *(Written
+  down as the reading to confirm when the weights are set.)*
+- **Rental with a horizon of about two months is hot on its own**, whatever else
+  is missing, with a floor of **50**.
+- **Booking a viewing or a meeting raises** the score.
+- **Asking for a human does not change** it. It is a routing fact, not intent.
+- **Temperature bands are re-derived** with the weights: cold/warm/hot cannot
+  keep thresholds written for a 0–100 scale.
+
+**Interest for an investor**, who is never shown a property. A brainstorm run
+without access to this codebase proposed three declared signals, weighted against
+a buyer's interest in a specific property at 1.0: a deployment horizon of six
+months or less (**1.0**), capital that is liquid rather than contingent
+(**0.8**), and accepting the specialist call with a channel and a time window
+(**0.6**). It rejected engagement proxies — message count, message length,
+questions asked — on the grounds that they measure free time, not intent. Its own
+objection stands beside it: all three are self-reported, where the buyer's signal
+is a reaction to a real property, so if most investors state a short horizon the
+signal ranks nobody. **Proposal, not yet accepted**; the cheap check before
+accepting it is the distribution of stated horizons across real conversations.
+
+**Alternatives considered.** Rebalancing the weights under the existing cap
+(keeps 0–100 tidy, but every new signal then has to steal points from an old
+one); a model-assigned score (rejected again, for ADR 11's reasons).
+
+**Consequences.** The number stops being a percentage and becomes a rank, which
+is what the dashboard needs. Seeded scores, the bands and
+`tests/score.test.ts` are all rewritten by the implementing spec. Until then the
+dashboard sorts by today's values, which are known to be wrong.

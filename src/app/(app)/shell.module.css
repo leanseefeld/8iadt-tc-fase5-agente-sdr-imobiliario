@@ -6,6 +6,25 @@
 
 .shell {
   min-height: 100vh;
+  /*
+   * Temperature tokens (spec 005, T007). Defined here, not in
+   * `globals.css`, because the leads screen is the only consumer today; the
+   * shell wraps every authenticated route's content, so `.shell`'s
+   * descendants — `leads/leads.module.css` among them — inherit these like
+   * any other custom property. FR-024: colour is never the only signal, so
+   * every dot pairs one of these with the word (Quente/Morno/Frio).
+   */
+  --temp-hot: #dc2626;
+  --temp-warm: #d97706;
+  --temp-cold: #2563eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  .shell {
+    --temp-hot: #f87171;
+    --temp-warm: #fbbf24;
+    --temp-cold: #60a5fa;
+  }
 }
 
 .topBar {
@@ -92,4 +111,44 @@
 
 .content {
   min-height: calc(100vh - 3.5rem);
+}
+
+/*
+ * Phones (SC-010 of spec 005: nothing scrolls sideways at 390 px).
+ *
+ * The bar carries four things — brand, navigation, who you are, and the way
+ * out — and at 390 px they do not fit. The role badge is the one that says
+ * least to the person reading it, since they know what they are, so it goes
+ * first; the navigation keeps its own scroll rather than pushing the page.
+ */
+@media (max-width: 640px) {
+  .topBar {
+    gap: 0.75rem;
+    padding: 0 0.75rem;
+  }
+
+  .nav {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .navLink {
+    padding: 0.4rem 0.5rem;
+    white-space: nowrap;
+  }
+
+  .roleBadge {
+    display: none;
+  }
+
+  .userName {
+    max-width: 8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }

@@ -226,6 +226,18 @@ export default function ChatWidget({
       });
     });
 
+    // Spec 005: a broker assuming the conversation writes no message, so the
+    // status is pushed on its own. `resync` stays for the message path, which
+    // also carries `consented` — this only moves the badge, and immediately.
+    source.addEventListener("status", (event) => {
+      alive();
+      const payload = JSON.parse((event as MessageEvent<string>).data) as {
+        status: HistoryResponse["status"];
+      };
+      setStatus(payload.status);
+      if (payload.status === "paused") setTyping(false);
+    });
+
     source.addEventListener("message", (event) => {
       alive();
       setTyping(false);
@@ -488,6 +500,12 @@ export default function ChatWidget({
                 bubble.role === "lead" ? styles.leadBubble : styles.agentBubble
               }`}
             >
+              {/* FR-034: a message a person typed must not read as the agent's.
+                  The name is deliberately absent — the lead was told "um
+                  corretor", and the panel is where a name belongs. */}
+              {bubble.role === "broker" ? (
+                <span className={styles.author}>Corretor</span>
+              ) : null}
               {quote === null ? null : (
                 <p className={styles.quote}>
                   <span className={styles.quoteLabel}>Você</span>

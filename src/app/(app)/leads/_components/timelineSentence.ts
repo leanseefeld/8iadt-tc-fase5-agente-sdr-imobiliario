@@ -29,7 +29,9 @@ export function timelineSentence(event: PanelEvent): string {
       return `Agente registrou ${label ?? "uma informação"}`;
     }
     case "conversation.turn":
-      return "Agente respondeu ao lead";
+      // Written by the agent's own turn (no actor) and by a broker's reply
+      // (`services/conversation.recordOutboundMessage`, actorType `user`) alike.
+      return actor ? `${actor} respondeu ao lead` : "Agente respondeu ao lead";
     case "lead.qualified":
       return "Lead qualificado";
     case "properties.suggested":

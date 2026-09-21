@@ -58,11 +58,13 @@ const STATE = Symbol.for("sdr.core.langfuse");
 interface State {
   registration: Registration | null;
   attempted: boolean;
+  /** Which process registered: `app` or `worker`. Both run the same image. */
+  service: ProcessName;
 }
 
 function state(): State {
   const container = globalThis as unknown as Record<symbol, State | undefined>;
-  container[STATE] ??= { registration: null, attempted: false };
+  container[STATE] ??= { registration: null, attempted: false, service: "app" };
   return container[STATE];
 }
 
@@ -244,6 +246,11 @@ export async function registerLangfuse(process: ProcessName): Promise<void> {
   if (state().attempted) return;
   state().attempted = true;
   log = createLogger(process, { module: "core/langfuse" });
+  // Read back by every trace below. It lives on `globalThis` with the rest of
+  // the registration because Next bundles `instrumentation.ts` separately from
+  // the route handlers, and a module-level `let` is written in one instance and
+  // read empty in the other.
+  state().service = process;
 
   const config = getConfig();
   const publicKey = config.LANGFUSE_PUBLIC_KEY;
@@ -255,13 +262,19 @@ export async function registerLangfuse(process: ProcessName): Promise<void> {
   }
 
   try {
-    const [{ NodeTracerProvider }, { LangfuseSpanProcessor }, tracing, { registerTelemetry }] =
-      await Promise.all([
-        import("@opentelemetry/sdk-trace-node"),
-        import("@langfuse/otel"),
-        import("@langfuse/tracing"),
-        import("ai"),
-      ]);
+    const [
+      { NodeTracerProvider },
+      { resourceFromAttributes },
+      { LangfuseSpanProcessor },
+      tracing,
+      { registerTelemetry },
+    ] = await Promise.all([
+      import("@opentelemetry/sdk-trace-node"),
+      import("@opentelemetry/resources"),
+      import("@langfuse/otel"),
+      import("@langfuse/tracing"),
+      import("ai"),
+    ]);
 
     const processor = new LangfuseSpanProcessor({
       publicKey,
@@ -274,7 +287,16 @@ export async function registerLangfuse(process: ProcessName): Promise<void> {
       environment: config.NODE_ENV,
     });
 
-    const provider = new NodeTracerProvider({ spanProcessors: [processor] });
+    // `service.name` is the OpenTelemetry way to say who emitted a span, and
+    // both processes run the same image — without it every span in Langfuse
+    // reads the same and a reply cannot be told from a summary by origin.
+    const provider = new NodeTracerProvider({
+      spanProcessors: [processor],
+      resource: resourceFromAttributes({
+        "service.name": `sdr-${process}`,
+        "service.namespace": "sdr-imobiliario",
+      }),
+    });
     // `register()` also installs the AsyncLocalStorage context manager, which is
     // what makes the turn's span the parent of the model spans across awaits.
     provider.register();
@@ -400,6 +422,11 @@ export async function withTurnTrace<T>(
         sessionId: attributes.conversationId,
         userId: maskedLeadId(attributes.leadId),
         metadata: {
+          // Also on the OTel resource as `service.name`. Repeated here because
+          // Langfuse filters and groups on trace metadata, and "which process
+          // produced this?" is the first question when a reply and a summary
+          // sit next to each other in the same list.
+          service: state().service,
           "agency.id": attributes.agencyId,
           "lead.id": attributes.leadId,
           "conversation.id": attributes.conversationId,
@@ -496,6 +523,11 @@ function aiSdkIntegration(tracing: LangfuseTracing): Telemetry {
             model: event.modelId,
             input: { instructions: event.instructions, messages: event.messages },
             metadata: {
+              // Which process emitted this. The turn trace carries it too, but
+              // a generation can exist outside one — the summariser runs in the
+              // worker and never enters `withTurnTrace` — and then this is the
+              // only place the origin appears.
+              service: state().service,
               "model.id": event.modelId,
               "provider.base_url": providerHost(),
             },

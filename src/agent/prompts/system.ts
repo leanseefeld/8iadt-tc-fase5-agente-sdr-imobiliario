@@ -246,6 +246,12 @@ function multiParty(input: TurnPromptInput): string {
   ];
 
   if (broker.justReturned) {
+    // Known and deliberately unresolved (21/09/2026): when this turn is also a
+    // `notUnderstood` one, both instructions reach the model and it picks. It
+    // picked the apology in the first live run, so the lead heard "não entendi"
+    // instead of "voltei". The fix belongs with whoever redesigns the slot
+    // machine — see `docs/decisoes-pendentes.md` item 6 — because the reason
+    // the turn is a fallback at all is that defect, not this one.
     // The developer's own words for this, 21/09/2026: acknowledge the
     // transition, and do not assume there is anything left to do. The handover
     // is visible to the lead, so pretending it did not happen reads as odd;

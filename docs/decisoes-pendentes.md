@@ -82,6 +82,23 @@ qualquer mensagem que não preenche slot conta como não compreensão. O mesmo o
 no meio do roteiro: *"Moema ou Vila Mariana"* depois de *"zona sul"* virou fallback.
 A spec 006 não funciona sobre isto — *"pode ser sábado?"* é exatamente esse caso.
 
+**Terceira manifestação, 21/09/2026 — agora no caminho do corretor.** Com a
+consciência multi-parte no ar, uma conversa real: agente qualifica, Ana assume,
+promete visita e preço, devolve. O lead responde *"e a visita de amanhã, continua
+de pé?"* — que não preenche slot nenhum — e o turno conta como não compreensão;
+a mensagem seguinte repete a dose e a conversa vai para handoff. Ou seja: o lead
+é devolvido a um humano por ter falado sobre o que o humano acabou de combinar.
+
+Duas coisas ficaram **deliberadamente sem correção** até esta decisão ser tomada
+(escolha do desenvolvedor, 21/09/2026, pelo caminho mais barato agora):
+
+1. Não há isenção de fallback para os turnos logo depois de uma devolução. Um
+   remendo pontual esconderia o tamanho real do defeito.
+2. Quando o turno é o primeiro depois da devolução **e** a mensagem não foi
+   entendida, as duas instruções vão juntas no briefing e o modelo escolhe — na
+   prática escolheu o pedido de desculpas, e a frase de reentrada ("Sofia aqui de
+   volta") não apareceu. Quem redesenhar a máquina decide qual voz ganha.
+
 ### 8. Pesos do score, faixas e sinal do investidor — ficam com a spec do ADR 20
 
 **Contexto.** O [ADR 20](arquitetura/adr/decisoes.md#20-the-lead-score-is-uncapped-and-compounding)

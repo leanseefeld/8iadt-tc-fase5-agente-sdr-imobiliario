@@ -344,6 +344,31 @@
   color: var(--muted);
 }
 
+/*
+ * SC-010: legible at 390 px, no sideways scroll. The four-column grid
+ * (temperature · name/preview · chips · time) has nowhere to put a long
+ * name once the row narrows below its content's natural width, so it wraps
+ * into a single column instead of overlapping.
+ */
+@media (max-width: 640px) {
+  .rowLink {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .rowChips {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .rowTime {
+    order: -1;
+    align-self: flex-end;
+  }
+}
+
 /* --- Pagination ---------------------------------------------------------- */
 
 .pagination {

@@ -166,15 +166,57 @@ async function pauseBeforeFirstChunk(startedAt: number): Promise<void> {
  */
 function toModelMessages(turn: LoadedTurn, limit?: number): ModelMessage[] {
   const messages: ModelMessage[] = [];
-  for (const message of turn.history) {
-    if (message.role === "system") continue;
-    const role = message.role === "lead" ? "user" : "assistant";
+  // Handovers are woven into the transcript in timestamp order, not described
+  // in the briefing, for the reason the briefing itself moved: everything
+  // before the final user turn has to stay byte-identical between calls or the
+  // provider's prefix cache throws the whole conversation away (measured at
+  // 82–84% hits in spec 004). A marker beside the message it explains is
+  // cached with it; the same fact in the briefing would be re-encoded forever.
+  const pending = [...turn.handovers];
+
+  const say = (role: "user" | "assistant", content: string) => {
     const previous = messages.at(-1);
     if (previous !== undefined && previous.role === role) {
-      previous.content = `${previous.content as string}\n${message.content}`;
-      continue;
+      previous.content = `${previous.content as string}\n${content}`;
+      return;
     }
-    messages.push({ role, content: message.content });
+    messages.push({ role, content });
+  };
+
+  for (const message of turn.history) {
+    if (message.role === "system") continue;
+
+    while (pending.length > 0 && pending[0].at <= message.createdAt) {
+      const handover = pending.shift();
+      if (handover === undefined) break;
+      say(
+        "assistant",
+        handover.kind === "assumed"
+          ? `[${handover.name} (corretor) assumiu a conversa]`
+          : `[${handover.name} devolveu a conversa para você]`,
+      );
+    }
+
+    const role = message.role === "lead" ? "user" : "assistant";
+    // A broker's words arriving as `assistant` is how this agent used to read
+    // "Oi, aqui é a Ana" as something it had said itself. The label is the
+    // whole fix: the model is told which assistant lines are not its own.
+    const authorId = message.metadata.userId;
+    const author = typeof authorId === "string" ? turn.brokerNames[authorId] : undefined;
+    const content =
+      message.role === "broker"
+        ? `[${author ?? "Corretor"} escreveu] ${message.content}`
+        : message.content;
+    say(role, content);
+  }
+
+  for (const handover of pending) {
+    say(
+      "assistant",
+      handover.kind === "assumed"
+        ? `[${handover.name} (corretor) assumiu a conversa]`
+        : `[${handover.name} devolveu a conversa para você]`,
+    );
   }
 
   const trimmed = limit === undefined ? messages : messages.slice(-limit);
@@ -900,7 +942,27 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   }
 
   // 4 · phrase
+  // The allowed figures already include the whole history, so a number a broker
+  // typed is a number the agent may repeat — which is what makes "como a Ana te
+  // falou, R$ 900.000" survive the `unbackedFigure` guard.
   const lead = figuresIn(`${leadText} ${turn.history.map((m) => m.content).join(" ")}`);
+
+  // Who, if anyone, has spoken here besides the agent and the lead — and
+  // whether this is the first turn since they handed it back. "First turn back"
+  // is "no agent message after the return", not a flag on the conversation: the
+  // rows already say it, and a flag would be a second source of truth.
+  const lastHandover = turn.handovers.at(-1);
+  const brokerContext =
+    lastHandover === undefined
+      ? undefined
+      : {
+          name: lastHandover.name,
+          justReturned:
+            lastHandover.kind === "returned" &&
+            !turn.history.some(
+              (message) => message.role === "agent" && message.createdAt > lastHandover.at,
+            ),
+        };
   const phrased = await phrase({
     turn,
     briefing: turnBriefing({
@@ -911,6 +973,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       consented,
       meeting,
       notUnderstood,
+      ...(brokerContext === undefined ? {} : { broker: brokerContext }),
       ...(search.searched
         ? { suggestions: { count: search.properties.length, relaxable: search.relaxable } }
         : {}),

@@ -131,6 +131,15 @@ export interface TurnPromptInput {
   /** The lead's message answered nothing we could parse (FR-023). */
   notUnderstood: boolean;
   /**
+   * A broker has spoken in this conversation. Their first name is what the
+   * agent may call them in front of the lead (decision of 21/09/2026).
+   */
+  broker?: {
+    name: string;
+    /** This is the first turn after the conversation came back to the agent. */
+    justReturned: boolean;
+  };
+  /**
    * A handoff is not phrased at all — `agent/orchestrator.ts` sends
    * `fallback.handoffReply` and never reaches this prompt, because the last
    * thing said before a conversation pauses must not depend on a sampler.
@@ -213,6 +222,42 @@ palavras, sem mudar o assunto dela:
   "${input.question.question}"`;
 }
 
+/**
+ * The multi-party block, present only when a person has actually written in
+ * this conversation — which is almost never, and the cost of the rule is paid
+ * by the conversations that need it rather than by every other one.
+ *
+ * Every line here answers a failure the code cannot prevent. Without the first,
+ * the model reads the broker's `[Ana escreveu] Oi, aqui é a Ana` as its own
+ * sentence and introduces itself as Ana. Without the second, it re-asks what
+ * Ana already settled, which is the one thing this agent promises never to do.
+ * Without the third, it either denies a commitment the lead can scroll up and
+ * read, or invents its own version of it.
+ */
+function multiParty(input: TurnPromptInput): string {
+  const broker = input.broker;
+  if (broker === undefined) return "";
+
+  const lines = [
+    `As linhas marcadas com [${broker.name} escreveu] são de ${broker.name}, corretor(a) do time — não são suas. Você é a Sofia e continua sendo a Sofia.`,
+    `O que ${broker.name} disse está combinado: não pergunte de novo o que ${broker.name} já perguntou e não contradiga o que ${broker.name} confirmou.`,
+    `Se a pessoa cobrar algo que ${broker.name} prometeu, confirme citando ${broker.name} ("como a ${broker.name} te falou") em vez de tratar como novidade.`,
+    `Se a pessoa pedir algo que você não tem como resolver sozinha, ofereça chamar ${broker.name} de volta e espere a pessoa confirmar que quer isso.`,
+  ];
+
+  if (broker.justReturned) {
+    // The developer's own words for this, 21/09/2026: acknowledge the
+    // transition, and do not assume there is anything left to do. The handover
+    // is visible to the lead, so pretending it did not happen reads as odd;
+    // inventing a task because a turn must produce one reads as pushy.
+    lines.push(
+      `${broker.name} acabou de devolver a conversa para você. Diga em uma frase curta que você voltou e pergunte se pode ajudar em mais alguma coisa — sem inventar assunto, sem repetir o que ${broker.name} já resolveu.`,
+    );
+  }
+
+  return `\nEsta conversa passou por uma pessoa do time:\n- ${lines.join("\n- ")}`;
+}
+
 function notes(input: TurnPromptInput): string {
   const lines: string[] = [];
   if (input.notUnderstood) {
@@ -256,6 +301,7 @@ export function turnBriefing(input: TurnPromptInput): string {
     renderSlots(input.intent, input.slots),
     acknowledgement(input),
     task(input),
+    multiParty(input),
     notes(input),
   ]
     .filter((block) => block !== "")

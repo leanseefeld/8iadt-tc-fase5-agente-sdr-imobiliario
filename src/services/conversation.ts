@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
-import { agencies, conversations, events as events_, leads, messages } from "../db/schema.ts";
+import { agencies, conversations, events as events_, leads, messages, users } from "../db/schema.ts";
 import { getConfig } from "../core/config.ts";
 import { EMPTY_SLOTS, slotsSchema, type Intent, type SlotKey, type Slots } from "../domain/slots.ts";
 import type { HandoffReason } from "../domain/handoff.ts";
@@ -66,6 +66,17 @@ export interface TurnConversation {
   lastAgentMessageAt: Date | null;
 }
 
+/**
+ * A conversation changed hands. Spec 005 writes these; the turn reads them so
+ * the agent knows a person spoke in the middle of its own transcript.
+ */
+export interface Handover {
+  kind: "assumed" | "returned";
+  /** The broker's first name — what the agent may say to the lead. */
+  name: string;
+  at: Date;
+}
+
 export interface LoadedTurn {
   agency: { id: string; slug: string };
   lead: TurnLead;
@@ -76,6 +87,14 @@ export interface LoadedTurn {
   unanswered: TurnMessage[];
   /** Lead messages inside the current `CHAT_BUDGET_WINDOW_MINUTES` window. */
   budgetUsed: number;
+  /**
+   * Takeovers and hand-backs inside the history window, oldest first, plus the
+   * name of whoever wrote each `broker` message. Empty for the overwhelming
+   * majority of conversations, which no person ever touched.
+   */
+  handovers: Handover[];
+  /** Broker user id → first name, for labelling their messages in the prompt. */
+  brokerNames: Record<string, string>;
 }
 
 /** Either end of the turn: the route handler has a session, the worker has an id. */
@@ -138,7 +157,7 @@ export async function loadTurn(ref: TurnRef): Promise<LoadedTurn | null> {
   const conversationId = row.conversation.id;
   const windowStart = new Date(Date.now() - config.CHAT_BUDGET_WINDOW_MINUTES * 60_000);
 
-  const [recent, unanswered, budget] = await Promise.all([
+  const [recent, unanswered, budget, handoverRows] = await Promise.all([
     db
       .select()
       .from(messages)
@@ -168,6 +187,20 @@ export async function loadTurn(ref: TurnRef): Promise<LoadedTurn | null> {
           gte(messages.createdAt, windowStart),
         ),
       ),
+    // The handover trail. Two event types, one index (`events_conversation_created_idx`),
+    // and almost always zero rows — a conversation a person never touched pays
+    // one cheap indexed lookup and nothing else.
+    db
+      .select({ type: events_.type, at: events_.createdAt, name: users.name, userId: users.id })
+      .from(events_)
+      .innerJoin(users, eq(users.id, events_.actorUserId))
+      .where(
+        and(
+          eq(events_.conversationId, conversationId),
+          inArray(events_.type, ["conversation.assumed", "conversation.returned"]),
+        ),
+      )
+      .orderBy(asc(events_.createdAt)),
   ]);
 
   return {
@@ -198,7 +231,20 @@ export async function loadTurn(ref: TurnRef): Promise<LoadedTurn | null> {
     history: recent.reverse().map(toTurnMessage),
     unanswered: unanswered.map(toTurnMessage),
     budgetUsed: budget[0]?.count ?? 0,
+    handovers: handoverRows.map((row) => ({
+      kind: row.type === "conversation.assumed" ? ("assumed" as const) : ("returned" as const),
+      name: firstName(row.name),
+      at: row.at,
+    })),
+    brokerNames: Object.fromEntries(
+      handoverRows.map((row) => [row.userId, firstName(row.name)]),
+    ),
   };
+}
+
+/** "Ana Ribeiro" → "Ana". The lead is being introduced to a person, not a record. */
+function firstName(full: string): string {
+  return full.trim().split(/\s+/)[0] ?? full;
 }
 
 function toTurnMessage(row: typeof messages.$inferSelect): TurnMessage {

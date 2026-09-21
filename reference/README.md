@@ -44,11 +44,11 @@ Continua sendo material útil para:
 
 | Arquivo | Descrição |
 |---|---|
-| `Desafio - Agente SDR Imobiliario.md` | Enunciado original do Tech Challenge (este **é** a fonte dos requisitos de negócio) |
-| `arquitetura e visão.md` | Ensaio inicial de arquitetura, mercado e diferenciais |
-| `mvp - telas e arquitetura.md` | Desenho do MVP: pontos de interação, telas e arquitetura proposta |
-| `exemplos de conversas.md` | Conversas de exemplo para os três cenários |
-| `ideas.md` | Anotações soltas |
+| [`Desafio - Agente SDR Imobiliario.md`](<Desafio - Agente SDR Imobiliario.md>) | Enunciado original do Tech Challenge (este **é** a fonte dos requisitos de negócio) |
+| [`arquitetura e visão.md`](<arquitetura e visão.md>) | Ensaio inicial de arquitetura, mercado e diferenciais |
+| [`mvp - telas e arquitetura.md`](<mvp - telas e arquitetura.md>) | Desenho do MVP: pontos de interação, telas e arquitetura proposta |
+| [`exemplos de conversas.md`](<exemplos de conversas.md>) | Conversas de exemplo para os três cenários |
+| [`ideas.md`](ideas.md) | Anotações soltas |
 
 > Exceção: o enunciado do desafio é a fonte legítima dos **requisitos de negócio**.
 > O que não vale é tratar as decisões **técnicas** dos outros documentos como

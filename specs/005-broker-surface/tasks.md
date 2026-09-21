@@ -38,6 +38,8 @@ slice. Commit per task. `[P]` = no ordering constraint. Stop on anything listed 
 
 ## Phase 5: Polish
 
+- [ ] T014a [US3] FR-039: `getLeadDetail` computes `summaryStale` from the newest message against `summaryUpdatedAt`; the panel shows a pulsing mark and one sentence, and `WORKER_SWEEP_INTERVAL_MS=15000` is the demo value so "shortly" is true
+
 - [ ] T015 SC-009 (pt-BR, no emoji) and SC-010's 390 px half; `npm run lint`; `npx tsc --noEmit`; `npm test`; `npm run test:integration`; mark 005 done in `specs/BACKLOG.md`
 
 ## Order

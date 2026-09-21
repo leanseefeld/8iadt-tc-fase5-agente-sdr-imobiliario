@@ -518,6 +518,50 @@
   margin: 0 0 0.7rem;
 }
 
+/*
+ * The summary is behind the conversation (FR-039). A pulse rather than a
+ * spinner: nothing is blocked, nothing is being waited on by this screen, and
+ * the work happens in another process on its own clock.
+ */
+.summaryStale {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.stalePulse {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: stalePulse 1.8s ease-in-out infinite;
+}
+
+@keyframes stalePulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+/* A pulse is decoration; motion sickness is not. */
+@media (prefers-reduced-motion: reduce) {
+  .stalePulse {
+    animation: none;
+    opacity: 0.9;
+  }
+}
+
 .summaryText {
   margin: 0 0 0.4rem;
   line-height: 1.45;

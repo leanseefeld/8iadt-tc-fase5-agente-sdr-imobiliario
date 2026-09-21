@@ -112,6 +112,7 @@ The worker summarises off the reply path; a slow or dead summariser costs the le
 - **FR-029**: The transcript shows the whole conversation, never truncated, roles distinct, property cards compact, broker messages labelled as written by a person.
 - **FR-030**: The timeline renders events as pt-BR sentences naming the actor, with times. Entries carrying a `traceId` link to the Langfuse UI on `LANGFUSE_UI_PORT`.
 - **FR-031**: Escape closes and restores focus; full screen on a phone; a lead outside scope behaves as if it does not exist.
+- **FR-039**: When a message is newer than the stored summary, the panel MUST say so — a pulsing mark and one sentence stating that the latest messages are not included and that the summary updates shortly. A conversation with no summary yet reads the same way. "Shortly" is a promise the worker must keep: the demo runs `WORKER_SWEEP_INTERVAL_MS=15000`, so the gap is the debounce plus one sweep.
 
 **Handoff**
 
@@ -140,6 +141,7 @@ Message (the `broker` role), Event (metrics, timeline, outbox).
 - **SC-008**: A takeover reaches the widget within one SSE push, with no message sent, and the agent produces zero replies while paused.
 - **SC-009**: Every broker-facing string is pt-BR, with no emoji.
 - **SC-010**: The panel is keyboard-operable with focus return, and neither list nor panel scrolls sideways at 390 px.
+- **SC-011**: A panel open on a conversation that has moved since its summary shows the stale mark, and stops showing it within one debounce plus one sweep.
 
 *(SC-001, the scoring table, moved with FR-001 to FR-006.)*
 

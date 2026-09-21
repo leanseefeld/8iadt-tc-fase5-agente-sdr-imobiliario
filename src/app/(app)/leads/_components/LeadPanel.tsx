@@ -64,8 +64,22 @@ export function LeadPanel({
         <h3 id="lead-panel-summary" className={styles.sectionTitle}>
           Resumo (IA)
         </h3>
+        {/*
+          A stale summary that looks current is worse than no summary: a broker
+          reads it as "what this lead wants" and walks into the call one
+          exchange behind. The dot says the gap exists and that it closes on its
+          own, so nobody goes looking for a button to press.
+        */}
+        {detail.conversation.summaryStale && (
+          <p className={styles.summaryStale}>
+            <span className={styles.stalePulse} aria-hidden="true" />
+            {detail.conversation.summary === null
+              ? "Resumindo a conversa — o resumo aparece aqui em instantes."
+              : "Este resumo não inclui as últimas mensagens. Será atualizado em instantes."}
+          </p>
+        )}
         <p className={styles.summaryText}>
-          {detail.conversation.summary ?? "Ainda não há um resumo — o worker gera um assim que a conversa avança."}
+          {detail.conversation.summary ?? "Ainda não há um resumo desta conversa."}
         </p>
         {detail.conversation.summaryUpdatedAt && (
           <p className={styles.summaryMeta} title={absoluteTime(detail.conversation.summaryUpdatedAt)}>

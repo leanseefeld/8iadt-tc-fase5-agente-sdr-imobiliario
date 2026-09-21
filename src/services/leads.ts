@@ -239,6 +239,17 @@ export interface LeadDetail {
     slots: Slots;
     summary: string | null;
     summaryUpdatedAt: Date | null;
+    /**
+     * There are turns the summariser has not consumed yet, so what the panel
+     * shows is behind the conversation.
+     *
+     * Read from the outbox rather than by comparing timestamps to the last
+     * message, and the difference matters: the panel promises the summary
+     * updates shortly, and that promise is only true when work is actually
+     * queued. A lead message with no agent turn behind it yet produces no
+     * pending row — nothing is owed, so nothing is claimed.
+     */
+    summaryStale: boolean;
     lastLeadMessageAt: Date | null;
   };
   messages: PanelMessage[];
@@ -271,6 +282,12 @@ export async function getLeadDetail(scope: LeadScope, leadId: string): Promise<L
       summary: conversations.summary,
       summaryUpdatedAt: conversations.summaryUpdatedAt,
       lastLeadMessageAt: conversations.lastLeadMessageAt,
+      // Served by `events_pending_turns_idx`; no extra round trip.
+      summaryStale: sql<boolean>`exists (
+        select 1 from events pending
+         where pending.conversation_id = ${conversations.id}
+           and pending.type = 'conversation.turn'
+           and pending.processed_at is null)`,
     })
     .from(leads)
     .innerJoin(
@@ -346,6 +363,7 @@ export async function getLeadDetail(scope: LeadScope, leadId: string): Promise<L
       slots: readSlots(row.slots),
       summary: row.summary,
       summaryUpdatedAt: row.summaryUpdatedAt,
+      summaryStale: row.summaryStale,
       lastLeadMessageAt: row.lastLeadMessageAt,
     },
     messages: transcript.map((message) => ({

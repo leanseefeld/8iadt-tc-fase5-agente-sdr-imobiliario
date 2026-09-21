@@ -15,6 +15,11 @@ import type { LeadScope } from "../../src/services/auth.ts";
  * nothing, and a broker with the toggle on cannot reach a colleague's lead by id.
  *
  * Reads only. It writes nothing, so it leaves the demo database as it found it.
+ *
+ * **It shares that database with every other integration file**, which run in
+ * parallel and create leads of their own in the same agency. So the assertions
+ * are written against the seeded rows by name, and counts are lower bounds:
+ * anything exact would fail depending on which suite happened to be running.
  */
 const integration = process.env.INTEGRATION === "1";
 
@@ -39,16 +44,23 @@ test("the leads queue is scoped by agency and filtered by Meus leads", {
 
   await t.test("with the toggle off, a broker sees the whole agency", async () => {
     const list = await listLeads(scope, { filter: "todos", mine: false, userId: ana, page: 1 });
-    assert.equal(list.total, 3);
-    assert.equal(list.rows.length, 3);
+    const names = list.rows.map((row) => row.name);
+    assert.ok(names.includes("Camila Andrade"));
+    assert.ok(names.includes("Rafael Souza"), "Bruno's lead is visible to Ana");
+    assert.ok(names.includes("Julia Martins"));
   });
 
   await t.test("with the toggle on, a broker sees only their own leads", async () => {
     const mine = await listLeads(scope, { filter: "todos", mine: true, userId: ana, page: 1 });
-    assert.equal(mine.total, 2);
+    const mineNames = mine.rows.map((row) => row.name);
+    assert.ok(mineNames.includes("Camila Andrade"));
+    assert.ok(mineNames.includes("Julia Martins"));
+    assert.ok(!mineNames.includes("Rafael Souza"), "a colleague's lead is hidden");
+
     const theirs = await listLeads(scope, { filter: "todos", mine: true, userId: bruno, page: 1 });
-    assert.equal(theirs.total, 1);
-    assert.equal(theirs.rows[0].name, "Rafael Souza");
+    const theirNames = theirs.rows.map((row) => row.name);
+    assert.ok(theirNames.includes("Rafael Souza"));
+    assert.ok(!theirNames.includes("Camila Andrade"));
   });
 
   await t.test("the toggle applies to search too", async () => {
@@ -68,7 +80,11 @@ test("the leads queue is scoped by agency and filtered by Meus leads", {
       search: "rafael",
       page: 1,
     });
-    assert.equal(found.total, 1, "search is case-insensitive");
+    assert.deepEqual(
+      found.rows.map((row) => row.name),
+      ["Rafael Souza"],
+      "search is case-insensitive",
+    );
   });
 
   await t.test("rows are ordered by score descending", async () => {
@@ -123,7 +139,11 @@ test("the leads queue is scoped by agency and filtered by Meus leads", {
       userId: ana,
       page: 1,
     });
-    assert.equal(waiting.total, 0, "nothing is paused in the seed");
+    assert.ok(
+      waiting.rows.every((row) => row.conversation.kind === "waiting"),
+      "every row of this filter is paused with no holder",
+    );
+    assert.ok(!waiting.rows.some((row) => row.name === "Camila Andrade"));
 
     const scheduled = await listLeads(scope, {
       filter: "visita_marcada",
@@ -131,8 +151,11 @@ test("the leads queue is scoped by agency and filtered by Meus leads", {
       userId: ana,
       page: 1,
     });
-    assert.equal(scheduled.total, 1);
-    assert.equal(scheduled.rows[0].name, "Camila Andrade");
+    assert.ok(scheduled.rows.some((row) => row.name === "Camila Andrade"));
+    assert.ok(
+      scheduled.rows.every((row) => row.stage === "scheduled"),
+      "the filter returns nothing that is not at that stage",
+    );
   });
 });
 
@@ -145,17 +168,24 @@ test("the funnel metrics read the agency and nothing else", {
   });
 
   const metrics = await getFunnelMetrics({ agencyId, defaultOwnLeadsOnly: false });
-  assert.equal(metrics.totalLeads, 3);
-  assert.equal(metrics.qualifiedLeads, 1, "only the scheduled lead is at qualified or beyond");
-  assert.ok(metrics.qualificationRate !== null && Math.abs(metrics.qualificationRate - 1 / 3) < 1e-9);
-  assert.equal(metrics.confirmedAppointments, 1);
+  assert.ok(metrics.totalLeads >= 3, "the three seeded leads at least");
+  assert.ok(metrics.qualifiedLeads >= 1, "the scheduled lead is at qualified or beyond");
+  assert.ok(metrics.qualifiedLeads <= metrics.totalLeads, "a subset, always");
+  assert.ok(
+    metrics.qualificationRate !== null &&
+      Math.abs(metrics.qualificationRate - metrics.qualifiedLeads / metrics.totalLeads) < 1e-9,
+    "the rate is the two counts and nothing else",
+  );
+  assert.ok(metrics.confirmedAppointments >= 1);
   assert.equal(metrics.recoveredLeads, 0, "spec 006 has not landed");
   assert.ok(
     metrics.medianFirstResponseSeconds !== null && metrics.medianFirstResponseSeconds > 0,
     "the seed answers every demo lead",
   );
 
+  // An agency that does not exist is the only count this file can pin exactly.
   const stranger = await getFunnelMetrics({ agencyId: randomUUID(), defaultOwnLeadsOnly: false });
   assert.equal(stranger.totalLeads, 0);
+  assert.equal(stranger.confirmedAppointments, 0);
   assert.equal(stranger.qualificationRate, null, "no leads is not a rate of zero");
 });

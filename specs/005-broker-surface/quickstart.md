@@ -17,9 +17,14 @@ Users: `ana@demo.com.br` (broker), `carla@demo.com.br` (manager), password `demo
 2. Empty slots *— não informado*; whole transcript; timeline in pt-BR with *ver trace* links.
 3. Escape and back close it; focus returns; list state kept. 390 px: full screen, no side scroll.
 
-## 3 · Summary — SC-005–SC-007
+## 3 · Summary — SC-005–SC-007, SC-011
+
+0. Set `WORKER_SWEEP_INTERVAL_MS=15000` in `.env` and `docker compose up -d worker`. At the
+   production default of 900000 a summary can take a quarter of an hour, which reads as broken.
 
 1. Four-turn widget conversation: within two sweeps the row has a preview (≤ 90 chars) and the panel a summary.
+1a. Send one more message with the panel open: the summary gains a pulsing mark saying it does not
+   include the latest messages, and the mark clears on the next sweep (SC-011).
 2. A message just sent: that conversation is skipped this sweep.
 3. `docker compose up -d --scale worker=2`; one `summary.updated` per conversation per batch. Scale back.
 4. Stop oMLX: widget falls back, screens render, sweep logs failure, summary unchanged.

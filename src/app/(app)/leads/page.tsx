@@ -4,13 +4,15 @@ import { getSession } from "@/core/auth";
 import { getConfig } from "@/core/config";
 import { scopeForUser } from "@/services/auth";
 import { getFunnelMetrics } from "@/services/metrics";
-import { isLeadFilter, listLeads, type LeadFilter } from "@/services/leads";
+import { getLeadDetail, isLeadFilter, listLeads, type LeadFilter } from "@/services/leads";
 import { MetricTiles } from "./_components/MetricTiles";
 import { FilterChips } from "./_components/FilterChips";
 import { MeusLeadsToggle } from "./_components/MeusLeadsToggle";
 import { SearchBox } from "./_components/SearchBox";
 import { LeadRow } from "./_components/LeadRow";
 import { LiveLeads } from "./_components/LiveLeads";
+import { LeadDrawer } from "./_components/LeadDrawer";
+import { LeadPanel } from "./_components/LeadPanel";
 import { buildHref, first, type SearchParamsRecord } from "./_components/query";
 import styles from "./leads.module.css";
 
@@ -42,10 +44,12 @@ export default async function LeadsPage({
   const mineRaw = first(params.mine);
   const mine = mineRaw === undefined ? scope.defaultOwnLeadsOnly : mineRaw === "1";
   const page = Math.max(1, Number(first(params.page)) || 1);
+  const leadId = first(params.lead);
 
-  const [metrics, list] = await Promise.all([
+  const [metrics, list, detail] = await Promise.all([
     getFunnelMetrics(scope),
     listLeads(scope, { filter, mine, userId: session.userId, search, page }),
+    leadId ? getLeadDetail(scope, leadId) : Promise.resolve(null),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(list.total / list.pageSize));
@@ -117,6 +121,17 @@ export default async function LeadsPage({
           </nav>
         )}
       </div>
+
+      {leadId && detail && (
+        <LeadDrawer>
+          <LeadPanel
+            detail={detail}
+            currentUserId={session.userId}
+            role={session.role}
+            langfuseUiPort={getConfig().LANGFUSE_UI_PORT}
+          />
+        </LeadDrawer>
+      )}
     </div>
   );
 }

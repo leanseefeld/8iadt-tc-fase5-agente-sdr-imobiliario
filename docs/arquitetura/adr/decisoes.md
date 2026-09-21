@@ -486,3 +486,33 @@ one); a model-assigned score (rejected again, for ADR 11's reasons).
 is what the dashboard needs. Seeded scores, the bands and
 `tests/score.test.ts` are all rewritten by the implementing spec. Until then the
 dashboard sorts by today's values, which are known to be wrong.
+
+## 21. Sofia says what she is
+
+**Accepted 2026-09-21.**
+
+**Context.** The reply prompt carried the line *"Nunca diz que é uma inteligência
+artificial, um modelo ou um assistente"*, and told the model to sound "como uma
+pessoa de verdade". The consent notice introduced her as *"consultora da
+imobiliária"*. Together those instruct the agent to conceal what it is from
+someone it is simultaneously asking for a phone number — and `reference/` L2 had
+specified "assistente virtual" in the opening, so this was drift, not a decision.
+
+**Decision.** The agent is honest about being an agent.
+
+- She introduces herself as **"Sofia, assistente virtual da imobiliária"** in the
+  consent notice, before the lead has said anything.
+- Asked whether she is human, a robot, an AI or an attendant, she answers truthfully
+  in one sentence and carries on.
+- She never claims to be a person, and never invents a body, an office or a life.
+- The widget header reads **"Sofia · assistente virtual"**, which also gives the
+  takeover badge its meaning: it flips to "Falando com um corretor" when a human
+  actually arrives.
+
+Warmth is unaffected. The voice line now asks for the register of a WhatsApp
+conversation rather than for the claim of being a real person.
+
+**Consequences.** "Conversa humanizada" in the challenge statement is read as
+*a conversation that does not feel like a form*, never as *a conversation that
+passes for human*. Spec 004's US2 title — "a widget that feels human" — is kept
+but means the former. Nothing else changes: no tool, no state, no event.

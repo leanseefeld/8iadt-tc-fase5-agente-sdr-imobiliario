@@ -34,6 +34,9 @@ answer to a question that register says is undecided.
 - **Brazilian Portuguese only**: all UI copy and all agent conversation. There is
   no internationalization framework, no locale switch and no translation keys.
   Strings live directly in the components that render them.
+- **The agent never claims to be human.** It introduces itself as an assistente
+  virtual and answers truthfully when asked what it is (ADR 21). A prompt, a
+  spec or a piece of copy that says otherwise is wrong and gets fixed.
 
 Portuguese domain nouns are translated into English identifiers using the glossary
 in `AGENTS.md` — never transliterated, never left in Portuguese. A `Lead` has a
@@ -203,4 +206,4 @@ concrete second case is speculative generality, with two deliberate exceptions
 recorded in the decision log: `ChannelAdapter` and `JobQueue`, which exist because
 they are the seams the architecture argument rests on.
 
-**Version**: 1.2.0 | **Ratified**: 2026-08-30 | **Last Amended**: 2026-09-08
+**Version**: 1.3.0 | **Ratified**: 2026-08-30 | **Last Amended**: 2026-09-21

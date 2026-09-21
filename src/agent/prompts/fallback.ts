@@ -17,7 +17,7 @@ import type { Question } from "../../domain/slots.ts";
 
 /** The widget's first bubble, rendered locally and never generated (FR-018). */
 export const CONSENT_NOTICE =
-  "Oi! Sou a Sofia, consultora da imobiliária. Para te ajudar a encontrar um imóvel, " +
+  "Oi! Sou a Sofia, assistente virtual da imobiliária. Para te ajudar a encontrar um imóvel, " +
   "vou guardar o que você me contar aqui — o que procura e, mais para frente, seu nome e " +
   "contato — e compartilhar com o corretor que vai te atender. Tudo bem para você?";
 

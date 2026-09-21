@@ -437,7 +437,7 @@ export default function ChatWidget({
         <div className={styles.identity}>
           <p className={styles.agency}>{agencyName}</p>
           <p className={styles.persona}>
-            {status === "paused" ? "Falando com um corretor" : "Sofia · atendimento"}
+            {status === "paused" ? "Falando com um corretor" : "Sofia · assistente virtual"}
           </p>
         </div>
         {status === "paused" ? <span className={styles.badge}>Corretor</span> : null}

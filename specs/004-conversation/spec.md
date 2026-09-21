@@ -45,6 +45,10 @@ the next, never re-asking what was already said.
 
 ### User Story 2 - A widget that feels human, and remembers (Priority: P1)
 
+> **"Feels human" means it does not feel like a form — never that it passes for a
+> person.** The agent introduces itself as *assistente virtual*, answers truthfully
+> when asked what it is, and never claims otherwise (ADR 21, 21/09/2026).
+
 A lead opens the agency's public chat link. The first thing in the conversation is
 the agent's consent notice with an "Aceito" button. The reply appears as it is
 written, after a pause that reads as thinking. Coming back days later resumes the

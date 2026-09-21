@@ -41,6 +41,7 @@ traceability to the challenge statement is unchanged.
 | 14 | — | **Observability hardening** | Langfuse dashboards, cost per qualified lead, business metrics beyond the technical trace. | Diferencial: observabilidade |
 | 15 | — | **RAG** | pgvector in the existing Postgres over property descriptions and commercial policy; hybrid search combining structured filters with semantic matching. | Diferencial: RAG |
 | 16 | — | **Multi-agent routing** | Router in front of the orchestrator, with a specialized investment agent. | Diferencial: multiagentes |
+| 17 | — | **Perfil de provedor em YAML** | Um arquivo por provedor (ou por `provider+model`) declarando como aquele modelo se comporta: **método de extração JSON** (`json_schema` nativo · modo JSON · texto + parser), suporte a tool calling, thinking, tetos de token, cabeçalho de autenticação. `agent/provider.ts` lê o perfil em vez de o código decidir. **Evidência que originou a ideia:** o `generateObject` falha validação em 2 de 3 conversas no `gemma-4-e4b-it-OptiQ-4bit` e a spec 005 teve de pedir JSON em texto e parsear — a mesma escolha que a 004 já tinha feito na extração. O GPT-5 da demonstração faria o contrário. Hoje essa diferença está espalhada por call sites; um perfil a torna configuração, que é o que o ADR 16 e o princípio VI prometem. | Diferencial: portabilidade de provedor · ADR 16 |
 
 ---
 

@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,35 +31,34 @@
 
 ## Notes
 
-**Two [NEEDS CLARIFICATION] markers remain, both deliberate** and both flagged by
-the developer as questions not to be answered by invention:
+**All 16 items pass** as of the clarification session on 2026-09-22. The two
+markers that were open after `/speckit-specify` were resolved by the developer and
+encoded: FR-005/FR-005a (orphaned slots kept, intent change triggers a
+reconfirmation) and FR-023 (an unanswerable question advances the streak but the
+reply says "ainda não consigo te ajudar com isso" rather than claiming
+incomprehension).
 
-- **FR-005** — what happens to slots orphaned by an intent change, and to a value
-  whose meaning does not survive the change (`priceMax` carried from `purchase`
-  into `rental`).
-- **FR-023** — whether a lead question the agent structurally cannot answer yet
-  (an appointment, before spec 006) counts as a misunderstanding.
+**Scope removed in the same session**, on the developer's instruction to hunt
+overengineering:
 
-Both are resolved by `/speckit-clarify`. Everything else passed.
+- FR-007's concrete cascade table left the spec — the mapping is data in code or
+  configuration, not a requirement. The values live in git history and land in
+  `plan.md`.
+- SC-004's "thirty generated states" became one assertion at the briefing
+  boundary, since FR-019 prevents the leak by construction.
+- SC-006 was withdrawn to Assumptions; an elicitation rate cannot be measured with
+  scripted leads.
+- The per-turn action-permission concept was dropped before it existed. Tools
+  state their own when-to-call and when-not-to-call, and refuse to the model.
 
-**Validation notes (one pass, 2026-09-22):**
+**Kept after challenge:** FR-022 (the collision is nearly unreachable but the rule
+is one line, and the implementation carries a comment where it would occur) and
+FR-029, which turned out to close a real gap rather than add a nicety — a first
+fill writes a durable `slot.filled` event that the summariser and the broker
+timeline read, and a revision currently writes nothing.
 
-The spec was drafted with these criteria in hand and reviewed once against them;
-there was no second corrective iteration. What the review confirmed:
-
-- *Requirements stay behavioural.* No FR depends on a file path or an identifier.
-  The mechanism is named precisely — `MergeResult.filled`, `searchDue`,
-  `shouldProposeMeeting` — but only in the "Why this exists" narrative, which is
-  diagnosis, not requirement. That naming is deliberate: the decision register
-  described this defect wrongly once already, and the correction is the most
-  valuable thing this spec carries forward.
-- *One deliberate deviation from the generic checklist.* "No implementation
-  details" is marked passing on the strength of the split above, not because the
-  document avoids technical vocabulary. This project's merged specs (004, 006)
-  name schema columns and modules freely; matching that house style is a
-  considered choice, not an oversight.
-- *Success criteria carry thresholds.* SC-006 in particular names the number that
-  decides whether the elicitation design works, and says what to change if it is
-  missed — without it, "the reconfirmation elicits corrections" would be untestable.
-- *Success criteria avoid product names.* SC-007 asks for "a trace showing both
-  calls, both results, and their order" rather than naming the tracing tool.
+**One deliberate deviation from the generic checklist.** "No implementation
+details" passes on the strength of requirements staying behavioural; the
+mechanism is named only in the "Why this exists" narrative and the Clarifications.
+This project's merged specs name schema columns and modules freely, and matching
+that house style is a considered choice.

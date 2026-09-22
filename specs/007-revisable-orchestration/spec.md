@@ -48,6 +48,17 @@ Fixing the accounting is therefore the whole feature, and the tool loop is what
 makes the fix worth having: once a criterion can change, a search has to be able
 to run again.
 
+## Clarifications
+
+### Session 2026-09-22
+
+- Q: Who invokes the property search — the model, or code that notices a criterion changed? → A: The model calls it. Before concluding the local model cannot, the **tool contract** is fixed first: narrow schema, explicit when-to-call *and* when-not-to-call, defined error handling. Today's code-invoked search was a response to a 4-bit model grabbing tools instead of writing sentences, which is a contract problem before it is a model problem.
+- Q: Should a turn carry a set of actions the model is not allowed to call? → A: No permitted-set layer. Two fronts instead: each tool's own definition says when it should and should not be called, and a tool invoked when its preconditions do not hold returns a **refusal result to the model** rather than failing the turn.
+- Q: How should the reconfirmation elicitation rate be handled? → A: Keep the design, move the rate out of Success Criteria and into Assumptions as the stated hypothesis. Validate with the larger model if the small one cannot carry it; 8 of 10 scripted runs passing is acceptable, with the shortfall recorded as technical debt rather than blocking the slice.
+- Q: Cut SC-004's thirty generated states? → A: Yes. FR-019 makes the leak structurally impossible, so one assertion on the briefing payload replaces the generated sweep.
+- Q: Cut FR-022's greeting-beats-apology rule? → A: No — the requirement stays. The implementation carries a comment at the point where the collision would occur, so the reasoning is findable from the code.
+- Q: What does a slot change record today? → A: A durable row in the append-only `events` table (`slot.filled`, payload `{ slot, value }`, PII-masked), which the summariser and the broker's timeline read — not merely a log line or a span. A **revision currently emits nothing at all**, so FR-029 closes a real gap rather than adding a nicety.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - The lead changes their mind and the conversation carries on (Priority: P1)
@@ -105,8 +116,10 @@ the trace contains both calls with both results, in order.
 2. **Given** a turn that called the same action twice, **Then** the trace shows
    two distinct steps, each naming the action, its arguments, its result and its
    position in the turn.
-3. **Given** the model attempts an action it is not permitted to take in this
-   turn, **Then** the action does not execute and the turn still produces a reply.
+3. **Given** the model calls an action whose preconditions do not hold, **Then**
+   the action does not take effect, the model receives a refusal it can read, and
+   the turn still produces a reply. There is no separate per-turn permission
+   layer: the same actions are offered every turn and each one guards itself.
 4. **Given** an action fails, **Then** the turn still produces a reply and the
    failure appears in the trace rather than reaching the lead as an error.
 
@@ -259,12 +272,17 @@ messages, and assert the offer appears exactly once.
   zero.
 - **FR-004**: A slot MUST NOT return to unfilled. An empty value over a filled
   slot is still refused.
-- **FR-005**: When the lead's intent changes, the system MUST handle the slots the
-  previous script filled that the new script does not use, and the values whose
-  meaning does not survive the change. [NEEDS CLARIFICATION: kept dormant and
-  restored if the lead switches back, cleared outright, or kept but excluded from
-  every downstream use — and separately, whether a `priceMax` of 700000 carried
-  from `purchase` into `rental` is kept, cleared, or re-asked]
+- **FR-005**: When the lead's intent changes, slots the previous script filled
+  that the new script does not use MUST be **kept, not cleared**. They remain
+  available to the rest of the system — broker routing by specialization reads
+  them today, and a specialist agent may read them later — and they MUST NOT be
+  presented to the lead as current criteria or counted toward the new script's
+  completion.
+- **FR-005a**: An intent change MUST trigger a reconfirmation, because a value
+  carried across scripts can survive with the wrong meaning — a budget stated for
+  a purchase is not a monthly rent. The reconfirmation restates the carried
+  criteria whose meaning the change puts in doubt, and asks its single question
+  like any other.
 
 **Reconfirmation**
 
@@ -272,19 +290,11 @@ messages, and assert the offer appears exactly once.
   the immediately preceding agent turn was not itself a reconfirmation, the system
   MUST produce a reconfirmation: a restatement of the dependants' current values
   followed by exactly one confirmation question.
-- **FR-007**: The dependants of each slot are fixed, and MUST be:
-
-  | Revised | Restated for confirmation |
-  |---|---|
-  | `priceMax` | `bedrooms`, `neighborhoods` |
-  | `bedrooms` | `priceMax`, `urgency` |
-  | `neighborhoods` | `priceMax`, `bedrooms` |
-  | `urgency` | — none |
-  | `ticket` | `returnExpectation`, `urgency` |
-  | `returnExpectation` | `ticket` |
-  | `investorProfile` | `ticket`, `returnExpectation` |
-  | `name`, `contact` | **never reconfirmed** |
-  | `intent` | not a reconfirmation — a script change |
+- **FR-007**: The dependants of each revisable slot — which other criteria a
+  change to it puts in doubt — MUST be declared as **data in one place**, a single
+  table in code or configuration, never spread through conditional logic, so that
+  the mapping can be read and changed without reading the orchestrator. The
+  consent-gated contact criteria MUST NOT appear as dependants of anything.
 
 - **FR-008**: A reconfirmation MUST contain exactly one question, satisfying the
   one-question-per-message rule without exception.
@@ -303,9 +313,17 @@ messages, and assert the offer appears exactly once.
   call again with different arguments before any reply text is produced. The
   number of steps per turn MUST be bounded, and reaching the bound MUST still
   produce a reply.
-- **FR-013**: Property search MUST become a repeatable action: it MUST run again
-  when a criterion it depends on changes, and MUST NOT be limited to the single
-  turn that completes the script.
+- **FR-013**: Property search MUST become a repeatable action **called by the
+  model**, not invoked from code on the model's behalf. It MUST be callable more
+  than once in a turn and on any turn, not only the one that completes the script.
+- **FR-013a**: Every action's definition MUST state, in the definition itself,
+  **when it should be called and when it should not** — the tool contract is part
+  of the prompt contract. Before any conclusion that the local model cannot drive
+  an action reliably, the contract MUST be narrowed and retested: an ambiguous
+  schema or an overlapping description is a design defect, not a model limit.
+- **FR-013b**: An action called when its preconditions do not hold MUST return a
+  **refusal result the model can read and act on** — never an exception, never
+  silence, and never a failed turn.
 - **FR-014**: The scope of a search — the agency it may read, and the refusal to
   search for an `investment` lead — MUST NOT be derivable from anything the model
   supplies.
@@ -339,12 +357,16 @@ messages, and assert the offer appears exactly once.
   agent message.
 - **FR-022**: If a re-entry greeting and an apology for not understanding would
   both apply to one turn, the greeting MUST win — the apology is false, since the
-  message was understood.
+  message was understood. FR-021 makes this collision nearly unreachable; the rule
+  stays for the conversation handed back before this feature existed and for a
+  failed write, and the implementation MUST carry a comment at the point where the
+  collision would occur, so a later reader finds the reasoning from the code.
 - **FR-023**: A lead question the agent cannot act on because the capability has
-  not been built yet MUST be handled explicitly rather than by silence. [NEEDS
-  CLARIFICATION: does a question the agent structurally cannot answer — an
-  appointment, before spec 006 exists — count as a misunderstanding and advance
-  the handoff streak, or is it answered honestly and excluded from the count?]
+  not been built yet MUST advance the consecutive-misunderstanding count like any
+  other unanswerable turn — reaching a human is the right outcome for a lead
+  asking something this agent genuinely cannot do. The **reply MUST say that**,
+  not claim incomprehension: *"ainda não consigo te ajudar com isso"* rather than
+  *"desculpa, não entendi"*. The agent understood; it cannot act.
 
 **Guards and what leaves with the rigidity**
 
@@ -366,8 +388,12 @@ messages, and assert the offer appears exactly once.
   the turn's trace.
 - **FR-028**: The span contract MUST extend the existing one rather than
   introduce a parallel vocabulary.
-- **FR-029**: A revision MUST be recorded as an event distinguishable from a
-  first fill, so that a conversation's history shows what changed and when.
+- **FR-029**: A revision MUST be recorded in the append-only event log,
+  distinguishable from a first fill. Today a first fill writes a durable
+  `slot.filled` row that the summariser and the broker's timeline read, and a
+  revision writes **nothing at all** — so a criterion that changed is invisible to
+  every consumer of that log. Whether this is a new event type or the existing one
+  carrying the previous value is an implementation choice.
 
 **Configuration and measurement**
 
@@ -406,15 +432,16 @@ No new table. Slot state, conversation state and the event log already exist.
 - **SC-003**: In ten runs where a criterion changes after properties were shown,
   the lead sees results matching the new criteria in ten of ten.
 - **SC-004**: A lead asking what the agent is filtering by receives the held
-  criteria, with no internal assessment value appearing in any reply, across at
-  least thirty generated states.
+  criteria. Separately, one assertion proves the briefing payload carries only the
+  permitted fields — the leak is prevented by construction (FR-019), so it is
+  checked once at the boundary rather than sampled across generated replies.
 - **SC-005**: A reconfirmation carries exactly one question in one hundred out of
   one hundred generated revision cases, and no reconfirmation ever directly
   follows another.
-- **SC-006**: In at least a third of reconfirmations driven through the local
-  model, the lead's answer corrects something that was not the slot they
-  originally revised — the elicitation effect the design is for. Below that, the
-  restatement wording is the thing to change, not the cascade.
+- **SC-006**: *Withdrawn 2026-09-22.* The reconfirmation elicitation rate moved
+  to Assumptions as a stated hypothesis — it cannot be honestly measured with
+  scripted leads. The number is not renumbered away, so a reader looking for
+  SC-006 finds where it went.
 - **SC-007**: A turn that searches, reads the result and searches again produces a
   trace showing both calls, both results, and their order, with no step missing.
 - **SC-008**: Following a completed qualification with three unrelated messages
@@ -438,6 +465,20 @@ No new table. Slot state, conversation state and the event log already exist.
   its own writer rather than this slice's reply path.
 - **Spec 005 owns the broker surface.** This slice adds the written re-entry
   message to the existing handback path and changes no screen.
+- **The reconfirmation rests on a hypothesis, stated rather than measured.**
+  People asked to review one or two settled answers tend to proactively correct a
+  third that was not mentioned — which is why the cascade restates dependants
+  instead of simply acknowledging the change. That rate cannot be honestly
+  measured here: a scripted lead corrects exactly what the script says, and a
+  second model playing the lead measures that model. It is therefore the design's
+  stated expectation, not a gate. **Validation policy:** if the small local model
+  cannot carry the reconfirmation, validate with the larger one; 8 of 10 scripted
+  runs passing is acceptable to ship, with the shortfall recorded as technical
+  debt rather than blocking the slice.
+- **Tool contracts are prompt contracts.** An action the model fails to call
+  correctly is treated first as an ambiguous schema, an overlapping description or
+  undefined error handling — a design defect — and only then as a model
+  limitation. This reverses the reflex behind today's code-invoked search.
 - **The script still decides what to ask.** Constitution principle V's rule that
   deciding the next question is deterministic code is **unchanged** and honoured:
   the script computes what remains and the briefing states it with emphasis. What

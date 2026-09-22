@@ -58,6 +58,7 @@ to run again.
 - Q: Cut SC-004's thirty generated states? → A: Yes. FR-019 makes the leak structurally impossible, so one assertion on the briefing payload replaces the generated sweep.
 - Q: Cut FR-022's greeting-beats-apology rule? → A: No — the requirement stays. The implementation carries a comment at the point where the collision would occur, so the reasoning is findable from the code.
 - Q: What does a slot change record today? → A: A durable row in the append-only `events` table (`slot.filled`, payload `{ slot, value }`, PII-masked), which the summariser and the broker's timeline read — not merely a log line or a span. A **revision currently emits nothing at all**, so FR-029 closes a real gap rather than adding a nicety.
+- Q: Should a revision be distinguishable from a first fill by its own event type? → A: No. Reuse `slot.filled` unchanged; a revision is told apart only by comparing against the previous value. Revisit only if a real consumer needs the distinction cheaply.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -388,12 +389,15 @@ messages, and assert the offer appears exactly once.
   the turn's trace.
 - **FR-028**: The span contract MUST extend the existing one rather than
   introduce a parallel vocabulary.
-- **FR-029**: A revision MUST be recorded in the append-only event log,
-  distinguishable from a first fill. Today a first fill writes a durable
-  `slot.filled` row that the summariser and the broker's timeline read, and a
+- **FR-029**: A revision MUST be recorded in the append-only event log, using the
+  **existing** `slot.filled` event and its existing payload. Today a first fill
+  writes a durable row that the summariser and the broker's timeline read, and a
   revision writes **nothing at all** — so a criterion that changed is invisible to
-  every consumer of that log. Whether this is a new event type or the existing one
-  carrying the previous value is an implementation choice.
+  every consumer of that log. Emitting the same event closes that gap and nothing
+  more: a revision is then distinguishable from a first fill only by comparing the
+  value against the previous event for that slot. **No new event type and no extra
+  payload field.** Revisit only if a concrete consumer needs to tell the two apart
+  without that comparison.
 
 **Configuration and measurement**
 

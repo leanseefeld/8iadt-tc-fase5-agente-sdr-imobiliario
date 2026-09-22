@@ -2,7 +2,7 @@
 
 > **Não normativo. Isto é exploração, não decisão.** Nada aqui é requisito, e
 > nenhuma spec deve citar este documento como autoridade. A decisão pendente é a
-> [6](../decisoes-pendentes.md#6-roteamento-multiagente--decidir-antes-da-spec-006).
+> [6](../decisoes-pendentes.md#6-orquestração-do-agente--decidir-antes-da-spec-006).
 > Aberto em 20/09/2026 a pedido do desenvolvedor.
 
 ## O que está em questão
@@ -135,3 +135,47 @@ neste projeto é defeito.
    ganho de cache medido (88% e 98% contra 25%)?
 4. O que acontece quando o modelo escolhe mal duas vezes seguidas: reprovar e
    cair para a ordem preferida do código é rede de segurança suficiente?
+
+---
+
+## Direção do desenvolvedor, 22/09/2026
+
+Esta exploração **continua aberta**, mas deixa de ser o caminho do MVP. O que foi
+decidido conduzir agora é a **opção 1** — tornar o estado revisável — somada a uma
+coisa que a opção 1 original não tinha: **o modelo chama as ações por tool call,
+com ida e volta**, e o código valida o que sai.
+
+Pontos registrados pelo desenvolvedor:
+
+1. **Todos os critérios são revisáveis**, não só os de busca. Nada de separar
+   "fatos de qualificação" write-once de "critérios de busca" revisáveis: a
+   revisão vale para o conjunto.
+2. **O bloqueio da spec 006 não é multiagência, é orquestração.** A pendência 6
+   foi aberta com o título errado. Multiagência continua sendo o item 16 do
+   backlog, e esta decisão é insumo dela, não o contrário.
+3. **Um agente investidor, se existir, entra como tool call** do agente
+   principal, alterando o estado da orquestração — que continua derivado do
+   modelo de dados no Postgres, nunca de memória de processo. Não está decidido.
+4. **Tool calling de ida e volta antes da resposta**: o modelo avalia o resultado
+   de uma chamada e pode chamar de novo com outros parâmetros, e só então a
+   resposta é gerada.
+5. **O modelo continua recebendo orientação forte sobre o que precisa ser
+   perguntado.** Quem escolhe a próxima pergunta segue sendo o roteiro; o que o
+   modelo ganha é a capacidade de agir e de revisar, não a de conduzir.
+6. **`EVIDENCE_WORDS` talvez saia inteiro**, mas só depois de medir a nova
+   orquestração. Candidato natural a virar configuração por modelo — item 17 do
+   backlog, o perfil de provedor em YAML.
+7. **Guardrails: simplicidade é requisito.** As guardas de saída ficam; o que
+   estiver compensando a rigidez do estado sai junto com a rigidez.
+
+### Modelo
+
+`gemma-4-12B-it-OptiQ-4bit` passa a ser o modelo de trabalho: mais confiável em
+tool calling, o que é pré-requisito do desenho acima. Custos conhecidos: mais
+lento, mais memória por token e **não aguenta 4 requisições em paralelo** — todo
+benchmark ou profile roda serializado, ou o número medido é o da fila, não o do
+modelo.
+
+Se ele não sustentar o laço de tools, o plano B é um modelo hospedado no Azure
+OpenAI / AI Foundry pela assinatura de estudante, o que a ADR 16 já prevê em três
+variáveis de ambiente.

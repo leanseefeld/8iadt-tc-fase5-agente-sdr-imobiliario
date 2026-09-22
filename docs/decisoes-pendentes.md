@@ -15,7 +15,7 @@ resolveu.
 
 ## Em aberto
 
-### 6. Roteamento multiagente — decidir **antes** da spec 006
+### 6. Orquestração do agente — decidir **antes** da spec 006
 
 **Pergunta:** a conversa continua sendo conduzida por uma única máquina de slots,
 ou passa a ter um roteador na frente do orquestrador, que classifica o que a
@@ -98,6 +98,33 @@ Duas coisas ficaram **deliberadamente sem correção** até esta decisão ser to
    entendida, as duas instruções vão juntas no briefing e o modelo escolhe — na
    prática escolheu o pedido de desculpas, e a frase de reentrada ("Sofia aqui de
    volta") não apareceu. Quem redesenhar a máquina decide qual voz ganha.
+
+**Direção dada em 22/09/2026 — o caminho escolhido para o MVP.** O título desta
+pendência estava errado: o que bloqueia a 006 é a **orquestração**, não a
+multiagência. Multiagência volta a ser apenas o item 16 do backlog, e recebe
+desta decisão o insumo de que um agente especialista (o investidor, por exemplo)
+provavelmente entra como **tool call** do agente principal, mudando o estado da
+orquestração — estado que continua derivado do modelo de dados no Postgres.
+
+O caminho para o MVP é a **opção 1, ampliada**:
+
+- **todos** os critérios revisáveis, não só os de busca;
+- as ações (buscar, propor, marcar, remarcar, cancelar) viram **tool calls do
+  modelo**, com ida e volta antes da resposta — o modelo lê o resultado e pode
+  chamar de novo com outros parâmetros;
+- o roteiro continua dizendo ao modelo, com ênfase, o que ainda precisa ser
+  perguntado: quem conduz a qualificação segue sendo o código;
+- as guardas de **saída** ficam; o `EVIDENCE_WORDS` é candidato a sair inteiro,
+  mas só depois de medir a nova orquestração — possivelmente virando configuração
+  por modelo (item 17 do backlog).
+
+Como o modelo passa a escolher **ações**, e não a próxima pergunta, o princípio V
+da constituição provavelmente não precisa de emenda — mas a spec que implementar
+isto tem de dizer isso explicitamente, e não passar por cima em silêncio.
+
+A exploração dos tópicos ([`exploracoes/roteiro-por-topicos.md`](exploracoes/roteiro-por-topicos.md))
+**continua aberta** para depois do MVP, com a direção de 22/09 registrada no fim
+dela.
 
 ### 8. Pesos do score, faixas e sinal do investidor — ficam com a spec do ADR 20
 

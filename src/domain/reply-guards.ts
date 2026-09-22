@@ -260,7 +260,7 @@ export function createReplyGuard(context: GuardContext): { check(chunk: string):
         if (questionsSoFar === MAX_QUESTIONS && !secondQuestionIsAllowed(sentence, context)) {
           return reject(
             "questionCount",
-            "the second question neither refines the pending slot nor asks the next one",
+            "the second question might not refine the pending slot nor ask the next one",
           );
         }
       }

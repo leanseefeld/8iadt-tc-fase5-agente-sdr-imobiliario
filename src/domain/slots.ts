@@ -89,13 +89,13 @@ export const SLOT_TOPIC_WORDS: Record<Askable, readonly string[]> = {
   intent: ["comprar", "compra", "alugar", "aluguel", "investir", "investimento", "objetivo"],
   priceMax: ["preço", "preços", "valor", "orçamento", "faixa", "reais", "r$", "financiamento", "entrada"],
   bedrooms: ["quarto", "quartos", "dormitório", "dormitórios", "suíte", "suítes", "escritório"],
-  neighborhoods: ["bairro", "bairros", "região", "regiões", "zona", "localização", "onde", "metrô"],
-  urgency: ["prazo", "urgência", "urgente", "mudar", "mudança", "pressa", "quando", "breve"],
+  neighborhoods: ["bairro", "bairros", "região", "regiões", "zona", "localização", "onde", "metrô", "trabalho"],
+  urgency: ["prazo", "urgência", "urgente", "mudar", "mudança", "pressa", "quando", "breve", "entregar", "devolver"],
   investorProfile: ["investidor", "investidora", "experiência", "experiente", "perfil", "carteira", "primeira"],
   ticket: ["ticket", "aporte", "capital", "destinar", "valor", "reais", "r$"],
   returnExpectation: ["retorno", "renda", "valorização", "rentabilidade", "yield", "expectativa", "aluguel"],
   name: ["nome", "chamar", "chamo"],
-  contact: ["telefone", "whatsapp", "e-mail", "email", "contato", "celular", "número"],
+  contact: ["telefone", "whatsapp", "whats", "zap", "e-mail", "email", "contato", "celular", "número", "fone"],
 };
 
 /**

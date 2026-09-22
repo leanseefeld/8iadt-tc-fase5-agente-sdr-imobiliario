@@ -131,7 +131,7 @@ docker compose exec -e INTEGRATION=1 app npm run test:integration
 
 Cenário 1 (compra) and Cenário 2 (investimento) run through
 `services/conversation.ts`, asserting slot state per turn, one question per agent
-message, no re-asked slot, properties drawn from the seeded catalog for Cenário 1
+message, no re-asked slot *(the no-re-ask half is superseded by ADR 22 — see `spec.md`)*, properties drawn from the seeded catalog for Cenário 1
 (never searched for Cenário 2), and `proposeMeeting` called at the end of each —
 not a handoff.
 

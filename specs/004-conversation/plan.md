@@ -219,7 +219,7 @@ volume, so the quickstart says how to create it on a database that already exist
 
 **10 · Scenario tests.** Cenário 1 and Cenário 2 driven through
 `services/conversation.ts`, not over HTTP, against the local model and the seeded
-catalog: slot state per turn, one question per agent message, no re-asked slot, every
+catalog: slot state per turn, one question per agent message, no re-asked slot *(the no-re-ask half is superseded by ADR 22 — see `spec.md`)*, every
 suggested property a seeded row matching the filters, `proposeMeeting` called at the end
 of each — not a handoff.
 

@@ -38,7 +38,8 @@ instead of inventing an answer.
 - **`domain/` imports nothing.** Pure entities and rules, no I/O.
 - **No repository layer.** Services own their Drizzle queries.
 - **The slot machine decides what to ask next, not the model.** One question per
-  message; never re-ask a filled slot.
+  message. Every criterion is revisable, `intent` included, and re-asking a
+  filled slot is discouraged in the prompt, not forbidden in code (ADR 22).
 - **Only `src/agent/provider.ts` imports a provider SDK.** Swapping oMLX for a
   hosted endpoint must be a change to two env vars and nothing else.
 - **Every LLM call is traced to Langfuse, fire-and-forget.** Telemetry never blocks

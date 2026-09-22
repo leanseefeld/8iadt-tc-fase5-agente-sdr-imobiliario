@@ -77,7 +77,10 @@ The qualification state machine is the source of truth, not the model.
 - Slot extraction uses structured output against a Zod schema.
 - **Deciding what to ask next is deterministic code.** The model never chooses.
 - One question per message. Two questions in one message break qualification.
-- A filled slot is never asked again.
+- A filled slot may be asked about again, and the state is revisable — `intent`
+  included. Repeating a question is **discouraged in the prompt, not forbidden in
+  code**: a lead changes their mind, and a criterion that contradicts another is
+  worth raising. A revision is something learned, never a misunderstanding.
 
 This matters more with a 4-bit local model than it would with a frontier model,
 and it is the difference between a qualification flow and a chatbot that loops.
@@ -206,4 +209,4 @@ concrete second case is speculative generality, with two deliberate exceptions
 recorded in the decision log: `ChannelAdapter` and `JobQueue`, which exist because
 they are the seams the architecture argument rests on.
 
-**Version**: 1.3.0 | **Ratified**: 2026-08-30 | **Last Amended**: 2026-09-21
+**Version**: 1.4.0 | **Ratified**: 2026-08-30 | **Last Amended**: 2026-09-22

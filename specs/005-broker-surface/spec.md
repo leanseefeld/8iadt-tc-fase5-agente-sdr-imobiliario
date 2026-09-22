@@ -10,9 +10,10 @@ Everything here reads columns spec 004 already writes. Nothing here talks to a l
 except the takeover path of US2.
 
 **Scope cut, 2026-09-20.** The score, qualification, handoff and meeting **rules**
-left this spec. They depend on two decisions — ADR 20's uncapped score and the open
-decision 6 on how the conversation asks — and belong to the spec that implements
-them. This one displays what is stored and never computes it.
+left this spec. They depended on two decisions, and those decisions turned out to
+belong to **two** specs, not one: ADR 20's uncapped score goes to **spec 008**, and
+decision 6 on how the conversation asks was resolved on 22/09/2026 by ADR 22 and
+goes to **spec 007**. This one displays what is stored and never computes it.
 
 **Built by 004, checked against this spec on 2026-09-16** (unit suite, database, and a
 live probe past qualification — `scripts/probe-after-qualification.ts`):
@@ -20,7 +21,7 @@ live probe past qualification — `scripts/probe-after-qualification.ts`):
 | Piece | Verdict |
 |---|---|
 | Score stored per turn | Works. Seeded scores disagree with the formula, and the formula itself is being replaced (ADR 20) — out of scope here. |
-| Handoff, pause, meeting offer | Work, but fire wrongly after qualification (decision 6). Named here so nobody reports them as this slice's defects. |
+| Handoff, pause, meeting offer | Work, but fire wrongly after qualification (decision 6, resolved by ADR 22 → spec 007). Named here so nobody reports them as this slice's defects. |
 | Paused means silent | Verified in 004 T047. |
 | Sweep registry | Matches `modelo-de-dados.md` §6. Append to it. |
 | Notifier | Per conversation only; no agency stream, no status push. |
@@ -78,7 +79,7 @@ The worker summarises off the reply path; a slow or dead summariser costs the le
 
 - **FR-007**: `leads.status` moves forward only along `new → qualifying → qualified → scheduled → visited → won | lost`. The agent owns stages up to `qualified` (004); a broker MAY set `won`/`lost` from any stage, and `visited` through 006's action. Conversation and follow-up state are separate axes (`modelo-de-dados.md` §7).
 
-*(FR-001 to FR-006 — scoring, qualification, handoff and meeting rules — moved to the spec that implements ADR 20 and decision 6.)*
+*(FR-001 to FR-006 — scoring, qualification, handoff and meeting rules — moved out. Split on 22/09/2026: the **score** half, weights and temperature bands, is **spec 008** (ADR 20); the **behaviour** half — when qualification, handoff and the meeting offer fire — is **spec 007** (ADR 22).)*
 
 **Asynchronous summary**
 

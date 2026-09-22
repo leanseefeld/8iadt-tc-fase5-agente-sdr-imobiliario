@@ -516,3 +516,80 @@ conversation rather than for the claim of being a real person.
 *a conversation that does not feel like a form*, never as *a conversation that
 passes for human*. Spec 004's US2 title — "a widget that feels human" — is kept
 but means the former. Nothing else changes: no tool, no state, no event.
+
+## 22. Revisable qualification state, and actions as tool calls
+
+**Accepted 2026-09-22.** Resolves pending decision 6, which was filed under the
+wrong title — what blocks spec 006 is the orchestration, not multi-agency.
+Amends **constitution principle V** (one bullet, named below) and extends ADR 14.
+Implemented by spec 007.
+
+**Context.** The state model says a conversation has exactly one thing to do:
+fill slots. Everything after qualification — navigating, refining, comparing,
+asking about a property, rescheduling — has no representation, so it is read as
+non-comprehension. Three manifestations were observed in real conversations:
+
+- *"E na zona norte, tem algo?"* after the script finished (16/09,
+  `scripts/probe-after-qualification.ts`, e4b local): the lead is walked into a
+  handoff at score 100.
+- *"Moema ou Vila Mariana"* after *"zona sul"*, mid-script: same outcome.
+- *"E a visita de amanhã, continua de pé?"* the turn after a broker handed the
+  conversation back (21/09): the lead is returned to a human for having spoken
+  about what the human just arranged.
+
+**The mechanism, corrected.** The register recorded this as `mergeSlots`
+discarding a value because the slot was already filled. That is not what the code
+does: merge rule 1 replaces a filled slot with a different non-empty value. The
+defect is one layer up, in the turn's accounting — `MergeResult.filled` counts
+only `empty → filled`, so `learnedSomething` cannot see a revision, `notUnderstood`
+fires, and two consecutive turns reach the handoff rule. Three consequences follow
+from the same gap: `searchDue` keys off the same set and so never re-runs a search
+when a criterion changes; `shouldProposeMeeting` is a pure function of slot state
+and so re-fires every turn once the script is done; and `cardsJustShown` exists as
+a one-turn shield over the symptom.
+
+**Decision.**
+
+- **Every criterion is revisable, `intent` included.** Merge rule 3 (intent moves
+  only from `undefined`) is withdrawn. A revision is *learning*, not a
+  misunderstanding, and must count as such in the turn's accounting. What happens
+  to slots orphaned by an intent change is spec 007's to answer.
+- **A filled slot may be asked about again.** Discouraged in the prompt, not
+  forbidden in code — a model that notices a lead wants five bedrooms under
+  R$ 2.000/month should be able to revisit the budget. This is the one bullet of
+  principle V that is amended.
+- **Deciding what to ask next stays deterministic code.** The script still tells
+  the model, with emphasis, what is left to ask. This bullet of principle V is
+  **not** amended, and the topics exploration stays parked.
+- **Actions become model tool calls with a round trip before the reply.** The
+  model reads a tool result and may call again with different parameters; only
+  then is the reply generated. Spec 007 takes the loop and `searchProperties`;
+  `proposeMeeting`/`bookMeeting` stay declared and inert until spec 006 supplies a
+  calendar.
+- **Offering a meeting becomes a suggestion, derived from Postgres.** Whether an
+  offer is already live is read from `appointment.proposed` and the message
+  record, never from a flag or process memory.
+- **Output guards stay.** `EVIDENCE_WORDS` is a candidate to remove whole, but
+  only after the new orchestration can be measured — backlog item 17.
+- **Every step of the loop is its own span.** Tool name, arguments, result and
+  step index, nested under the turn, so a trace reads as an ordered back-and-forth.
+
+**Alternatives considered.** The topics design, where the orchestrator hands over
+the remaining topics and the model conducts — parked on 22/09 and kept in
+[`exploracoes/roteiro-por-topicos.md`](../../exploracoes/roteiro-por-topicos.md);
+it buys revision for free but requires amending principle V's load-bearing bullet
+and moves the choice of subject to a 4-bit model. Deterministic phases
+(`qualifying → browsing → scheduling`) — compatible with the constitution as
+written, but it *adds* machinery where revisability *removes* it. Option 1
+unwidened, separating write-once qualification facts from revisable search
+criteria — rejected because the split is arbitrary at the boundary and "pode ser
+quinta em vez de quarta?" falls on the write-once side.
+
+**Consequences.** `nextQuestion` survives; `cardsJustShown` and part of
+`looksLikeSteering` exist to compensate for rigidity and go with it. Multi-agency
+returns to backlog item 16 and takes from this decision the input that a
+specialist agent likely arrives as a tool call of the main agent, mutating
+orchestration state that stays derived from the data model. Rescheduling and
+cancelling become spec 009, inside the MVP. The working model becomes
+`gemma-4-12B-it-OptiQ-4bit`, for tool-calling reliability; its concurrency is to
+be measured rather than assumed.

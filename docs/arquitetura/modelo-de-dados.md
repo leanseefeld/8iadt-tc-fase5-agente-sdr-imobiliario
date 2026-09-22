@@ -144,8 +144,14 @@ for update skip locked`.
 ## 2. Slots — o estado da qualificação
 
 Um objeto JSON validado por Zod em `domain/`. O roteiro por intenção define a
-**ordem** das perguntas; a slot machine pergunta o primeiro slot vazio dessa ordem
-e nunca pergunta um preenchido.
+**ordem** das perguntas; a slot machine pergunta o primeiro slot vazio dessa ordem.
+
+> **Revisável desde o [ADR 22](adr/decisoes.md#22-revisable-qualification-state-and-actions-as-tool-calls)**
+> (22/09/2026). Todo critério pode ser revisto, **`intent` inclusive** — a regra de
+> merge 3, que só deixava o intent sair de `undefined`, caiu junto. Uma revisão é
+> algo aprendido, nunca uma não compreensão. Repetir uma pergunta já respondida é
+> desencorajado no prompt, não proibido no código. O que acontece com os slots que
+> uma troca de intenção deixa órfãos é da spec 007.
 
 | Intenção | Ordem dos slots |
 |---|---|

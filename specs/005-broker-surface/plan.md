@@ -6,8 +6,8 @@
 
 One screen at `/leads` with a URL-addressed panel, an agency-scoped SSE stream, four
 handoff actions, and one worker consumer turning `conversation.turn` events into
-summaries. No new table, no new dependency, no rule this slice owns: the score and
-the conversation's behaviour belong to the spec that implements ADR 20 and decision 6.
+summaries. No new table, no new dependency, no rule this slice owns: the score belongs
+to spec 008 (ADR 20) and the conversation's behaviour to spec 007 (ADR 22).
 All list state lives in the query string; the panel is the same route, so the list
 never unmounts.
 
@@ -15,7 +15,7 @@ never unmounts.
 
 | Original plan | Reality | Consequence |
 |---|---|---|
-| `domain/scoring.ts`, `services/qualification.ts`, `lead.qualified` | `domain/score.ts` and `domain/handoff.ts` exist; `commitTurn` writes score and stage | All of it leaves this slice with FR-001…FR-006 (ADR 20 + decision 6). |
+| `domain/scoring.ts`, `services/qualification.ts`, `lead.qualified` | `domain/score.ts` and `domain/handoff.ts` exist; `commitTurn` writes score and stage | All of it leaves this slice with FR-001…FR-006 — score to 008 (ADR 20), behaviour to 007 (ADR 22). |
 | Seed scores consistent with §3 | They are not, and the formula is being replaced | Left alone on purpose. The seed fix here is brokers, preview line and turn events only. |
 | Qualification-rate tile from `lead.qualified` | The event is never written | Tile reads `leads.status` instead — one fewer dependency, same number. |
 | `jobs/consumers.ts` + worker loop to build | Exists | Append `summarize`. |

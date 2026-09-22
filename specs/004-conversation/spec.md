@@ -9,6 +9,15 @@ public chat widget, Langfuse span contract, observability Compose profile. Cover
 *atendimento conversacional · qualificação · continuidade · Cenários 1 e 2 ·
 integração com base de imóveis · UX*.
 
+> **Superseded in part by [ADR 22](../../docs/arquitetura/adr/decisoes.md#22-revisable-qualification-state-and-actions-as-tool-calls)**
+> (22/09/2026), implemented by spec 007. This spec stands as the record of what was
+> built, but three of its rules no longer hold: **FR-002**'s "a filled slot MUST never
+> be asked about again" (now discouraged in the prompt, not forbidden in code),
+> **FR-004**'s "the intent MUST only move from undefined to a value" (every criterion
+> is revisable, `intent` included), and the reading of a revision as non-comprehension.
+> US1's "never re-asking what was already said" and the no-re-ask assertions in
+> `plan.md`, `tasks.md` and `quickstart.md` are superseded with them.
+
 This slice is the demonstration: a lead opens a link, types in Portuguese, is
 qualified one question at a time, sees three real properties from the seeded
 catalog, and is handed to a broker — every turn traced, every slot persisted.

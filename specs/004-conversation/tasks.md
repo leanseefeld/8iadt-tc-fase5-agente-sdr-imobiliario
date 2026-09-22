@@ -37,7 +37,7 @@ description: "Task list for the conversation slice"
 
 ## Phase 3: User Story 1 — Qualified one question at a time (P1) 🎯 MVP
 
-**Goal / test**: a turn runs end to end through the service layer — call it directly with the Cenário 1 messages and assert slot state, one question per reply, no re-ask.
+**Goal / test**: a turn runs end to end through the service layer — call it directly with the Cenário 1 messages and assert slot state, one question per reply, no re-ask. *(the no-re-ask half is superseded by ADR 22 — see `spec.md`)*
 
 - [x] T014 [US1] Write the idempotency index migration in `src/db/migrations/` per [data-model.md](data-model.md) §5
 - [x] T015 [US1] Implement `loadTurn` in `src/services/conversation.ts` — agency by slug, lead by `externalId`, active conversation, last `MODEL_HISTORY_WINDOW` messages, the session's message count within `CHAT_BUDGET_WINDOW_MINUTES`, all scoped by `agencyId`

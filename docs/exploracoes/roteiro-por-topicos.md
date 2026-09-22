@@ -1,9 +1,11 @@
 # Exploração: tópicos em vez de slot machine
 
 > **Não normativo. Isto é exploração, não decisão.** Nada aqui é requisito, e
-> nenhuma spec deve citar este documento como autoridade. A decisão pendente é a
-> [6](../decisoes-pendentes.md#6-orquestração-do-agente--decidir-antes-da-spec-006).
-> Aberto em 20/09/2026 a pedido do desenvolvedor.
+> nenhuma spec deve citar este documento como autoridade. Aberto em 20/09/2026 a
+> pedido do desenvolvedor. A pendência 6 que o originou foi **resolvida em
+> 22/09/2026** pelo [ADR 22](../arquitetura/adr/decisoes.md#22-revisable-qualification-state-and-actions-as-tool-calls),
+> que escolheu outro caminho para o MVP — ver a direção no fim deste documento.
+> Esta exploração segue aberta para depois do MVP.
 
 ## O que está em questão
 
@@ -172,9 +174,21 @@ Pontos registrados pelo desenvolvedor:
 
 `gemma-4-12B-it-OptiQ-4bit` passa a ser o modelo de trabalho: mais confiável em
 tool calling, o que é pré-requisito do desenho acima. Custos conhecidos: mais
-lento, mais memória por token e **não aguenta 4 requisições em paralelo** — todo
-benchmark ou profile roda serializado, ou o número medido é o da fila, não o do
-modelo.
+lento e mais memória por token.
+
+**Correção de 22/09/2026.** Este parágrafo dizia que o modelo *"não aguenta 4
+requisições em paralelo"*. Isso nunca foi medido — não há benchmark no repositório
+que sustente a afirmação, e ela estava sendo herdada como fato. São duas coisas
+diferentes, e só a segunda é verdadeira sem verificação:
+
+1. **"Não aguenta 4 em paralelo"** é uma afirmação sobre capacidade, e está
+   **em aberto**. Se aguentar, rode em paralelo. A medição é uma tarefa da spec
+   007: estender `scripts/tool-smoke.ts` para disparar N turnos concorrentes e
+   comparar a latência por requisição em N=1 e N=4. Se a latência em N=4 for ~4×
+   a de N=1, é fila; se for parecida, é paralelismo real.
+2. **"Um benchmark em paralelo mede a fila, não o modelo"** vale para qualquer
+   servidor que enfileira, independentemente deste modelo. É uma ressalva sobre
+   como ler o número, não uma proibição de rodar em paralelo.
 
 Se ele não sustentar o laço de tools, o plano B é um modelo hospedado no Azure
 OpenAI / AI Foundry pela assinatura de estudante, o que a ADR 16 já prevê em três

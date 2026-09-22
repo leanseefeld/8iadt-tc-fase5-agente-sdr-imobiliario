@@ -69,7 +69,7 @@ export const QUESTIONS: Record<Askable, string> = {
   intent: "Você está procurando um imóvel para comprar, para alugar ou para investir?",
   priceMax: "Qual faixa de preço você tem em mente?",
   bedrooms: "Quantos quartos você precisa?",
-  neighborhoods: "Tem algum bairro ou região específica em mente, ou está aberto a sugestões?",
+  neighborhoods: "Tem algum bairro ou região específica em mente, ou aceita sugestões?",
   urgency: "Você precisa se mudar em breve ou ainda é uma pesquisa inicial?",
   investorProfile: "Essa seria sua primeira aplicação em imóveis ou você já investe no setor?",
   ticket: "Qual valor você pensa em destinar a esse investimento?",

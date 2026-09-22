@@ -322,7 +322,7 @@ function demoLeads(): DemoLead[] {
           role: "agent",
           content:
             "Anotado, dois quartos. Tem algum bairro ou região específica em mente, " +
-            "ou está aberto a sugestões?",
+            "ou aceita sugestões?",
           minutesAgo: 19,
         },
       ],

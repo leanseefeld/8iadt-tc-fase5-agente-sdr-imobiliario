@@ -10,60 +10,76 @@ Dois públicos, dois modos de interação completamente diferentes: o lead conve
 
 ### 1.1 Lead — jornada completa
 
-| # | Ponto de interação | Gatilho | O que acontece | Canal |
-|---|---|---|---|---|
-| L1 | **Entrada** | Lead clica no widget, escaneia QR do anúncio ou abre link `t.me` | Sessão criada, lead anônimo registrado | Widget / Telegram |
-| L2 | **Saudação + opt-in** | Primeira mensagem | Agente se apresenta como assistente virtual e declara finalidade do uso dos dados | Chat |
-| L3 | **Captura de intenção** | Lead descreve o que quer | Classificação: compra / aluguel / investimento / indefinido | Chat |
-| L4 | **Qualificação (slot filling)** | Intenção identificada | Perguntas sequenciais, uma por vez, conforme roteiro da intenção | Chat |
-| L5 | **Identificação** | Slots principais preenchidos | Agente pede nome e telefone/e-mail — pede tarde, depois de já ter entregado valor | Chat |
-| L6 | **Apresentação de imóveis** | Filtros suficientes | 2 a 3 cards com foto, preço, quartos, bairro | Chat |
-| L7 | **Refinamento** | Lead reage aos imóveis | Ajuste de filtros e nova busca | Chat |
-| L8 | **Proposta de agendamento** | Lead demonstra interesse | Agente oferece horários concretos, não "quando você prefere?" | Chat |
-| L9 | **Confirmação** | Lead escolhe horário | Resumo do agendamento + confirmação | Chat |
-| L10 | **Handoff para humano** | Lead pede pessoa, ou pergunta fora de escopo, ou score alto | Agente avisa que vai chamar um corretor e para de responder | Chat |
-| L11 | **Fallback** | Agente não entende após 2 tentativas | Reconhece a limitação e oferece humano | Chat |
-| L12 | **Follow-up proativo** | Conversa parada há N horas | Agente reabre com contexto: "sobre o apê de 2 quartos em Moema..." | Chat |
-| L13 | **Opt-out** | Lead pede para parar | Agente confirma, marca `do_not_contact`, encerra follow-ups | Chat |
-| L14 | **Retorno** | Lead volta dias depois | Agente reconhece o histórico e retoma de onde parou | Chat |
+
+| #   | Ponto de interação              | Gatilho                                                          | O que acontece                                                                    | Canal             |
+| --- | ------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------- |
+| L1  | **Entrada**                     | Lead clica no widget, escaneia QR do anúncio ou abre link `t.me` | Sessão criada, lead anônimo registrado                                            | Widget / Telegram |
+| L2  | **Saudação + opt-in**           | Primeira mensagem                                                | Agente se apresenta como assistente virtual e declara finalidade do uso dos dados | Chat              |
+| L3  | **Captura de intenção**         | Lead descreve o que quer                                         | Classificação: compra / aluguel / investimento / indefinido                       | Chat              |
+| L4  | **Qualificação (slot filling)** | Intenção identificada                                            | Perguntas sequenciais, uma por vez, conforme roteiro da intenção                  | Chat              |
+| L5  | **Identificação**               | Slots principais preenchidos                                     | Agente pede nome e telefone/e-mail — pede tarde, depois de já ter entregado valor | Chat              |
+| L6  | **Apresentação de imóveis**     | Filtros suficientes                                              | 2 a 3 cards com foto, preço, quartos, bairro                                      | Chat              |
+| L7  | **Refinamento**                 | Lead reage aos imóveis                                           | Ajuste de filtros e nova busca                                                    | Chat              |
+| L8  | **Proposta de agendamento**     | Lead demonstra interesse                                         | Agente oferece horários concretos, não "quando você prefere?"                     | Chat              |
+| L9  | **Confirmação**                 | Lead escolhe horário                                             | Resumo do agendamento + confirmação                                               | Chat              |
+| L10 | **Handoff para humano**         | Lead pede pessoa, ou pergunta fora de escopo, ou score alto      | Agente avisa que vai chamar um corretor e para de responder                       | Chat              |
+| L11 | **Fallback**                    | Agente não entende após 2 tentativas                             | Reconhece a limitação e oferece humano                                            | Chat              |
+| L12 | **Follow-up proativo**          | Conversa parada há N horas                                       | Agente reabre com contexto: "sobre o apê de 2 quartos em Moema..."                | Chat              |
+| L13 | **Opt-out**                     | Lead pede para parar                                             | Agente confirma, marca `do_not_contact`, encerra follow-ups                       | Chat              |
+| L14 | **Retorno**                     | Lead volta dias depois                                           | Agente reconhece o histórico e retoma de onde parou                               | Chat              |
+
 
 **Regras que valem a pena definir explicitamente no MVP:**
+
 - Uma pergunta por mensagem. Duas perguntas juntas quebram a qualificação
 - Nunca perguntar o que já foi respondido — a máquina de slots é a fonte da verdade, não o LLM
 - Follow-up respeita janela 9h–20h e limite de 3 tentativas
 - Handoff é irreversível sem ação humana — o agente não "retoma sozinho"
 
+
+
 ### 1.2 Corretor
 
-| # | Ponto de interação | Gatilho |
-|---|---|---|
-| C1 | **Login** | Acesso ao painel |
-| C2 | **Notificação de lead qualificado** | Lead atinge score mínimo (no MVP: badge no painel; depois: e-mail/push) |
-| C3 | **Consulta da fila de leads** | Rotina diária |
-| C4 | **Leitura da ficha** | Abre um lead — resumo IA primeiro, transcrição depois |
-| C5 | **Assumir conversa** | Botão que pausa o agente |
-| C6 | **Responder manualmente** | Envia mensagem pelo mesmo chat |
-| C7 | **Devolver ao agente** | Botão que reativa a automação |
-| C8 | **Atualizar status** | Marca ganho / perdido / em negociação |
-| C9 | **Consultar agenda** | Ver visitas do dia |
+
+| #   | Ponto de interação                  | Gatilho                                                                 |
+| --- | ----------------------------------- | ----------------------------------------------------------------------- |
+| C1  | **Login**                           | Acesso ao painel                                                        |
+| C2  | **Notificação de lead qualificado** | Lead atinge score mínimo (no MVP: badge no painel; depois: e-mail/push) |
+| C3  | **Consulta da fila de leads**       | Rotina diária                                                           |
+| C4  | **Leitura da ficha**                | Abre um lead — resumo IA primeiro, transcrição depois                   |
+| C5  | **Assumir conversa**                | Botão que pausa o agente                                                |
+| C6  | **Responder manualmente**           | Envia mensagem pelo mesmo chat                                          |
+| C7  | **Devolver ao agente**              | Botão que reativa a automação                                           |
+| C8  | **Atualizar status**                | Marca ganho / perdido / em negociação                                   |
+| C9  | **Consultar agenda**                | Ver visitas do dia                                                      |
+
+
+
 
 ### 1.3 Gerente comercial
 
-| # | Ponto de interação | Gatilho |
-|---|---|---|
-| G1 | **Métricas de funil** | Abre o painel — números no topo da lista de leads |
-| G2 | **Visão de todos os leads** | Mesma tela do corretor, sem filtro de propriedade |
-| G3 | **Reatribuição de lead** | Corretor sem capacidade ou lead mal distribuído |
+
+| #   | Ponto de interação          | Gatilho                                           |
+| --- | --------------------------- | ------------------------------------------------- |
+| G1  | **Métricas de funil**       | Abre o painel — números no topo da lista de leads |
+| G2  | **Visão de todos os leads** | Mesma tela do corretor, sem filtro de propriedade |
+| G3  | **Reatribuição de lead**    | Corretor sem capacidade ou lead mal distribuído   |
+
+
+
 
 ### 1.4 Fora do MVP (deliberadamente)
 
 Vale citar na apresentação como roadmap consciente, não esquecimento:
+
 - Tela de configuração do agente (prompts, roteiros, horários) — no MVP fica em arquivo de config
 - Cadastro/CRUD de imóveis — catálogo entra por seed
 - Gestão de usuários — usuários vêm por seed
 - Relatório por campanha de marketing
 
 ---
+
+
 
 ## Parte 2 — Telas
 
@@ -186,7 +202,11 @@ Grid de imóveis com filtros básicos. Existe para dar credibilidade na demo: pr
 
 ---
 
+
+
 ## Parte 3 — Arquitetura
+
+
 
 ### 3.1 Decisão central: monolito modular
 
@@ -198,7 +218,9 @@ Três propriedades garantem a escalabilidade sem reescrita:
 
 1. **API stateless** — nenhum estado em memória de processo. Escala horizontal é só aumentar réplicas
 2. **Estado externalizado** — Postgres e Redis são serviços externos, não processos filhos
-3. **Comunicação por fila desde o início** — o worker já é um processo separado consumindo fila. Extrair para outro serviço depois é mudar deploy, não código
+3. **Comunicação por fila desde o início** — o worker já é um processo separado consumindo fila. Extrair para outro serviço depois já tem um ponto de integração preparado
+
+
 
 ### 3.2 Diagrama de componentes
 
@@ -256,6 +278,8 @@ Três propriedades garantem a escalabilidade sem reescrita:
    │  DASHBOARD — Next.js  →  consome a mesma API             │
    └──────────────────────────────────────────────────────────┘
 ```
+
+
 
 ### 3.3 Estrutura de pastas
 
@@ -320,6 +344,7 @@ followup_jobs      id, conversation_id, attempt, scheduled_for, status
 ### 3.5 Fluxos
 
 **Síncrono — mensagem do lead**
+
 ```
 1. Canal → webhook → Adapter normaliza
 2. Carrega conversa + slots (Redis, fallback Postgres)
@@ -332,6 +357,7 @@ followup_jobs      id, conversation_id, attempt, scheduled_for, status
 ```
 
 **Assíncrono — follow-up**
+
 ```
 1. Worker roda a cada 15 min
 2. Busca conversas: sem resposta > N h, ativas,
@@ -340,9 +366,12 @@ followup_jobs      id, conversation_id, attempt, scheduled_for, status
 4. Envia via Adapter · registra tentativa e evento
 ```
 
+
+
 ### 3.6 Deploy e caminho de escala
 
 **Local**
+
 ```yaml
 services:
   api:      FastAPI · uvicorn
@@ -358,17 +387,21 @@ Um `docker compose up` sobe tudo. É isso que torna a demo confiável.
 
 **Caminho de escala, sem reescrita:**
 
-| Pressão | Ação | Toca o código? |
-|---|---|---|
-| Mais conversas simultâneas | Réplicas da API | Não |
-| Follow-ups atrasando | Réplicas do worker | Não |
-| Fila insuficiente | Redis → SQS/Pub-Sub | Só a implementação da interface de fila |
-| Banco saturado | Read replica + pgbouncer | Não |
-| RAG entra em cena | `CREATE EXTENSION vector` no mesmo Postgres | Novo módulo, nada existente |
-| WhatsApp aprovado | Nova classe em `channels/` | Uma classe |
-| Multiagentes | Roteador antes do orquestrador | Camada nova, orquestrador intacto |
-| Voice AI | Middleware STT no Adapter | Orquestrador intacto |
-| Serviço precisa isolar | Extrai módulo → serviço próprio | Fronteiras já existem |
+
+| Pressão                                                                                       | Ação                                        | Toca o código?                                                         |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------- |
+| Mais conversas simultâneas                                                                    | Réplicas da API (hospedagem)                | Não                                                                    |
+| Follow-ups atrasando                                                                          | Réplicas do worker (hospedagem)             | Não                                                                    |
+| Fila insuficiente                                                                             | Redis → SQS/Pub-Sub (hospedagem ou serviço) | Só a implementação da interface de fila + container ou serviço externo |
+| Banco saturado                                                                                | Read replica + pgbouncer                    | Não                                                                    |
+| Customização do agente com documentos de referência (RAG)RAG em documentação e entra em cena | `CREATE EXTENSION vector` no mesmo Postgres | Novo módulo e nova etapa no agente                                     |
+| WhatsApp aprovado                                                                             | Nova classe em `channels/`                  | Uma classe                                                             |
+| Multiagentes                                                                                  | Roteador antes do orquestrador              | Camada nova, orquestrador intacto                                      |
+| Voice AI                                                                                      | Middleware STT para os Adapters             | Orquestrador intacto                                                   |
+| Serviço precisa isolar                                                                        | Extrai módulo → serviço próprio             | Sim, e fronteiras já existem                                           |
+
+
+
 
 ### 3.7 Práticas que custam pouco e sustentam a escala
 
@@ -382,15 +415,19 @@ Um `docker compose up` sobe tudo. É isso que torna a demo confiável.
 
 ---
 
+
+
 ## Resumo executivo
 
-| Dimensão | Decisão |
-|---|---|
-| Telas | 6 (widget, login, painel, ficha, agenda, catálogo) |
-| Serviços em execução | 4 (api, worker, postgres, redis) + frontend |
-| Padrão arquitetural | Monolito modular, stateless, worker desde o dia 1 |
-| Abstrações que sustentam o futuro | `ChannelAdapter`, `LLMClient`, `Repository`, fila |
-| Deploy | Docker Compose → PaaS → cloud gerenciada |
-| Custo de escalar | Réplicas e serviços gerenciados, não reescrita |
+
+| Dimensão                          | Decisão                                            |
+| --------------------------------- | -------------------------------------------------- |
+| Telas                             | 6 (widget, login, painel, ficha, agenda, catálogo) |
+| Serviços em execução              | 4 (api, worker, postgres, redis) + frontend        |
+| Padrão arquitetural               | Monolito modular, stateless, worker desde o dia 1  |
+| Abstrações que sustentam o futuro | `ChannelAdapter`, `LLMClient`, `Repository`, fila  |
+| Deploy                            | Docker Compose → PaaS → cloud gerenciada           |
+| Custo de escalar                  | Réplicas e serviços gerenciados, não reescrita     |
+
 
 O argumento de arquitetura para a banca: **cada diferencial do enunciado tem um ponto de encaixe já previsto no desenho.** RAG entra no Postgres que já existe, WhatsApp é uma classe no diretório de canais, multiagentes é uma camada antes do orquestrador, voice é um middleware no adapter. Não construímos tudo — construímos o lugar de tudo.

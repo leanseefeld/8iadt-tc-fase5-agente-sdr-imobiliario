@@ -51,6 +51,29 @@ export function reconfirmationFor(
 no configuration read. Two revisions in one turn yield the **union** of their
 dependants, deduplicated, in script order, with unfilled dependants omitted.
 
+## 2a. The extraction result, in `agent/orchestrator.ts`
+
+```ts
+interface Extraction {
+  calls: CommittedToolCall[];
+  leadAskedForHuman: boolean;
+  optedOut: boolean;
+  saidSomething: boolean;
+  /** NEW — the lead tried to convey something, rather than reacting or greeting. */
+  attemptedAnswer: boolean;
+  dropped: string[];
+  failed: boolean;
+}
+```
+
+Read from the same JSON the call already returns, via the same `isTrue` coercion
+as `askedForHuman` and `optOut`. **No second call, no new prompt, no keyword
+list.**
+
+When the extraction fails entirely (both attempts), `failed` is already true and
+is now **read**: the turn holds the count and replies technically (FR-003c).
+`attemptedAnswer` is not consulted on that path, so its default does not matter.
+
 ## 3. The offer, in `domain/handoff.ts`
 
 `shouldProposeMeeting` stops being a pure function of slot state alone. The fact

@@ -57,6 +57,22 @@ FR-029, which turned out to close a real gap rather than add a nicety — a firs
 fill writes a durable `slot.filled` event that the summariser and the broker
 timeline read, and a revision currently writes nothing.
 
+**Second clarify pass, same day, after `plan.md` existed.** The developer found a
+defect the spec did not cover: `notUnderstood` gates on `plausiblyAnswers()`,
+whose noise list is 28 tokens, so *"Nossa, isso seria bom haha"* and *"opa, tá
+aí?"* both count as attempted answers and earn an apology plus a step toward
+handoff. That produced FR-003a/FR-003b, and three further clarifications:
+
+- **FR-003c** — a failed extraction call no longer counts as a misunderstanding.
+  Found while probing the new boundary: a provider outage currently hands *every*
+  live conversation to a broker within two turns.
+- **FR-003d** — a conversational or failed turn **holds** the count; only learning
+  something resets it. Without this, a lead alternating unintelligible and chatty
+  messages would never reach a human.
+- **Scope deliberately not added** — no second "no-progress" counter. Recorded as
+  backlog item 27 instead, with the alternative (counting how often the same
+  question is re-asked) noted beside it.
+
 **One deliberate deviation from the generic checklist.** "No implementation
 details" passes on the strength of requirements staying behavioural; the
 mechanism is named only in the "Why this exists" narrative and the Clarifications.

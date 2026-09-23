@@ -115,9 +115,11 @@ Principle V has four bullets. This slice touches one of them and honours the res
   that currently says *"Nunca pergunte de novo…"*.
 
 **No new violation, no Complexity Tracking entry.** The one thing that could look
-like added machinery — the reconfirmation — removes more than it adds: it arrives
-with the deletion of `cardsJustShown` and part of the steering shield, both of
-which exist only to compensate for the rigidity being removed.
+like added machinery — the reconfirmation — removes more than it adds. The slice
+as a whole deletes `cardsJustShown`, the fallback-shielding half of the steering
+check, merge rule 3, and `plausiblyAnswers`'s mis-use in the misunderstanding
+decision. Those deletions are ordered: the card shield goes **after** the
+attempted-answer fact replaces it, never before.
 
 ## Project Structure
 
@@ -172,11 +174,19 @@ copy already lives.
 
 The order is chosen so that the riskiest thing is not also the first thing.
 
-**Phase A — the accounting fix, no model involved.** `MergeResult.revised`,
-merge rule 3 withdrawn, `learnedSomething` and `notUnderstood` updated,
-`searchDue` widened and its false comment corrected. Pure functions, unit tests,
-no loop, no new call. **This alone closes SC-001 and SC-002** and is independently
+**Phase A — the accounting fix.** `MergeResult.revised`, merge rule 3 withdrawn,
+`learnedSomething` and `notUnderstood` redefined, `searchDue` widened and its
+false comment corrected. Mostly pure functions and unit tests, no loop, no new
+call. **This alone closes SC-001, SC-002 and SC-004a** and is independently
 shippable. If everything after it were cut, the defect would still be fixed.
+
+One part of Phase A does touch the model: the extraction JSON gains the
+"attempted an answer" fact (FR-003b) in the call it already makes. This replaces
+`plausiblyAnswers` in the misunderstanding decision, where it never belonged — it
+was written to decide whether a recovery call was worth making, and its 28-token
+noise list counts *"nossa"* and *"tá"* as attempted answers. That mis-reuse is why
+*"Nossa, isso seria bom haha"* and *"opa, tá aí?"* currently earn an apology and a
+step toward handoff.
 
 **Phase B — the derived facts.** "Was the previous turn a reconfirmation" and "is
 an offer already outstanding", both read from existing rows through `services/`.

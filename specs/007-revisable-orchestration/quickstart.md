@@ -58,6 +58,36 @@ The third one is expected to reach a handoff **eventually** — the agent genuin
 cannot answer it until spec 006 — but the reply must read *"ainda não consigo te
 ajudar com isso"*, never *"desculpa, não entendi"* (FR-023).
 
+## 1a. Conversational messages — SC-004a
+
+No model assertion needed for the decision itself, only for the fact feeding it.
+In the widget, mid-script, send each of these and expect **no apology and no
+streak movement**:
+
+- *"Nossa, isso seria bom haha"* — a reaction
+- *"opa, tá aí?"* — a check-in
+- *"valeu!"* — thanks
+- *"👍"* — nothing at all
+
+Then send two in a row and confirm **no handoff**. Today the first two both earn
+*"desculpa, não entendi"*, because `plausiblyAnswers` counts `nossa`, `isso`,
+`seria` and `ta` as attempted answers.
+
+Also check the mixed case — *"opa! pode ser até 900 mil"* — which is social *and*
+substantive: the slot must merge and the turn must be ordinary.
+
+## 1b. The provider is down — SC-004b
+
+Point `PROVIDER_BASE_URL` at a dead port and send ten messages.
+
+Expect ten technical replies, **zero handoffs**, and a fallback streak that never
+moves. Today the second message hands off, so an outage delivers every live
+conversation to the brokers at once.
+
+Also check the ordering case: one unintelligible message, then *"haha ok"*, then
+another unintelligible one. The third turn hands off — the interjection neither
+rescued the count nor accelerated it.
+
 ## 2. The reconfirmation — SC-005
 
 ```bash

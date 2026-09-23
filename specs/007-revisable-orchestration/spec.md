@@ -60,6 +60,12 @@ to run again.
 - Q: What does a slot change record today? → A: A durable row in the append-only `events` table (`slot.filled`, payload `{ slot, value }`, PII-masked), which the summariser and the broker's timeline read — not merely a log line or a span. A **revision currently emits nothing at all**, so FR-029 closes a real gap rather than adding a nicety.
 - Q: Should a revision be distinguishable from a first fill by its own event type? → A: No. Reuse `slot.filled` unchanged; a revision is told apart only by comparing against the previous value. Revisit only if a real consumer needs the distinction cheaply.
 
+### Session 2026-09-22 (second pass, after plan)
+
+- Q: Should a failed extraction call — provider down, both attempts timed out — still count as a misunderstanding? → A: No. The reply says something went wrong technically and asks the lead to repeat; the consecutive-misunderstanding count is untouched. Today an outage counts as two misunderstandings and hands **every live conversation** to a broker at the worst possible moment.
+- Q: With conversational turns no longer advancing the count, what bounds a lead whose answers are repeatedly misread as chat? → A: Nothing new in this slice. Genuine non-comprehension still advances the existing streak, and a misclassified answer simply gets the question re-asked. The separate, more generous no-progress counter is recorded in the backlog for when a real case appears.
+- Q: Does a conversational message after a genuine misunderstanding reset the count or hold it? → A: Hold. The count measures *consecutive failures to understand*, and an interjection is not evidence the confusion cleared: unintelligible → chat → unintelligible still reaches the handoff.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - The lead changes their mind and the conversation carries on (Priority: P1)
@@ -90,6 +96,15 @@ an apology.
 4. **Given** the lead supplies the *same* value a slot already holds, **Then**
    nothing is treated as revised, no reconfirmation is triggered, and the turn
    proceeds as an ordinary one.
+5. **Given** the lead reacts rather than answers — *"Nossa, isso seria bom haha"*
+   — **Then** the turn is not a misunderstanding, the streak does not advance, no
+   apology is produced, and the reply acknowledges the reaction and continues with
+   the pending question.
+6. **Given** the lead checks whether anyone is there — *"opa, tá aí?"* — **Then**
+   the same holds: no apology, no streak, and the agent answers that it is there
+   and repeats what it was waiting on.
+7. **Given** two such messages arrive in a row, **Then** no handoff is raised —
+   the streak never moved.
 
 ---
 
@@ -235,6 +250,18 @@ messages, and assert the offer appears exactly once.
 
 ### Edge Cases
 
+- **The model provider is unreachable mid-conversation.** Every turn replies with
+  a technical apology and the conversation stays with the agent; brokers are not
+  flooded with handoffs because the model is down.
+- **Unintelligible, then chatty, then unintelligible.** The count holds through
+  the middle turn and reaches the handoff on the third — the interjection neither
+  rescues nor accelerates it.
+- **A reaction arriving right after property cards.** Not a misunderstanding —
+  and it must stay that way once the one-turn card shield is deleted.
+- **A message that is both social and substantive** — *"opa! pode ser até 900 mil"*.
+  The attempt is what counts: the slot is merged and the turn is ordinary.
+- **A message of pure punctuation or emoji.** Attempts nothing; same treatment as
+  a reaction, and it must not cost a model call it does not need.
 - **The lead revises two slots in one message.** Both changes are merged; at most
   one reconfirmation is produced for the turn.
 - **The lead revises a slot the script has not reached.** Treated as an ordinary
@@ -271,6 +298,31 @@ messages, and assert the offer appears exactly once.
   intent changed, MUST count as having learned something, MUST NOT be recorded as
   a misunderstanding, and MUST reset the consecutive-misunderstanding count to
   zero.
+- **FR-003a**: A turn MUST be recorded as a misunderstanding only when the lead
+  **attempted to convey something** and the system could neither learn from it nor
+  act on it. A message that attempts nothing — a reaction (*"Nossa, isso seria bom
+  haha"*), a greeting, a check-in (*"opa, tá aí?"*), a thank-you, or any other
+  social remark — MUST NOT count as a misunderstanding, MUST NOT advance the
+  consecutive-misunderstanding count, and MUST NOT produce an apology. The agent
+  acknowledges it and carries on with the pending question.
+- **FR-003b**: Whether the lead attempted an answer MUST be decided by the
+  **model's reading of the message**, reported alongside the extraction that
+  already reports whether the lead asked for a human or opted out — one more
+  fact from a call that is already being made. It MUST NOT be decided by a list
+  of known-harmless words: a fixed vocabulary cannot cover a language, and the
+  one in use today counts *"nossa"*, *"isso"*, *"seria"* and *"tá"* as evidence
+  that an answer was attempted.
+- **FR-003c**: A turn whose extraction **failed outright** — the provider was
+  unreachable or every attempt timed out — MUST NOT be recorded as a
+  misunderstanding and MUST NOT advance the consecutive-misunderstanding count.
+  The reply MUST say that something went wrong on the system's side and ask the
+  lead to repeat, rather than claim not to have understood. The failure is already
+  known to the turn; it is simply not read today, which is why a provider outage
+  currently walks every live conversation into a handoff in two turns.
+- **FR-003d**: A conversational turn and a failed turn both **hold** the
+  consecutive-misunderstanding count where it is — neither advancing it nor
+  resetting it. Only learning something resets it (FR-003). An interjection
+  between two genuine misunderstandings is not evidence the confusion cleared.
 - **FR-004**: A slot MUST NOT return to unfilled. An empty value over a filled
   slot is still refused.
 - **FR-005**: When the lead's intent changes, slots the previous script filled
@@ -380,7 +432,11 @@ messages, and assert the offer appears exactly once.
   the one-turn shield after property cards, and the part of the steering check
   that exists to stop a steering attempt counting as a misunderstanding — MUST be
   removed once the accounting no longer needs them, and their removal MUST NOT
-  reintroduce any behaviour the guards were protecting.
+  reintroduce any behaviour the guards were protecting. The card shield in
+  particular is today the **only** thing keeping a reaction to a property
+  (*"Nossa, isso seria bom haha"*) out of the misunderstanding count, and it lasts
+  exactly one turn: it MUST NOT be removed before FR-003a is in place, or that
+  case regresses instead of improving.
 
 **Observability**
 
@@ -439,6 +495,13 @@ No new table. Slot state, conversation state and the event log already exist.
   criteria. Separately, one assertion proves the briefing payload carries only the
   permitted fields — the leak is prevented by construction (FR-019), so it is
   checked once at the boundary rather than sampled across generated replies.
+- **SC-004a**: Across a set of purely conversational messages — reactions,
+  greetings, check-ins, thanks — zero produce an apology and zero advance the
+  consecutive-misunderstanding count. Two in a row raise no handoff. Today both
+  *"Nossa, isso seria bom haha"* and *"opa, tá aí?"* fail this.
+- **SC-004b**: With the provider made unreachable, ten consecutive turns produce
+  ten technical replies, zero handoffs and a consecutive-misunderstanding count
+  that never moves. Today the second turn hands off.
 - **SC-005**: A reconfirmation carries exactly one question in one hundred out of
   one hundred generated revision cases, and no reconfirmation ever directly
   follows another.

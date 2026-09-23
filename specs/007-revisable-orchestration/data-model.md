@@ -37,13 +37,54 @@ Three derived values in the orchestrator change meaning:
 |---|---|---|
 | `learnedSomething` | `filled.length > 0 \|\| intentChanged` | `filled.length > 0 \|\| revised.length > 0 \|\| intentChanged` |
 | `searchDue` | qualified **and** a qualifying slot was filled this turn | a search-relevant criterion was filled **or revised**, and the script is far enough along to search |
-| `notUnderstood` | `!learnedSomething && …` | same expression, now correct because `learnedSomething` is correct |
+| `notUnderstood` | `!learnedSomething && …` | **redefined — see §2a.** Fixing `learnedSomething` is necessary but not sufficient: the gate on it is also wrong. |
 
 `cardsJustShown` and the fallback-shielding half of `looksLikeSteering` are
-**deleted** once the above lands: both exist to hide the symptom this fixes.
+**deleted** once §2a lands — not before. Both exist to hide the symptom this
+fixes, and `cardsJustShown` is currently the only cover for a reaction to a
+property.
 
 The turn outcome vocabulary gains `revised` and `reconfirmed` alongside the
 existing `replied | fallback | handoff | meeting_proposed | opted_out`.
+
+## 2a. The extraction gains a third fact
+
+The extraction call already returns two booleans the code acts on —
+`askedForHuman` and `optOut`. It gains a third: **did the lead attempt to convey
+something at all**, as against reacting, greeting, thanking or checking in.
+
+| Fact | Today | After |
+|---|---|---|
+| `askedForHuman` | boolean on the extraction JSON | unchanged |
+| `optOut` | boolean on the extraction JSON | unchanged |
+| *attempted an answer* | — | **new**, same call, same JSON, no extra round trip |
+
+`notUnderstood` is then redefined:
+
+| | Today | After |
+|---|---|---|
+| Condition | `!learnedSomething && dropped.length === 0 && plausiblyAnswers(text) && !cardsJustShown && !steering` | `!learnedSomething && dropped.length === 0 && attemptedAnswer && !steering` |
+
+`plausiblyAnswers` and `cardsJustShown` both leave the expression.
+`plausiblyAnswers` keeps its original job — deciding whether a recovery call is
+worth making (FR-011) — which is the low bar it was written for. Reusing it to
+decide "was this a misunderstanding" is the defect: its `NOISE` set holds 28
+tokens, so *"nossa"*, *"isso"*, *"seria"* and *"tá"* all read as attempted
+answers.
+
+Three states, not two. A turn is a misunderstanding, or it **holds** the count, or
+it **resets** it:
+
+| Turn | Count |
+|---|---|
+| Learned something — filled, revised, or intent changed | **reset to 0** |
+| Conversational — attempted nothing | **hold** |
+| Extraction failed outright (`failed === true`) | **hold**, and the reply is technical, not an apology |
+| Attempted something the system could not use | **advance**, and two in a row hand off |
+
+**Ordering constraint.** `cardsJustShown` is today the only thing keeping a
+reaction to a property out of the count. It may not be deleted until the new fact
+is in place (FR-026).
 
 ## 3. The dependant table — the cascade
 

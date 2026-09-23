@@ -14,7 +14,7 @@ phases have proven the accounting works.
 | A — accounting | T004–T020 | US1 (P1) | SC-001, SC-002, SC-004a, SC-004b |
 | B — derived facts | T021–T025 | US6 (P3) | SC-008 |
 | C — reconfirmation | T026–T033 (incl. T031a) | US4 (P2) | SC-005 |
-| D — the loop | T034–T043 (incl. T038a, T043a) | US2 (P1) | SC-003, SC-007 |
+| D — the loop | T034–T043 (incl. T036a, T038a, T043a) | US2 (P1) | SC-003, SC-007 |
 | E — edges | T044–T052 (incl. T051a) | US3, US5 (P2) | SC-004, SC-009 |
 | F — measurement & records | T053–T059 | — | SC-010, SC-011 |
 
@@ -34,8 +34,8 @@ Repository root is the project root. Unit tests run on the host with Node 24
 ## Phase 1: Setup
 
 - [ ] T001 Record the starting baseline: run `docker compose exec app npm test` and note the pass/fail counts in the implementation log. On the host the expected figure is 177 pass / 15 fail, where all 15 are `loadConfig` errors from unset `DATABASE_URL`/`AUTH_SECRET` — those are environment artifacts, not regressions, and must not be "fixed"
-- [ ] T002 [P] (FR-030) Switch `MODEL_ID` to `gemma-4-12B-it-OptiQ-4bit` in `.env.example` and confirm `tests/env-example.test.ts` still passes. *(plan.md lists the switch under phase F; it moves here because phase D cannot be evaluated on the old model)*
-- [ ] T003 [P] Confirm the model is reachable and answers a trivial tool call via `scripts/tool-smoke.ts` before any code changes, so a later failure is attributable to this slice rather than to the environment
+- [ ] T002 [P] (FR-030) Leave `MODEL_ID` on `gemma-4-e4b-it-OptiQ-4bit`. The larger model is an escalation taken on evidence, not an opening move — see T036a. Confirm `tests/env-example.test.ts` passes unchanged
+- [ ] T003 [P] Establish the e4b tool-calling baseline: confirm the model is reachable and answers a trivial tool call via `scripts/tool-smoke.ts` **before any code changes**, so a later failure is attributable to this slice rather than to the environment — and so T036a has a before-and-after to compare
 
 ---
 
@@ -136,6 +136,7 @@ the bound.
 - [ ] T036 [US2] Create `src/agent/act.ts` implementing the bounded loop per [contracts/interfaces.md](contracts/interfaces.md) §4, with `MAX_ACTION_STEPS = 3`; reaching the bound stops tool offering and returns what it holds (FR-012)
 - [ ] T037 [US2] Make the loop in `src/agent/act.ts` never throw: a provider error, timeout or tool exception becomes a recorded step plus a `failed` flag, and the turn continues to phrasing (FR-016)
 - [ ] T038 [US2] Call `act()` conditionally from `src/agent/orchestrator.ts` `run()`, between extraction and phrasing, only when the turn has an action worth considering — a turn with none must make no extra call and cost what it costs today
+- [ ] T036a [US2] **Only if** the loop fails on e4b after T034 narrowed the contract: escalate `MODEL_ID` to `gemma-4-12B-it-OptiQ-4bit` in `.env.example` (FR-030), and record in the implementation log what failed and how, with the T003 baseline beside it. The order is fixed by [research.md](research.md) §3 — contract first, then the larger model, then Azure per ADR 16. Skip this task entirely if e4b carries the loop
 - [ ] T038a [US2] Remove the direct `runSearchProperties` invocation from `src/agent/orchestrator.ts` `run()`, so the search runs **only** as a model tool call inside the loop (FR-013). Until this lands, Phase A's code path and Phase D's model path both exist; after it, `searchDue` decides only whether `act()` is offered. Leave `runSearchProperties` exported — it is the tool's body and the loop calls it
 - [ ] T039 [US2] Ensure `src/agent/act.ts` takes no `ReplySink` and its text output is **discarded**: only `phrase()` and the written-reply path in `finish()` may write to the sink, so the model's reasoning and refinement have no path to the lead
 - [ ] T040 [US2] Set the tool set to exactly one entry in `src/agent/tools/index.ts`; `proposeMeeting` and `bookMeeting` stay declared and inert, and a model calling one receives today's unavailable result and cannot create a booking (FR-015)
@@ -171,7 +172,7 @@ conversation to a broker and back and send a slot-free message.
 ## Phase 8: Measurement, records and verification
 
 - [ ] T053 Extend `scripts/tool-smoke.ts` with a concurrency flag and report per-request latency at N=1 and N=4, run **serially** — running both at once measures neither (FR-031)
-- [ ] T054 Replace the unverified claim in `docs/exploracoes/roteiro-por-topicos.md` (the "Correção de 22/09/2026" block) with the measured numbers, whichever way they fall (SC-010)
+- [ ] T054 Record the measured numbers in `docs/exploracoes/roteiro-por-topicos.md` (the "Correção de 22/09/2026" block), naming which model they describe. The open claim there is about the **12B** model specifically: if T036a never ran, an e4b measurement does not settle it and the claim MUST stay marked open rather than be silently replaced (SC-010)
 - [ ] T055 [P] Correct ADR 14's consequences paragraph in `docs/arquitetura/adr/decisoes.md`: it states the model calls tools natively, which was never built — `conversationTools()` has never been called. Record what was actually built and what this slice changed
 - [ ] T056 [P] Amend `specs/004-conversation/contracts/observability.md` §2's paragraph claiming the agent invokes every tool from code so the SDK never sees them execute — true for every tool except the one now running inside the loop
 - [ ] T057 Confirm SC-011: the existing suite passes except where a test asserts behaviour this spec deliberately changes, and each such change traces to a requirement here. List them in the implementation log
@@ -205,7 +206,8 @@ Setup (T001–T003)
 - **T038a after T038, and not before.** Removing the code-invoked search while the
   loop is unproven leaves the lead with no results at all. The two paths coexist
   for exactly the span of those two tasks, on purpose.
-- **T002 before Phase 6.** The loop is evaluated on the working model, not the old one.
+- **T003 before T036a.** Escalating the model without a recorded baseline turns a
+  measurable decision into a hunch.
 
 **Not parallel, despite touching different concerns:** every task editing
 `src/agent/orchestrator.ts` — T010–T015, T023, T031, T031a, T038, T038a, T039,

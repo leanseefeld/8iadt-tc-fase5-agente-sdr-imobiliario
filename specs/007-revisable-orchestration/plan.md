@@ -203,8 +203,10 @@ the refusal path. Closes SC-003 and SC-007.
 **Phase E — the edges.** Re-entry line, the "ainda não consigo" reply, prompt
 softening, the removal of `cardsJustShown` and the steering shield.
 
-**Phase F — measurement.** The N=1 vs N=4 concurrency numbers, the model switch,
-and the record correction in the exploration doc.
+**Phase F — measurement.** The N=1 vs N=4 concurrency numbers and the record
+correction in the exploration doc. The model switch is **not** here and is not
+scheduled at all: it is an escalation in Phase D, taken only if e4b fails the
+loop after the contract has been narrowed.
 
 Phases A–C touch no model behaviour and can be verified entirely in the unit
 suite. Phase D is where the risk is, and it arrives with A–C already proving the

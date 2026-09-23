@@ -463,8 +463,13 @@ messages, and assert the offer appears exactly once.
 
 **Configuration and measurement**
 
-- **FR-030**: The working model becomes the larger local model, for tool-calling
-  reliability. Changing it MUST remain a change to configuration only.
+- **FR-030**: The working model **stays** `gemma-4-e4b-it-OptiQ-4bit` for this
+  slice. Moving to the larger local model is an **escalation, taken on evidence**,
+  not an opening move: it happens only after the tool contract has been narrowed
+  and retested (FR-013a) and the small model has still failed to drive one tool
+  reliably. Whenever it happens, it MUST remain a change to configuration only,
+  and the observation that triggered it MUST be recorded — otherwise the next
+  person inherits a model change with no reason attached.
 - **FR-031**: Whether that model sustains four concurrent requests MUST be
   measured and the result recorded, replacing the current unverified claim.
   Per-request latency at one and at four concurrent requests MUST both be

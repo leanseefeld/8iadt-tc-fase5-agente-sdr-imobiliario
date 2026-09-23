@@ -156,7 +156,10 @@ speculative generality applies directly: a richer scheme has no second consumer.
 - **The cascade mapping** — decided by the developer on 22/09 and recorded in
   [`data-model.md`](data-model.md) §3, deliberately out of the spec because it is
   data, not a requirement.
-- **Working model** — `gemma-4-12B-it-OptiQ-4bit`, a configuration change per
-  ADR 16. Whether it sustains four concurrent requests is **unmeasured**; the old
-  claim that it does not was never backed by a benchmark, and measuring it is a
-  task of this slice, not an assumption of this plan.
+- **Working model** — `gemma-4-e4b-it-OptiQ-4bit` **stays**, and
+  `gemma-4-12B-it-OptiQ-4bit` is an escalation taken on evidence, not an opening
+  move (developer's direction, 22/09). Escalating early would hide whether the
+  narrowed tool contract was what fixed the loop — which is the one thing §3 says
+  to find out. Whether the larger model sustains four concurrent requests is
+  **unmeasured**: the old claim that it does not was never backed by a benchmark,
+  and it stays marked open unless the escalation actually happens.

@@ -172,9 +172,13 @@ Pontos registrados pelo desenvolvedor:
 
 ### Modelo
 
-`gemma-4-12B-it-OptiQ-4bit` passa a ser o modelo de trabalho: mais confiável em
-tool calling, o que é pré-requisito do desenho acima. Custos conhecidos: mais
-lento e mais memória por token.
+`gemma-4-12B-it-OptiQ-4bit` é o **plano de escalada**, não o ponto de partida.
+Refinado ainda em 22/09: o modelo de trabalho continua sendo o
+`gemma-4-e4b-it-OptiQ-4bit`, e a troca só acontece **depois** de o contrato das
+tools ter sido estreitado e o modelo pequeno ainda assim não sustentar o laço.
+Trocar antes esconderia justamente o que se quer descobrir — se o problema era o
+contrato ou o modelo. Custos conhecidos do 12B: mais lento e mais memória por
+token.
 
 **Correção de 22/09/2026.** Este parágrafo dizia que o modelo *"não aguenta 4
 requisições em paralelo"*. Isso nunca foi medido — não há benchmark no repositório

@@ -13,9 +13,9 @@ phases have proven the accounting works.
 |---|---|---|---|
 | A — accounting | T004–T020 | US1 (P1) | SC-001, SC-002, SC-004a, SC-004b |
 | B — derived facts | T021–T025 | US6 (P3) | SC-008 |
-| C — reconfirmation | T026–T033 | US4 (P2) | SC-005 |
-| D — the loop | T034–T043 | US2 (P1) | SC-003, SC-007 |
-| E — edges | T044–T052 | US3, US5 (P2) | SC-004, SC-009 |
+| C — reconfirmation | T026–T033 (incl. T031a) | US4 (P2) | SC-005 |
+| D — the loop | T034–T043 (incl. T038a, T043a) | US2 (P1) | SC-003, SC-007 |
+| E — edges | T044–T052 (incl. T051a) | US3, US5 (P2) | SC-004, SC-009 |
 | F — measurement & records | T053–T059 | — | SC-010, SC-011 |
 
 **US6 is P3 but runs second**, because it is cheap, independent, and part of the
@@ -34,7 +34,7 @@ Repository root is the project root. Unit tests run on the host with Node 24
 ## Phase 1: Setup
 
 - [ ] T001 Record the starting baseline: run `docker compose exec app npm test` and note the pass/fail counts in the implementation log. On the host the expected figure is 177 pass / 15 fail, where all 15 are `loadConfig` errors from unset `DATABASE_URL`/`AUTH_SECRET` — those are environment artifacts, not regressions, and must not be "fixed"
-- [ ] T002 [P] Switch `MODEL_ID` to `gemma-4-12B-it-OptiQ-4bit` in `.env.example` and confirm `tests/env-example.test.ts` still passes. *(plan.md lists the switch under phase F; it moves here because phase D cannot be evaluated on the old model)*
+- [ ] T002 [P] (FR-030) Switch `MODEL_ID` to `gemma-4-12B-it-OptiQ-4bit` in `.env.example` and confirm `tests/env-example.test.ts` still passes. *(plan.md lists the switch under phase F; it moves here because phase D cannot be evaluated on the old model)*
 - [ ] T003 [P] Confirm the model is reachable and answers a trivial tool call via `scripts/tool-smoke.ts` before any code changes, so a later failure is attributable to this slice rather than to the environment
 
 ---
@@ -44,10 +44,10 @@ Repository root is the project root. Unit tests run on the host with Node 24
 **Blocking**: US1 and US4 both depend on the merge telling a revision apart from a
 first fill. Nothing else can be correct until it does.
 
-- [ ] T004 Add `revised: SlotKey[]` and `intentChanged: boolean` to `MergeResult` in `src/domain/slots.ts` per [contracts/interfaces.md](contracts/interfaces.md) §1, populating `revised` when a filled slot receives a different valid non-empty value
-- [ ] T005 Withdraw merge rule 3 in `src/domain/slots.ts` (the branch at the intent check that drops an intent moving between two defined values): the intent now updates and reports `intentChanged`
+- [ ] T004 (FR-001) Add `revised: SlotKey[]` and `intentChanged: boolean` to `MergeResult` in `src/domain/slots.ts` per [contracts/interfaces.md](contracts/interfaces.md) §1, populating `revised` when a filled slot receives a different valid non-empty value
+- [ ] T005 (FR-002) Withdraw merge rule 3 in `src/domain/slots.ts` (the branch at the intent check that drops an intent moving between two defined values): the intent now updates and reports `intentChanged`
 - [ ] T006 Ensure re-supplying an identical value puts the slot in **none** of `filled`/`revised`/`dropped` in `src/domain/slots.ts` — spec US1 scenario 4 depends on this, and it is the easiest invariant to get wrong
-- [ ] T007 Write `tests/slots.test.ts` cases for the four invariants in [contracts/interfaces.md](contracts/interfaces.md) §1: a key appears in at most one set; an identical value appears in none; an empty value over a filled slot is still `dropped`; an unconsented contact slot is still `dropped`
+- [ ] T007 (FR-004) Write `tests/slots.test.ts` cases for the four invariants in [contracts/interfaces.md](contracts/interfaces.md) §1: a key appears in at most one set; an identical value appears in none; an empty value over a filled slot is still `dropped`; an unconsented contact slot is still `dropped`
 - [ ] T008 [P] Update `docs/arquitetura/modelo-de-dados.md` §4 so the `slot.filled` row states it covers revisions as well as first fills
 
 ---
@@ -71,7 +71,7 @@ would still be worth shipping.
 - [ ] T012 [US1] Redefine `notUnderstood` in `src/agent/orchestrator.ts` to gate on `attemptedAnswer` instead of `plausiblyAnswers(leadText)` (FR-003a/FR-003b). Leave `plausiblyAnswers` in `src/agent/recovery.ts` untouched and still used for its original job — deciding whether a recovery call is worth making
 - [ ] T013 [US1] Handle the failed-extraction path in `src/agent/orchestrator.ts`: when `extraction.failed` is true, hold the streak and produce a written technical reply asking the lead to repeat, never an apology for not understanding (FR-003c). Add the written sentence beside the other written replies
 - [ ] T014 [US1] Implement the three-state streak rule in `src/agent/orchestrator.ts` per [data-model.md](data-model.md) §2a: learning **resets** to zero; a conversational or failed turn **holds**; an unusable attempt **advances** (FR-003d)
-- [ ] T015 [US1] Widen `searchDue` in `src/agent/orchestrator.ts` so a **revised** search-relevant criterion re-runs the search, and **delete the comment** above it that claims `mergeSlots` never overwrites a filled slot — it is false today and has been since the module was written
+- [ ] T015 [US1] Widen the `searchDue` condition in `src/agent/orchestrator.ts` so a **revised** search-relevant criterion counts, and **delete the comment** above it claiming `mergeSlots` never overwrites a filled slot — false today and since the module was written. Note the condition's role changes in Phase 6: here it still gates the code-invoked search; from T038a it gates only whether the action call is offered at all, and never runs a search itself (FR-013)
 - [ ] T016 [US1] Emit `slot.filled` for revisions in `src/services/conversation.ts` (the loop over `input.filled` around line 668), with the same payload and the same key-aware masking, so a changed criterion stops being invisible to the summariser and the broker timeline (FR-029)
 - [ ] T017 [P] [US1] Write `tests/integration/revision.test.ts` against the container's Postgres: a revision after qualification changes the slot, leaves the streak at zero, re-runs the search, and produces no apology (SC-001, SC-003 partial)
 - [ ] T018 [P] [US1] Write `tests/conversational.test.ts`: reactions, greetings, check-ins, thanks and emoji do not advance the streak; two in a row raise no handoff; the mixed case *"opa! pode ser até 900 mil"* still merges its slot (SC-004a)
@@ -108,13 +108,14 @@ restates `bedrooms` and `neighborhoods`, asks exactly one question, and that a
 second revision next turn triggers no second reconfirmation.
 
 - [ ] T026 [US4] Create `src/domain/revision.ts` with the `DEPENDANTS` table exactly as recorded in [data-model.md](data-model.md) §3 — one declared constant, read by everything, written by nobody (FR-007)
-- [ ] T027 [US4] Implement `reconfirmationFor(changed, slots)` in `src/domain/revision.ts` per [contracts/interfaces.md](contracts/interfaces.md) §2: pure, union of dependants for multiple revisions, deduplicated, script order, unfilled dependants omitted (FR-010)
+- [ ] T027 [US4] (FR-006) Implement `reconfirmationFor(changed, slots)` in `src/domain/revision.ts` per [contracts/interfaces.md](contracts/interfaces.md) §2: pure, union of dependants for multiple revisions, deduplicated, script order, unfilled dependants omitted (FR-010)
 - [ ] T028 [US4] Implement `lastTurnWasReconfirmation(turn)` in `src/services/conversation.ts` from the last agent message's metadata (FR-009)
 - [ ] T029 [US4] Mark reconfirmation turns in the agent message metadata written by `commitTurn` in `src/services/conversation.ts`, so T028 has something to read
 - [ ] T030 [US4] Create `src/agent/prompts/reconfirm.ts` with the pt-BR restatement, in the shape *"Só pra confirmar: até R$ 1,2 mi, 3 quartos, Moema. Continua assim?"* — a restatement of facts followed by exactly one question (FR-008)
 - [ ] T031 [US4] Wire the reconfirmation into the briefing in `src/agent/prompts/system.ts` and into `run()` in `src/agent/orchestrator.ts`, suppressed when the previous turn was one
 - [ ] T032 [US4] Handle the intent-change case in `src/domain/revision.ts` and `src/agent/orchestrator.ts`: a script switch reconfirms the carried criteria whose meaning the switch puts in doubt, and orphaned slots are kept in storage but never restated as current criteria (FR-005, FR-005a)
-- [ ] T033 [P] [US4] Write `tests/revision.test.ts`: the four table invariants from [data-model.md](data-model.md) §3 enforced as assertions, plus exactly-one-question over generated revision cases and never-two-in-a-row (SC-005)
+- [ ] T031a [US4] Handle the lead's **answer** to a reconfirmation in `src/agent/orchestrator.ts` (FR-011): a correction merges as an ordinary revision under FR-001, and a plain confirmation changes no slot and returns the conversation to the question the script was already waiting on — it must not be read as a turn that learned nothing
+- [ ] T033 [P] [US4] Write `tests/revision.test.ts`: the four table invariants from [data-model.md](data-model.md) §3 enforced as assertions, plus exactly-one-question over generated revision cases and never-two-in-a-row (SC-005); and both FR-011 answer paths — a correction merges, a confirmation changes nothing and resumes the pending question
 
 ---
 
@@ -135,11 +136,14 @@ the bound.
 - [ ] T036 [US2] Create `src/agent/act.ts` implementing the bounded loop per [contracts/interfaces.md](contracts/interfaces.md) §4, with `MAX_ACTION_STEPS = 3`; reaching the bound stops tool offering and returns what it holds (FR-012)
 - [ ] T037 [US2] Make the loop in `src/agent/act.ts` never throw: a provider error, timeout or tool exception becomes a recorded step plus a `failed` flag, and the turn continues to phrasing (FR-016)
 - [ ] T038 [US2] Call `act()` conditionally from `src/agent/orchestrator.ts` `run()`, between extraction and phrasing, only when the turn has an action worth considering — a turn with none must make no extra call and cost what it costs today
+- [ ] T038a [US2] Remove the direct `runSearchProperties` invocation from `src/agent/orchestrator.ts` `run()`, so the search runs **only** as a model tool call inside the loop (FR-013). Until this lands, Phase A's code path and Phase D's model path both exist; after it, `searchDue` decides only whether `act()` is offered. Leave `runSearchProperties` exported — it is the tool's body and the loop calls it
 - [ ] T039 [US2] Ensure `src/agent/act.ts` takes no `ReplySink` and its text output is **discarded**: only `phrase()` and the written-reply path in `finish()` may write to the sink, so the model's reasoning and refinement have no path to the lead
 - [ ] T040 [US2] Set the tool set to exactly one entry in `src/agent/tools/index.ts`; `proposeMeeting` and `bookMeeting` stay declared and inert, and a model calling one receives today's unavailable result and cannot create a booking (FR-015)
 - [ ] T041 [US2] Emit `model.act` and per-step `tool.*` spans with `step.index`, `step.refused`, `steps.count` and `steps.bounded` per [contracts/observability.md](contracts/observability.md) §1–§2 (FR-027, FR-028)
 - [ ] T042 [P] [US2] Write the four bring-up cases from [quickstart.md](quickstart.md) §3 as `INTEGRATION=1` tests: obvious case, retry case, refusal case, bound case
 - [ ] T043 [US2] Verify the trace shape in Langfuse matches [contracts/observability.md](contracts/observability.md) §3 exactly — a `steps.count` that disagrees with the number of `tool.*` children is a defect (SC-007)
+
+- [ ] T043a [US2] Verify SC-003 with **five** runs (not ten — the developer's call on 22/09): a criterion changes after properties were shown and the lead sees results matching the new criteria, five of five. **Cost to know up front:** this needs seeded catalog entries that satisfy two different criteria sets, one before the change and one after, so the "results changed" assertion is real rather than incidental. Budget the fixture work with the task; if it proves disproportionate, say so and defer SC-003 explicitly rather than quietly
 
 ---
 
@@ -156,9 +160,10 @@ conversation to a broker and back and send a slot-free message.
 - [ ] T046 [US5] Post the written re-entry message on handback in `src/services/handoff.ts` (the `conversation.returned` path), composed with no model call, templated with the broker's first name: *"Sofia de volta! {Broker} saiu da conversa, mas se precisar de alguma coisa, é só chamar!"* (FR-021)
 - [ ] T047 [US5] Add the greeting-beats-apology precedence in `src/agent/orchestrator.ts`, **with a comment at that point** explaining that T046 makes the collision nearly unreachable and why the rule remains (FR-022)
 - [ ] T048 [US5] Add the honest "cannot act" reply in `src/agent/prompts/fallback.ts` — *"ainda não consigo te ajudar com isso"* — for a question the agent structurally cannot answer, which still advances the streak but never claims incomprehension (FR-023)
-- [ ] T049 Soften the prompt line in `src/agent/prompts/system.ts` that reads *"Nunca pergunte de novo algo que já está preenchido"* to a discouragement, per constitution 1.4.0
+- [ ] T049 Soften the prompt line in `src/agent/prompts/system.ts` that reads *"Nunca pergunte de novo algo que já está preenchido"* to a discouragement (FR-026a, constitution 1.4.0). This is the **only** code change that amendment licenses
 - [ ] T050 Delete `cardsJustShown` from `src/agent/orchestrator.ts`. **Only after T012 is merged and green** — it is currently the sole cover for a reaction to a property, and removing it earlier regresses that case (FR-026)
 - [ ] T051 Delete the fallback-shielding half of `looksLikeSteering`'s use in `src/agent/orchestrator.ts`, keeping the guard's own recording role intact, and confirm `tests/reply-guards.test.ts` stays green (FR-024, FR-026)
+- [ ] T051a [P] Write one assertion in `tests/slots.test.ts` that the evidence gate still drops a closed-set value the lead's own words never raised (FR-025). It stays in this slice deliberately, and after two shields are deleted around it, nothing else pins that it still fires
 - [ ] T052 [P] [US5] Write the handback case in `tests/integration/handback.test.ts`: the re-entry line exists before the lead's next message is processed, and the following slot-free turn produces no apology (SC-009)
 
 ---
@@ -197,11 +202,14 @@ Setup (T001–T003)
   `commitTurn` writes it.
 - **T034 before T036.** The contract is rewritten before the loop is built, so a
   loop failure is attributable to the loop rather than to an ambiguous schema.
+- **T038a after T038, and not before.** Removing the code-invoked search while the
+  loop is unproven leaves the lead with no results at all. The two paths coexist
+  for exactly the span of those two tasks, on purpose.
 - **T002 before Phase 6.** The loop is evaluated on the working model, not the old one.
 
 **Not parallel, despite touching different concerns:** every task editing
-`src/agent/orchestrator.ts` — T010–T015, T023, T031, T038–T039, T047–T048,
-T050–T051. They share one function.
+`src/agent/orchestrator.ts` — T010–T015, T023, T031, T031a, T038, T038a, T039,
+T047–T048, T050–T051. They share one function.
 
 ## Parallel opportunities
 

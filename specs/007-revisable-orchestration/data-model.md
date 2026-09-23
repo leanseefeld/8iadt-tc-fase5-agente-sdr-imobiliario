@@ -152,10 +152,10 @@ The event catalogue in `docs/arquitetura/modelo-de-dados.md` §4 gains no row. I
 ## 6. Action step — in the trace only
 
 One step of the loop: which action, the arguments it was called with, what it
-returned, and its position in the turn. It is **not persisted** — it lives in the
-span and in the existing `messages.metadata` tool-call record. Persisting a step
-table would be a second source of truth for something the trace already answers,
-with no consumer asking for it.
+returned, and its position in the turn. It adds **no new table and no new
+column**: it lives in the span, and rides the `messages.metadata` tool-call record
+that `commitTurn` already writes. A dedicated step table would be a second source
+of truth for something the trace already answers, with no consumer asking for it.
 
 | Field | Meaning |
 |---|---|

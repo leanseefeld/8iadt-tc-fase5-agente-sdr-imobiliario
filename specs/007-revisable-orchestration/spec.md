@@ -438,6 +438,12 @@ messages, and assert the offer appears exactly once.
   exactly one turn: it MUST NOT be removed before FR-003a is in place, or that
   case regresses instead of improving.
 
+- **FR-026a**: The prompt line forbidding the agent from ever raising a filled
+  slot again MUST be softened to a discouragement, matching constitution 1.4.0's
+  amended principle V. Re-asking stays something the agent avoids by default and
+  may do when it has reason — the reconfirmation in US4 is the first such reason.
+  No other code change is licensed by that amendment.
+
 **Observability**
 
 - **FR-027**: Every step of a turn's action loop MUST emit its own span, naming
@@ -485,10 +491,16 @@ No new table. Slot state, conversation state and the event log already exist.
 - **SC-001**: Across ten scripted conversations that each revise a criterion after
   qualification, zero end in a handoff and zero produce an apology for not
   understanding — today's rate is the opposite.
-- **SC-002**: The three conversations recorded in the decision register — the zona
-  norte question, *"Moema ou Vila Mariana"* after *"zona sul"*, and the question
-  about tomorrow's viewing after a handback — replay to completion without
-  reaching a handoff.
+- **SC-002**: The three conversations recorded in the decision register replay
+  without the failure each one documented. The zona norte question after a
+  finished script and *"Moema ou Vila Mariana"* after *"zona sul"* reach **no
+  handoff at all** — both are understood, and both were handed off for being
+  understood. The question about tomorrow's viewing after a handback **may** reach
+  a handoff, because this agent genuinely cannot answer it until spec 006 exists,
+  but only by way of FR-023's honest *"ainda não consigo te ajudar com isso"* and
+  never by an apology for not understanding. Reaching a human because the agent
+  cannot help is correct; reaching one because it pretended not to understand is
+  the defect.
 - **SC-003**: In ten runs where a criterion changes after properties were shown,
   the lead sees results matching the new criteria in ten of ten.
 - **SC-004**: A lead asking what the agent is filtering by receives the held

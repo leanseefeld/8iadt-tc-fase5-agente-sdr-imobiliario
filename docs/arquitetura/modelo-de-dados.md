@@ -213,7 +213,7 @@ Teto 100. Faixas: **frio < 40**, **morno 40–69**, **quente ≥ 70**.
 | `lead.created` | `{ channel }` | 004 |
 | `lead.consented` | `{}` | 004 |
 | `intent.identified` | `{ intent }` | 004 |
-| `slot.filled` | `{ slot, value }` (PII mascarada) | 004 |
+| `slot.filled` | `{ slot, value }` (PII mascarada) — primeiro preenchimento e revisão | 004 |
 | `conversation.turn` | `{ messageId }` | 004 — consumido pelo resumidor (005) |
 | `lead.qualified` | `{ score }` | 005 |
 | `properties.suggested` | `{ propertyIds }` | 004 |

@@ -3,15 +3,16 @@ import { getConfig } from "../core/config.ts";
 import { modelTelemetry, rememberLeadName, withTurnTrace } from "../core/langfuse.ts";
 import { createLogger } from "../core/logging.ts";
 import { handoffDecision, shouldProposeMeeting, type HandoffReason } from "../domain/handoff.ts";
+import { reconfirmationKeys } from "../domain/revision.ts";
 import { looksLikeInjection, looksLikeSteering } from "../domain/injection.ts";
 import { createReplyGuard, figuresIn, splitSentences } from "../domain/reply-guards.ts";
 import { scoreLead } from "../domain/score.ts";
 import {
-  SLOT_KEYS,
   hasEvidence,
   isQualified,
   mergeSlots,
   nextQuestion,
+  partitionSlotChanges,
   qualifyingSlots,
   upcomingSlots,
   type Askable,
@@ -24,13 +25,17 @@ import {
 import {
   claimTurn,
   commitTurn,
+  lastTurnWasReconfirmation,
   loadTurn,
+  offerOutstanding,
   releaseTurn,
   type CommittedToolCall,
   type LeadStatus,
   type LoadedTurn,
 } from "../services/conversation.ts";
 import {
+  CANNOT_ACT_REPLY,
+  EXTRACTION_FAILURE_REPLY,
   MODEL_FAILURE_REPLY,
   OPT_OUT_REPLY,
   PRE_CONSENT_REPLY,
@@ -40,10 +45,12 @@ import {
   noMatchReply,
   refusalReply,
 } from "./prompts/fallback.ts";
+import { reconfirmationSentence } from "./prompts/reconfirm.ts";
 import { REPLY_SYSTEM_PROMPT, extractionSystemPrompt, turnBriefing } from "./prompts/system.ts";
 import { getJsonModel, modelCall } from "./provider.ts";
 import { plausiblyAnswers, recoverSlot } from "./recovery.ts";
-import { runProposeMeeting, runSearchProperties } from "./tools/index.ts";
+import { act } from "./act.ts";
+import { actionTools, runProposeMeeting, type SearchOutcome } from "./tools/index.ts";
 import { isTrue, normalizeExtraction } from "./tools/update-slots.ts";
 
 /**
@@ -281,6 +288,10 @@ interface Extraction {
   optedOut: boolean;
   /** The extraction produced at least one non-null slot. */
   saidSomething: boolean;
+  /** The lead tried to convey something, rather than reacting or greeting. */
+  attemptedAnswer: boolean;
+  /** The lead asked what the agent is filtering by. */
+  askedAboutCriteria: boolean;
   /** Closed-set slots the evidence gate refused — understood, but not trusted. */
   dropped: SlotKey[];
   failed: boolean;
@@ -291,9 +302,55 @@ const NOTHING: Extraction = {
   leadAskedForHuman: false,
   optedOut: false,
   saidSomething: false,
+  attemptedAnswer: false,
+  askedAboutCriteria: false,
   dropped: [],
   failed: true,
 };
+
+/**
+ * The three-state streak (FR-003, FR-003d). Learning resets it. A conversational
+ * turn and a failed extraction hold it. An attempt the system could not use
+ * advances it. A dropped slot also holds, because it was understood.
+ */
+export function accountTurn(
+  currentStreak: number,
+  turn: {
+    learnedSomething: boolean;
+    extractionFailed: boolean;
+    attemptedAnswer: boolean;
+    droppedCount: number;
+    /** A plain "yes" to the previous reconfirmation. Not a turn that learned nothing. */
+    confirming?: boolean;
+    /** Asked what the current criteria are. Not a misunderstanding (FR-018). */
+    askedAboutCriteria?: boolean;
+    /**
+     * Ignored. It used to keep a steering attempt off the streak. That shield
+     * is gone (FR-026); the call site still records the attempt as a guard.
+     */
+    steering?: boolean;
+  },
+): { notUnderstood: boolean; fallbackStreak: number } {
+  // The steering shield is gone. Callers still pass the flag so the call site
+  // shows the attempt was recognised; the count does not read it.
+  void turn.steering;
+  if (turn.learnedSomething) return { notUnderstood: false, fallbackStreak: 0 };
+  // A failed extraction is not consulted for `attemptedAnswer` (FR-003c).
+  // A confirmation, or a question about the current criteria, holds the count.
+  if (
+    turn.extractionFailed ||
+    !turn.attemptedAnswer ||
+    turn.confirming === true ||
+    turn.askedAboutCriteria === true
+  ) {
+    return { notUnderstood: false, fallbackStreak: currentStreak };
+  }
+  const notUnderstood = turn.droppedCount === 0;
+  return {
+    notUnderstood,
+    fallbackStreak: notUnderstood ? currentStreak + 1 : currentStreak,
+  };
+}
 
 /**
  * One call: read the lead's message into slots.
@@ -390,6 +447,8 @@ async function extract(turn: LoadedTurn, pending: Askable | null): Promise<Extra
       const extracted = gated.slots;
       const askedForHuman = isTrue(object.askedForHuman);
       const optedOut = isTrue(object.optOut);
+      const attemptedAnswer = isTrue(object.attemptedAnswer);
+      const askedAboutCriteria = isTrue(object.askedAboutCriteria);
 
       // The transcript and the spans keep the vocabulary they had when this was
       // a tool call: `commitTurn` writes these, not the AI SDK, and
@@ -404,6 +463,8 @@ async function extract(turn: LoadedTurn, pending: Askable | null): Promise<Extra
         leadAskedForHuman: askedForHuman,
         optedOut,
         saidSomething: Object.keys(extracted).length > 0,
+        attemptedAnswer,
+        askedAboutCriteria,
         dropped: gated.dropped,
         failed: false,
       };
@@ -565,10 +626,14 @@ interface FinishInput {
   qualified: boolean;
   fallbackStreak: number;
   question: Question | null;
+  /** Slots that went value → different value this turn. Same event as a first fill. */
+  revised?: SlotKey[];
   outcome: TurnOutcomeName;
   guard?: string | null;
   handoffReason?: HandoffReason | null;
   meeting?: "viewing" | "call" | null;
+  /** This turn restated dependants and asked the lead to confirm them. */
+  reconfirmation?: boolean;
   optedOut?: boolean;
   toolCalls?: CommittedToolCall[];
   propertyIds?: string[];
@@ -602,12 +667,15 @@ async function finish(input: FinishInput): Promise<TurnResult> {
     intent: input.intent,
     slots: input.slots,
     filled: input.filled,
+    revised: input.revised ?? [],
     score: input.score,
     qualified: input.qualified,
     fallbackStreak: input.fallbackStreak,
     handoffReason: input.handoffReason ?? null,
     optedOut: input.optedOut ?? false,
     guard: input.guard ?? null,
+    meeting: input.meeting ?? null,
+    reconfirmation: input.reconfirmation === true,
     toolCalls: input.toolCalls ?? [],
     // Absent rather than empty: `commitTurn` writes the key only when there are
     // cards, and no search is not the same thing as a search that found nothing.
@@ -770,14 +838,38 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   const extraction = await extract(turn, pending?.slot ?? null);
   const toolCalls: CommittedToolCall[] = [...extraction.calls];
 
+  // FR-003c: the provider never answered. Hold the streak and say so. Do not
+  // ask the model to phrase an apology for a message it did not read.
+  if (extraction.failed) {
+    const held = accountTurn(turn.conversation.fallbackStreak, {
+      learnedSomething: false,
+      extractionFailed: true,
+      attemptedAnswer: false,
+      droppedCount: 0,
+      steering: false,
+    });
+    return finish({
+      turn,
+      context,
+      reply: EXTRACTION_FAILURE_REPLY,
+      speak: true,
+      intent: before.intent,
+      slots: before.slots,
+      filled: [],
+      score: turn.lead.score,
+      qualified: isQualified(before.intent, before.slots),
+      fallbackStreak: held.fallbackStreak,
+      question: pending,
+      toolCalls,
+      outcome: "replied",
+    });
+  }
+
   // 2 · merge, in code
   let merged = mergeSlots(before, {}, { consented });
-  const filled = new Set<SlotKey>();
   for (const call of extraction.calls) {
     if (call.name !== "updateSlots") continue;
-    const step = mergeSlots(merged, normalizeExtraction(call.arguments), { consented });
-    merged = step;
-    for (const slot of step.filled) filled.add(slot);
+    merged = mergeSlots(merged, normalizeExtraction(call.arguments), { consented });
   }
 
   // FR-011: one bounded structured call, and only for the slot that was pending.
@@ -808,9 +900,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     const recovered = await recoverSlot({ slot: pending.slot, text: leadText });
     if (Object.keys(recovered).length > 0) {
       toolCalls.push({ name: "recoverSlot", arguments: recovered });
-      const step = mergeSlots(merged, recovered, { consented });
-      merged = step;
-      for (const slot of step.filled) filled.add(slot);
+      merged = mergeSlots(merged, recovered, { consented });
     }
   }
 
@@ -839,44 +929,55 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
 
   // 3 · compute — every decision below is made here, never by the model
   const { intent, slots } = merged;
-  const filledThisTurn = SLOT_KEYS.filter((slot) => filled.has(slot));
-  const learnedSomething = filledThisTurn.length > 0 || intent !== before.intent;
+  const { filled: filledThisTurn, revised: revisedThisTurn } = partitionSlotChanges(before.slots, slots);
+  const intentChanged = before.intent !== "undefined" && intent !== before.intent;
+  // A first identification is not `intentChanged`, but it is still something learned.
+  const learnedSomething =
+    filledThisTurn.length > 0 || revisedThisTurn.length > 0 || intentChanged || intent !== before.intent;
   const score = scoreLead(intent, slots);
   const qualified = isQualified(intent, slots);
 
-  // A reaction to the cards ("gostei do segundo") fills no slot and is not a
-  // misunderstanding — counting it as one would walk a happy conversation into
-  // a handoff two turns after the catalog answered.
-  const lastAgentMessage = [...turn.history].reverse().find((message) => message.role === "agent");
-  const cardsJustShown =
-    Array.isArray(lastAgentMessage?.metadata.propertyIds) &&
-    (lastAgentMessage.metadata.propertyIds as unknown[]).length > 0;
-
-  // An override attempt learns nothing on purpose, and it was understood
-  // perfectly — counting it as a misunderstanding walked SC-007's own five
-  // scripted attempts into a handoff on the second one.
+  // An override attempt learns nothing on purpose. It is recorded below as a
+  // guard. It no longer suppresses the streak (FR-026).
   const steering = looksLikeSteering(leadText);
 
-  // FR-023/FR-027: a turn that read a real message and learned nothing is a
-  // fallback, and two in a row are a handoff.
-  // A slot the evidence gate refused is not a message nobody understood: the
-  // extraction read it, the code declined to trust it. Saying "não entendi" over
-  // that is a lie to the lead, and counting it toward FR-027's streak hands a
-  // working conversation to a person for nothing.
-  const notUnderstood =
-    !learnedSomething &&
-    extraction.dropped.length === 0 &&
-    plausiblyAnswers(leadText) &&
-    !cardsJustShown &&
-    !steering;
-  const fallbackStreak = notUnderstood ? turn.conversation.fallbackStreak + 1 : 0;
+  // The re-entry line is posted on handback, so a turn is rarely both a
+  // greeting and a misunderstanding. The precedence stays for a conversation
+  // handed back before that line existed, and for a failed write of it
+  // (FR-022): the greeting wins, because the apology would be false.
+  const lastHandoverEarly = turn.handovers.at(-1);
+  const justReturned =
+    lastHandoverEarly !== undefined &&
+    lastHandoverEarly.kind === "returned" &&
+    !turn.history.some(
+      (message) => message.role === "agent" && message.createdAt > lastHandoverEarly.at,
+    );
+
+  // A misunderstanding is an attempt the system could not use (FR-003a). A
+  // reaction, a greeting or a failed extraction holds the streak instead of
+  // resetting it (FR-003d). A slot the evidence gate refused is not one of
+  // these: the extraction read it and the code declined to trust it.
+  const accounted = accountTurn(turn.conversation.fallbackStreak, {
+    learnedSomething,
+    extractionFailed: false,
+    attemptedAnswer: extraction.attemptedAnswer,
+    droppedCount: extraction.dropped.length,
+    steering,
+    confirming: (lastTurnWasReconfirmation(turn) && !learnedSomething) || justReturned,
+    askedAboutCriteria: extraction.askedAboutCriteria,
+  });
+  const notUnderstood = accounted.notUnderstood;
+  const fallbackStreak = accounted.fallbackStreak;
   const handoffReason = handoffDecision({
     leadAskedForHuman: extraction.leadAskedForHuman,
     fallbackStreak,
   });
 
   // FR-040/041: the offer is a decision of the slot machine, not of the model.
-  const meeting = handoffReason === null ? shouldProposeMeeting(intent, slots, score) : null;
+  const meeting =
+    handoffReason === null
+      ? shouldProposeMeeting(intent, slots, score, offerOutstanding(turn))
+      : null;
   if (meeting !== null) {
     const offered = runProposeMeeting();
     toolCalls.push({ name: "proposeMeeting", arguments: { kind: meeting, status: offered.status } });
@@ -885,34 +986,46 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   const question = meeting !== null || handoffReason !== null ? null : nextQuestion({ intent, slots }, consented);
   const upcoming = upcomingSlots({ intent, slots }, consented);
 
-  // FR-024/026: the catalog is asked exactly once, on the turn that completes the
-  // qualifying script — `mergeSlots` never overwrites a filled slot, so those
-  // filters cannot change afterwards and a second search would return the same
-  // three rows under a second set of cards. `runSearchProperties` refuses
-  // `investment` on its own (FR-041), and a handoff or a meeting turn has a
-  // different job.
+  // A search-relevant criterion was filled or revised, and the script is far
+  // enough along to search. This only decides whether `act()` is offered.
+  // `investment` is refused inside the tool (FR-041), and a handoff or a
+  // meeting turn has a different job.
+  const searchRelevant = [...filledThisTurn, ...revisedThisTurn];
   const searchDue =
     qualified &&
     handoffReason === null &&
     meeting === null &&
-    filledThisTurn.some((slot) => qualifyingSlots(intent).includes(slot));
+    searchRelevant.some((slot) => qualifyingSlots(intent).includes(slot));
 
-  const search = searchDue
-    ? await runSearchProperties({ agencyId: turn.agency.id, intent, slots })
-    : { properties: [], searched: false, relaxable: null };
-
-  if (search.searched) {
-    toolCalls.push({
-      name: "searchProperties",
-      arguments: { codes: search.properties.map((property) => property.code) },
-      // The span's output: the ids of what went on the lead's screen, and
-      // nothing more. Titles and prices would make the trace readable without
-      // a lookup, but every span is storage the developer pays for forever and
-      // the catalog row is one join away — the id is the part that cannot be
-      // recovered after the fact.
-      result: { propertyIds: search.properties.map((property) => property.id) },
+  // `searchDue` only decides whether the action call is offered. The search
+  // itself runs inside the loop, as a model tool call, and may run again
+  // before any reply exists (FR-013).
+  const searches: SearchOutcome[] = [];
+  if (searchDue) {
+    const acted = await act({
+      turn,
+      briefing:
+        "Há uma busca a considerar com os critérios já registrados. Chame searchProperties.",
+      tools: actionTools({
+        agencyId: turn.agency.id,
+        intent,
+        slots,
+        onOutcome: (outcome) => {
+          searches.push(outcome);
+        },
+      }),
     });
+    for (const step of acted.steps) {
+      toolCalls.push({
+        name: step.name,
+        arguments: step.arguments as Record<string, unknown>,
+        result: step.result,
+        stepIndex: step.index,
+        refused: step.refused,
+      });
+    }
   }
+  const search = searches.at(-1) ?? { properties: [], searched: false, relaxable: null };
   const propertyIds = search.properties.map((property) => property.id);
 
   // FR-028: a handoff is terminal for the agent, so it is written rather than
@@ -923,14 +1036,21 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   // gets silence until a person arrives. `handoffReply` names the limitation and
   // says who is coming, in both flavours, and costs no model call.
   if (handoffReason !== null) {
+    // A question the agent cannot act on must not be handed off as if it had
+    // not been understood (FR-023). The asked-for-a-person path is unchanged.
+    const reply =
+      handoffReason === "fallback" && leadText.includes("?")
+        ? `${CANNOT_ACT_REPLY} Vou chamar um corretor para assumir daqui.`
+        : handoffReply(handoffReason);
     return finish({
       turn,
       context,
-      reply: handoffReply(handoffReason),
+      reply,
       speak: true,
       intent,
       slots,
       filled: filledThisTurn,
+      revised: revisedThisTurn,
       score,
       qualified,
       fallbackStreak,
@@ -963,16 +1083,55 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
               (message) => message.role === "agent" && message.createdAt > lastHandover.at,
             ),
         };
+  // A meeting offer speaks for itself this turn. The reconfirmation waits rather
+  // than replacing the offer the lead was about to hear.
+  const reconfirmKeys =
+    meeting !== null
+      ? []
+      : reconfirmationKeys(
+          { revised: revisedThisTurn, intentChanged },
+          slots,
+          lastTurnWasReconfirmation(turn),
+        );
+  const reconfirmText = reconfirmationSentence(slots, reconfirmKeys);
+
+  // A question this agent cannot act on yet still counts toward a handoff,
+  // and the reply says so instead of claiming the message was not understood.
+  if (notUnderstood && leadText.includes("?") && meeting === null && reconfirmText === null) {
+    return finish({
+      turn,
+      context,
+      reply: CANNOT_ACT_REPLY,
+      speak: true,
+      intent,
+      slots,
+      filled: filledThisTurn,
+      revised: revisedThisTurn,
+      score,
+      qualified,
+      fallbackStreak,
+      question: null,
+      handoffReason,
+      meeting,
+      toolCalls,
+      propertyIds,
+      propertyCodes: search.properties.map((property) => property.code),
+      outcome: handoffReason !== null ? "handoff" : "fallback",
+    });
+  }
+
   const phrased = await phrase({
     turn,
     briefing: turnBriefing({
       intent,
       slots,
-      filled: filledThisTurn,
+      filled: [...filledThisTurn, ...revisedThisTurn],
       question,
       consented,
       meeting,
       notUnderstood,
+      ...(extraction.askedAboutCriteria ? { askedAboutCriteria: true } : {}),
+      ...(reconfirmText === null ? {} : { reconfirmation: reconfirmText }),
       ...(brokerContext === undefined ? {} : { broker: brokerContext }),
       ...(search.searched
         ? { suggestions: { count: search.properties.length, relaxable: search.relaxable } }
@@ -992,12 +1151,14 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       ...search.properties.map((property) => property.price),
     ],
     allowedPercentages: lead.percentages,
-    ...(search.searched
-      ? {
-          fallbackText:
-            search.properties.length > 0 ? SUGGESTION_REPLY : noMatchReply(search.relaxable),
-        }
-      : {}),
+    ...(reconfirmText !== null
+      ? { fallbackText: reconfirmText }
+      : search.searched
+        ? {
+            fallbackText:
+              search.properties.length > 0 ? SUGGESTION_REPLY : noMatchReply(search.relaxable),
+          }
+        : {}),
     sink: context.sink,
     startedAt: context.startedAt,
   });
@@ -1016,6 +1177,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     intent,
     slots,
     filled: filledThisTurn,
+    revised: revisedThisTurn,
     score,
     qualified,
     fallbackStreak,
@@ -1023,6 +1185,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     guard,
     handoffReason,
     meeting,
+    reconfirmation: reconfirmText !== null,
     toolCalls,
     propertyIds,
     propertyCodes: search.properties.map((property) => property.code),

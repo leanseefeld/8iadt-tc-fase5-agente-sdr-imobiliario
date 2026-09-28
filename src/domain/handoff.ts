@@ -49,7 +49,10 @@ export function shouldProposeMeeting(
   intent: Intent,
   slots: Slots,
   score: number,
+  /** An offer is already outstanding. Checked before every other rule (FR-017). */
+  offerOutstanding: boolean,
 ): MeetingKind | null {
+  if (offerOutstanding) return null;
   if (intent === "undefined") return null;
   // The script is finished only when nothing is left to ask, contacts included.
   if (upcomingSlots({ intent, slots }, true).length > 0) return null;

@@ -218,9 +218,43 @@ export interface MergeResult {
   slots: Slots;
   /** Slots that went empty → filled in this merge, in script order. */
   filled: SlotKey[];
-  /** Keys refused: an invalid value, an empty value over a filled slot, an intent
-   *  change, an unconsented contact slot, or a key that is not a slot at all. */
+  /** Slots that went value → different value, in script order. */
+  revised: SlotKey[];
+  /** The intent moved between two defined values. A first identification is not one. */
+  intentChanged: boolean;
+  /** Keys refused: an invalid value, an empty value over a filled slot, an
+   *  unconsented contact slot, or a key that is not a slot at all. An intent
+   *  change is no longer a refusal. */
   dropped: string[];
+}
+
+/** Same contents, including array order. A re-supplied identical value is not a revision. */
+export function sameSlotValue(left: unknown, right: unknown): boolean {
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return left.length === right.length && left.every((item, index) => item === right[index]);
+  }
+  return Object.is(left, right);
+}
+
+/**
+ * What changed between two slot states, in script order. A turn applies several
+ * merges (extraction, then recovery); this is the comparison against the state
+ * the turn started in, so a slot filled and then adjusted in the same turn stays
+ * a fill.
+ */
+export function partitionSlotChanges(
+  before: Slots,
+  after: Slots,
+): { filled: SlotKey[]; revised: SlotKey[] } {
+  const filled: SlotKey[] = [];
+  const revised: SlotKey[] = [];
+  for (const key of SLOT_KEYS) {
+    const had = isFilled(before, key);
+    const has = isFilled(after, key);
+    if (!had && has) filled.push(key);
+    else if (had && has && !sameSlotValue(before[key], after[key])) revised.push(key);
+  }
+  return { filled, revised };
 }
 
 function isEmptyValue(value: unknown): boolean {
@@ -228,9 +262,10 @@ function isEmptyValue(value: unknown): boolean {
 }
 
 /**
- * The five merge rules of `modelo-de-dados.md` §2, applied after every extraction
- * so that "never overwrite" and "intent is immutable" are enforced *after* the
- * model rather than requested of it.
+ * The merge rules of `modelo-de-dados.md` §2, applied after every extraction.
+ * Rule 3 is withdrawn (ADR 22): `intent` moving between two defined values is a
+ * revision, reported as `intentChanged`, not a drop. An empty value still never
+ * unfills a slot.
  *
  * `extraction` is `unknown` on purpose — it is model output.
  */
@@ -241,11 +276,13 @@ export function mergeSlots(
 ): MergeResult {
   const slots: Slots = { ...current.slots };
   let intent = current.intent;
+  let intentChanged = false;
   const filled = new Set<SlotKey>();
+  const revised = new Set<SlotKey>();
   const dropped: string[] = [];
 
   if (extraction === null || typeof extraction !== "object" || Array.isArray(extraction)) {
-    return { intent, slots, filled: [], dropped: [] };
+    return { intent, slots, filled: [], revised: [], intentChanged, dropped: [] };
   }
 
   const source = extraction as Record<string, unknown>;
@@ -255,17 +292,16 @@ export function mergeSlots(
     if (!Object.hasOwn(source, key)) continue;
     const value = source[key];
 
-    // Rule 3: the intent only moves from undefined to a value, never between values.
+    // Intent moves out of `undefined` and between defined values. Re-supplying
+    // the value it already holds is neither a change nor a drop.
     if (key === "intent") {
       const parsed = intentSchema.safeParse(value);
       if (!parsed.success || parsed.data === "undefined") {
         if (!isEmptyValue(value)) dropped.push("intent");
         continue;
       }
-      if (current.intent !== "undefined") {
-        if (parsed.data !== current.intent) dropped.push("intent");
-        continue;
-      }
+      if (parsed.data === current.intent) continue;
+      if (current.intent !== "undefined") intentChanged = true;
       intent = parsed.data;
       continue;
     }
@@ -295,8 +331,11 @@ export function mergeSlots(
 
     const wasEmpty = !isFilled(slots, slot);
     // Rule 2 falls out of the representation: `[]` is not an empty value here.
+    // An identical value is not a fill and not a revision (US1 scenario 4).
+    if (!wasEmpty && sameSlotValue(slots[slot], parsed.data)) continue;
     Object.assign(slots, { [slot]: parsed.data });
     if (wasEmpty) filled.add(slot);
+    else revised.add(slot);
   }
 
   for (const name of Object.keys(source)) {
@@ -307,6 +346,8 @@ export function mergeSlots(
     intent,
     slots,
     filled: SLOT_KEYS.filter((key) => filled.has(key)),
+    revised: SLOT_KEYS.filter((key) => revised.has(key)),
+    intentChanged,
     dropped: [...dropped, ...unknownKeys],
   };
 }

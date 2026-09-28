@@ -1,7 +1,6 @@
 import { and, asc, eq, gte, ilike, inArray, lte, sql } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
 import { agencies, properties } from "../db/schema.ts";
-import { searchAndRank, type RankingCandidate } from "../domain/property-ranking.ts";
 
 /**
  * The sole path to `properties` for everything above `db/` — the `/catalogo`
@@ -143,16 +142,11 @@ export async function listProperties(
   };
 }
 
-function toCandidate(row: PropertyRow): RankingCandidate {
-  return { id: row.id, price: row.price, neighborhood: row.neighborhood, region: row.region };
-}
-
 /**
- * `searchProperties` — spec 004's suggestion tool, in practice. Fetches the
- * active/`transaction`-matching (and `bedrooms`-satisfying — never relaxed,
- * see research.md) candidate set, delegates all ranking/relaxation to the
- * pure `domain/property-ranking.ts`, then maps the winners back to full
- * `Property` rows. Never throws for "no match" — returns `[]`.
+ * Active properties that match the criteria as stated. A maximum price is a
+ * maximum, a named neighborhood is that neighborhood, a bedroom count is a
+ * minimum. Nothing is widened to return a fuller set. At most three, cheapest
+ * first. An empty list is a normal result.
  */
 export async function searchProperties(agencyId: string, criteria: SearchCriteria): Promise<Property[]> {
   const db = getDb();
@@ -163,21 +157,19 @@ export async function searchProperties(agencyId: string, criteria: SearchCriteri
     eq(properties.transaction, criteria.transaction),
   ];
   if (criteria.bedrooms !== undefined) conditions.push(gte(properties.bedrooms, criteria.bedrooms));
+  if (criteria.priceMax !== undefined) conditions.push(lte(properties.price, criteria.priceMax));
+  if (criteria.neighborhoods !== undefined && criteria.neighborhoods.length > 0) {
+    conditions.push(inArray(properties.neighborhood, criteria.neighborhoods));
+  }
 
   const rows = await db
     .select()
     .from(properties)
-    .where(and(...conditions));
+    .where(and(...conditions))
+    .orderBy(asc(properties.price), asc(properties.id))
+    .limit(3);
 
-  if (rows.length === 0) return [];
-
-  const byId = new Map(rows.map((row) => [row.id, row]));
-  const ranked = searchAndRank(rows.map(toCandidate), {
-    priceMax: criteria.priceMax,
-    neighborhoods: criteria.neighborhoods,
-  });
-
-  return ranked.map((candidate) => toProperty(byId.get(candidate.id)!));
+  return rows.map(toProperty);
 }
 
 /**

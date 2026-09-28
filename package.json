@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p ${APP_PORT:-3000}",
-    "build": "next build",
+    "build": "NODE_ENV=production next build",
     "start": "next start -H 0.0.0.0 -p ${APP_PORT:-3000}",
     "start:worker": "node src/worker/index.ts",
     "doctor": "node scripts/doctor.ts",

@@ -1,6 +1,6 @@
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
-import { conversations, events, leads } from "../db/schema.ts";
+import { conversations, events, leads, users } from "../db/schema.ts";
 import { publishQuietly, STATE_CHANNEL } from "../core/notifier.ts";
 import { canTransition, isLeadStage, type LeadStage } from "../domain/lead-status.ts";
 import { recordOutboundMessage } from "./conversation.ts";
@@ -165,6 +165,21 @@ export async function returnToAgent(
   });
 
   if (!updated) return fail("A conversa mudou de mãos enquanto você olhava.");
+
+  // Written, no model call. The lead sees the hand-back before their next
+  // message, which is what keeps the following turn from apologising (FR-021).
+  const [broker] = await getDb()
+    .select({ name: users.name })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const brokerName = (broker?.name ?? "O corretor").trim().split(/\s+/)[0] ?? "O corretor";
+  await recordOutboundMessage({
+    conversationId: found.conversationId,
+    role: "agent",
+    content: `Sofia de volta! ${brokerName} saiu da conversa, mas se precisar de alguma coisa, é só chamar!`,
+  });
+
   announce(found, "active");
   return ok;
 }

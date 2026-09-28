@@ -1,7 +1,12 @@
 import type { ToolSet } from "ai";
 import { updateSlots } from "./update-slots.ts";
 import { bookMeeting, proposeMeeting, runProposeMeeting } from "./scheduling.stub.ts";
-import { searchPropertiesTool, type SearchContext, type SearchOutcome } from "./search-properties.ts";
+import {
+  searchPropertiesTool,
+  type SearchContext,
+  type SearchOutcome,
+  type ToolRefusal,
+} from "./search-properties.ts";
 import { requestHandoff } from "./handoff.ts";
 import { optOut } from "./opt-out.ts";
 
@@ -37,6 +42,16 @@ import { optOut } from "./opt-out.ts";
  * pair is here so that a reader looking for "what can this agent do" finds one
  * answer, and so 006 has one file to edit.
  */
+/**
+ * The tools a turn's action loop may offer. Exactly one, on purpose: a 4-bit
+ * model handed several tools picks one instead of answering (FR-015).
+ * `proposeMeeting` and `bookMeeting` stay declared above and return the same
+ * unavailable result if something calls them; they are not in this set.
+ */
+export function actionTools(context: SearchContext): ToolSet {
+  return { searchProperties: searchPropertiesTool(context) };
+}
+
 export function conversationTools(context?: SearchContext): ToolSet {
   return {
     updateSlots,
@@ -50,6 +65,6 @@ export function conversationTools(context?: SearchContext): ToolSet {
 
 export { updateSlots, proposeMeeting, bookMeeting, runProposeMeeting, requestHandoff, optOut };
 export { runSearchProperties, searchPropertiesTool, MAX_SUGGESTIONS } from "./search-properties.ts";
-export type { SearchContext, SearchOutcome };
+export type { SearchContext, SearchOutcome, ToolRefusal };
 export { normalizeExtraction, updateSlotsInputSchema } from "./update-slots.ts";
 export type { SchedulingResult } from "./scheduling.stub.ts";

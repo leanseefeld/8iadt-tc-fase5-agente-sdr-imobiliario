@@ -46,19 +46,19 @@ test("asked outranks fallback when both conditions hold", () => {
 test("a hot purchase lead with a known contact is offered a viewing, never a handoff", () => {
   const score = scoreLead("purchase", purchaseComplete);
   assert.equal(score, 100);
-  assert.equal(shouldProposeMeeting("purchase", purchaseComplete, score), "viewing");
+  assert.equal(shouldProposeMeeting("purchase", purchaseComplete, score, false), "viewing");
   assert.equal(handoffDecision({ leadAskedForHuman: false, fallbackStreak: 0 }), null);
 });
 
 test("a purchase lead with the script unfinished is offered nothing yet", () => {
   const slots: Slots = { ...purchaseComplete, urgency: null };
-  assert.equal(shouldProposeMeeting("purchase", slots, scoreLead("purchase", slots)), null);
+  assert.equal(shouldProposeMeeting("purchase", slots, scoreLead("purchase", slots), false), null);
 });
 
 test("a purchase lead whose score is not hot is offered nothing", () => {
   const slots: Slots = { ...purchaseComplete, urgency: "exploring" };
   assert.equal(scoreLead("purchase", slots), 85);
-  assert.equal(shouldProposeMeeting("purchase", slots, 60), null);
+  assert.equal(shouldProposeMeeting("purchase", slots, 60, false), null);
 });
 
 // A finished investment script is 10 + 45 + 15 = 70 at minimum, so it is always
@@ -67,10 +67,17 @@ test("a purchase lead whose score is not hot is offered nothing", () => {
 test("the end of the investment script proposes a call with a specialist", () => {
   const score = scoreLead("investment", investmentComplete);
   assert.equal(score, 70);
-  assert.equal(shouldProposeMeeting("investment", investmentComplete, score), "call");
-  assert.equal(shouldProposeMeeting("investment", investmentComplete, 0), "call");
+  assert.equal(shouldProposeMeeting("investment", investmentComplete, score, false), "call");
+  assert.equal(shouldProposeMeeting("investment", investmentComplete, 0, false), "call");
 });
 
 test("an undefined intent proposes nothing", () => {
-  assert.equal(shouldProposeMeeting("undefined", purchaseComplete, 100), null);
+  assert.equal(shouldProposeMeeting("undefined", purchaseComplete, 100, false), null);
+});
+
+test("a hot lead with contact is not offered again while an offer is outstanding", () => {
+  const score = scoreLead("purchase", purchaseComplete);
+  assert.equal(score >= 70, true);
+  assert.equal(shouldProposeMeeting("purchase", purchaseComplete, score, true), null);
+  assert.equal(shouldProposeMeeting("investment", investmentComplete, 100, true), null);
 });

@@ -7,10 +7,9 @@ import type { Intent, Slots } from "../../domain/slots.ts";
 /**
  * The catalog tool — the only way a property, a code or a price reaches a lead.
  *
- * It writes no query of its own. Spec 002 already owns `searchProperties` in
- * `services/properties.ts`, which ranks, relaxes and returns `[]` rather than
- * throwing; this file is the thin layer that turns the *slot state* into that
- * service's criteria, scopes it to the agency and caps it at three (FR-024).
+ * It writes no query of its own. `searchProperties` in `services/properties.ts`
+ * applies the stated filters and returns `[]` when nothing matches; this file
+ * turns the slot state into those criteria and scopes the search to the agency.
  * Constitution IV in one import: the agent reaches the catalog through
  * `services/`, never through `db/`.
  *
@@ -29,6 +28,15 @@ export interface SearchContext {
   agencyId: string;
   intent: Intent;
   slots: Slots;
+  /** The turn collects each successful search. Not a model argument. */
+  onOutcome?: (outcome: SearchOutcome) => void;
+}
+
+/** What a refused action returns. The model can read it and choose another step. */
+export interface ToolRefusal {
+  ok: false;
+  reason: string;
+  message: string;
 }
 
 /** Empty because nothing matched — as opposed to "never asked" (FR-025, T041). */
@@ -64,9 +72,8 @@ function relaxableFilter(slots: Slots): SearchOutcome["relaxable"] {
 }
 
 /**
- * The tool's body, callable without a tool runtime — the orchestrator invokes it
- * directly, the same way it invokes `proposeMeeting`, because "the script is
- * finished" is a decision of the slot machine and not of a 4-bit model.
+ * The tool's body. The loop calls it; the agency and the investment refusal
+ * are already bound in `context`, so a model argument cannot widen either.
  */
 export async function runSearchProperties(context: SearchContext): Promise<SearchOutcome> {
   const transaction = transactionFor(context.intent);
@@ -95,19 +102,48 @@ export async function runSearchProperties(context: SearchContext): Promise<Searc
   };
 }
 
+const REFUSAL = {
+  notSearchable: {
+    ok: false as const,
+    reason: "notSearchable",
+    message: "Esta conversa não busca imóvel no catálogo. Não chame a busca de novo.",
+  },
+  failed: {
+    ok: false as const,
+    reason: "failed",
+    message: "A busca falhou. Siga com o que você já tem, sem inventar imóvel.",
+  },
+};
+
 /**
- * The declared form, for the registry. Its input schema is empty on purpose: the
- * filters are the slot state the code already holds, and the agency is bound by
- * the factory — a tool argument must never be able to widen either. Offered to
- * the model only through `conversationTools(context)`, which is why it cannot
- * exist without a turn to belong to.
+ * The one action the model may call. Agency and the refusal to search for an
+ * investment lead come from the turn, never from the arguments (FR-014).
  */
 export function searchPropertiesTool(context: SearchContext) {
   return tool({
     description:
-      "Busca no catálogo da imobiliária os imóveis que combinam com o que a pessoa já contou. " +
-      "Não recebe filtros: usa o que já está registrado.",
+      "Busca imóveis no catálogo com os critérios que a pessoa já informou. " +
+      "Quando chamar: um critério de busca mudou ou o roteiro de busca acabou de ficar completo. " +
+      "Quando NÃO chamar: a mensagem é só cumprimento, reação ou agradecimento; a pessoa está " +
+      "investindo; ou você já recebeu imóveis e nenhum critério mudou. " +
+      "Não recebe filtros. Se ok for false, leia o motivo e não invente imóvel.",
     inputSchema: z.object({}),
-    execute: () => runSearchProperties(context),
+    execute: async () => {
+      // Preconditions that do not hold are a result, not an exception (FR-013b).
+      if (transactionFor(context.intent) === null) return REFUSAL.notSearchable;
+      try {
+        const outcome = await runSearchProperties(context);
+        context.onOutcome?.(outcome);
+        return {
+          ok: true as const,
+          count: outcome.properties.length,
+          codes: outcome.properties.map((property) => property.code),
+          relaxable: outcome.relaxable,
+        };
+      } catch (error) {
+        log.warn({ err: (error as Error).message }, "search tool failed");
+        return REFUSAL.failed;
+      }
+    },
   });
 }

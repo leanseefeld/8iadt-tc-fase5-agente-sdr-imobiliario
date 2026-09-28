@@ -107,6 +107,8 @@ lookup. Beyond that the model is refining rather than answering, and every extra
 step is a full local-model round trip the lead waits through. Three is cheap to
 raise later and expensive to discover the need for at runtime.
 
+*Note, 27/09/2026:* since FR-034 the search takes no arguments, so the second step of that loop cannot differ from the first until backlog item 010's relaxation exists. The bound of three stands; its motivating case waits for 010.
+
 **Why a bound at all.** Without one, a model that keeps calling the same tool with
 slightly different arguments never produces a reply: the lead watches a typing
 indicator, tokens burn, and the turn never commits. This is a realistic local-model

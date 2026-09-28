@@ -66,6 +66,14 @@ to run again.
 - Q: With conversational turns no longer advancing the count, what bounds a lead whose answers are repeatedly misread as chat? → A: Nothing new in this slice. Genuine non-comprehension still advances the existing streak, and a misclassified answer simply gets the question re-asked. The separate, more generous no-progress counter is recorded in the backlog for when a real case appears.
 - Q: Does a conversational message after a genuine misunderstanding reset the count or hold it? → A: Hold. The count measures *consecutive failures to understand*, and an interjection is not evidence the confusion cleared: unintelligible → chat → unintelligible still reaches the handoff.
 
+### Session 2026-09-27 (closing, after implementation)
+
+Two manual conversations after the slice was implemented (`b0561984…`, `28c0e0e5…`) exposed defects the requirements had not ruled out.
+
+- Q: When a turn both runs a search and qualifies for a reconfirmation, which does the lead hear? → A: The search. Cards or a no-match outrank the reconfirmation and the criteria restatement. A reconfirmation happens only on a turn where no search result is presented. Accepted consequence: after qualification a search-relevant revision always re-runs the search, so the reconfirmation becomes mostly a mid-script, investor and non-search-slot behaviour.
+- Q: Should the agent keep offering to widen a search it cannot widen (*"Posso procurar em bairros vizinhos?"* → *"Claro!"* → nothing)? → A: No. Until a relaxation spec exists, a no-match asks the lead for a different value instead. Lead-approved relaxation — exact matches never displaced, widening only after zero exact matches and the lead's yes — becomes its own spec, after 006 and before the demo.
+- Q: What records the removal of the proximity ranking that was already done in code? → A: A requirement here (FR-034), with spec 002's FR-019 pointed at it.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - The lead changes their mind and the conversation carries on (Priority: P1)
@@ -120,18 +128,20 @@ revision cannot be acted on in the same turn, and this is the architecture ADR 2
 committed to. It is also the seam a specialist agent arrives through later
 (backlog item 16).
 
-**Independent Test**: Force a turn whose first search returns nothing, and assert
-that a second search ran with relaxed parameters within the same turn, and that
-the trace contains both calls with both results, in order.
+**Independent Test**: A turn whose criteria changed calls the search as a model
+tool call, reads its result, and replies from it; the trace shows the call and its
+result before the reply. *(The search-read-search-again case moved to the
+relaxation spec on 2026-09-27: the search takes no arguments since FR-034, so a
+second call in the same turn cannot differ from the first.)*
 
 **Acceptance Scenarios**:
 
 1. **Given** a turn where an action is available, **When** the model calls it,
    **Then** the result is returned to the model and the model may call again
    before any reply text is produced.
-2. **Given** a turn that called the same action twice, **Then** the trace shows
-   two distinct steps, each naming the action, its arguments, its result and its
-   position in the turn.
+2. **Given** a turn that called an action, **Then** the trace shows the step
+   naming the action, its arguments, its result and its position in the turn.
+   *(Two distinct steps of the same action moves to the relaxation spec.)*
 3. **Given** the model calls an action whose preconditions do not hold, **Then**
    the action does not take effect, the model receives a refusal it can read, and
    the turn still produces a reply. There is no separate per-turn permission
@@ -193,6 +203,9 @@ a second revision in the following turn does **not** trigger another reconfirmat
 2. **Given** the previous turn was itself a reconfirmation, **When** the lead
    revises another slot, **Then** no second reconfirmation is produced — the turn
    proceeds normally.
+6. **Given** a revision re-runs the search in the same turn, **Then** the lead
+   hears about the results — the cards, or that nothing matched — and no
+   reconfirmation is produced or recorded for that turn.
 3. **Given** a reconfirmation is produced, **Then** it contains exactly one
    question.
 4. **Given** the lead answers a reconfirmation by correcting a restated value,
@@ -342,7 +355,8 @@ messages, and assert the offer appears exactly once.
 - **FR-006**: When a turn revises an already-filled slot that has dependants, and
   the immediately preceding agent turn was not itself a reconfirmation, the system
   MUST produce a reconfirmation: a restatement of the dependants' current values
-  followed by exactly one confirmation question.
+  followed by exactly one confirmation question — **unless a search result is
+  presented this turn**, which outranks it (FR-032).
 - **FR-007**: The dependants of each revisable slot — which other criteria a
   change to it puts in doubt — MUST be declared as **data in one place**, a single
   table in code or configuration, never spread through conditional logic, so that
@@ -393,7 +407,11 @@ messages, and assert the offer appears exactly once.
 
 - **FR-018**: When the lead asks what the agent is considering or filtering by,
   the system MUST reply with the criteria currently held, and MUST invite a
-  change. The turn MUST NOT count as a misunderstanding.
+  change — **unless a search result is presented this turn**, which outranks it
+  (FR-032). The turn MUST NOT count as a misunderstanding. A question about the
+  **results** of the search (*"nenhum imóvel?"*, *"tem mais?"*) is the same kind of
+  question and gets the same treatment, answered with the last search's outcome
+  (FR-033).
 - **FR-019**: Internal assessment of a lead — ranking score, temperature,
   consecutive-misunderstanding count, pipeline stage, broker assignment and
   routing decisions — MUST NOT be placed in anything sent to the model. The
@@ -475,6 +493,32 @@ messages, and assert the offer appears exactly once.
   Per-request latency at one and at four concurrent requests MUST both be
   reported, so that queueing is distinguishable from parallelism.
 
+**Closing the slice** *(added 2026-09-27)*
+
+- **FR-032**: A search presented this turn — cards, or a statement that nothing
+  matched — MUST outrank both a reconfirmation and a criteria restatement for what
+  the reply says. A reconfirmation MUST be produced only on a turn where no search
+  result is presented, and a turn that did not reconfirm MUST NOT be recorded as
+  one, so FR-009's derived fact stays true.
+- **FR-033**: The outcome of the most recent search — how many properties matched
+  — MUST be available to later turns, derived from what is stored. A lead asking
+  about results without changing a criterion (*"nenhum imóvel nessa faixa?"*) MUST
+  be answered from it, without a new search and without restating the criteria as
+  if they were the answer. Such a question MUST be recognised by the extraction the
+  same way a question about criteria is (FR-018), so it can never fall through to
+  the cannot-act reply of FR-023 — the agent **can** answer it.
+- **FR-034**: A search MUST return only properties that satisfy **every** stated
+  criterion — at or under the price ceiling, at least the requested bedrooms, in a
+  named neighbourhood or region. A neighbourhood the catalog does not know matches
+  nothing. No near miss fills the list. This supersedes spec 002 FR-019's ranking
+  by closeness to the ceiling, which placed properties above the lead's budget
+  among the results.
+- **FR-035**: When nothing matches, the reply MUST say so and invite the lead to
+  change **one** criterion by giving a new value. It MUST NOT offer to widen the
+  search on the lead's behalf (*"posso procurar em bairros vizinhos?"*): nothing
+  performs that widening until the relaxation spec exists, and a *"sim"* to it
+  leaves the lead with a promise and no action.
+
 ### Key Entities
 
 - **Qualification state** — the intent plus the nine slots. Gains the property
@@ -526,8 +570,11 @@ No new table. Slot state, conversation state and the event log already exist.
   to Assumptions as a stated hypothesis — it cannot be honestly measured with
   scripted leads. The number is not renumbered away, so a reader looking for
   SC-006 finds where it went.
-- **SC-007**: A turn that searches, reads the result and searches again produces a
-  trace showing both calls, both results, and their order, with no step missing.
+- **SC-007**: *Deferred 2026-09-27 to the relaxation spec.* A turn that searches,
+  reads the result and searches again needs a search whose second call can differ
+  from its first; since FR-034 the search takes no arguments. What remains
+  verifiable here — one search step with its result in the trace before the
+  reply — is covered by US2's independent test.
 - **SC-008**: Following a completed qualification with three unrelated messages
   produces exactly one offer to meet.
 - **SC-009**: Every conversation returned by a broker carries the written re-entry
@@ -535,6 +582,13 @@ No new table. Slot state, conversation state and the event log already exist.
 - **SC-010**: Per-request latency at one and at four concurrent requests is
   recorded for the working model, and the register's unverified claim is replaced
   by that measurement.
+- **SC-012**: A revision that re-runs the search never produces a reconfirmation
+  in the same reply, across the two recorded conversations replayed: the 600k
+  revision and a further lower-budget revision both answer with results or a
+  no-match.
+- **SC-013**: *"nenhum imóvel nessa faixa?"* after a search that found nothing is
+  answered with the fact that nothing matched, and no no-match reply in either
+  recorded conversation offers to widen the search.
 - **SC-011**: The existing conversation test suite passes unchanged except where a
   test asserts the behaviour this spec deliberately changes, and each such change
   is traceable to a requirement here.
@@ -581,6 +635,12 @@ No new table. Slot state, conversation state and the event log already exist.
   suite skips them.
 
 ## Out of Scope
+
+- **Lead-approved relaxation of the search** — its own spec, after 006 and before
+  the demo. Exact matches are never displaced; a widening happens only after zero
+  exact matches and the lead's agreement.
+- **A guard against invented claims** (*"sim, nós ajudamos com financiamento"*) —
+  backlog item 31.
 
 - **Score weights, temperature bands and the investor signal** — spec 008, after
   spec 006, because "booking raises the score" needs bookings to exist.

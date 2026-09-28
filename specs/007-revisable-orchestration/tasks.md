@@ -17,6 +17,7 @@ phases have proven the accounting works.
 | D — the loop | T034–T043 (incl. T036a, T038a, T043a) | US2 (P1) | SC-003, SC-007 |
 | E — edges | T044–T052 (incl. T051a) | US3, US5 (P2) | SC-004, SC-009 |
 | F — measurement & records | T053–T059 | — | SC-010, SC-011 |
+| Closing *(2026-09-27)* | T060–T068 | US3, US4 | SC-012, SC-013 |
 
 **US6 is P3 but runs second**, because it is cheap, independent, and part of the
 same accounting family as US1. **US2 is P1 but runs fourth**, because it is the
@@ -141,8 +142,8 @@ the bound.
 - [x] T039 [US2] Ensure `src/agent/act.ts` takes no `ReplySink` and its text output is **discarded**: only `phrase()` and the written-reply path in `finish()` may write to the sink, so the model's reasoning and refinement have no path to the lead
 - [x] T040 [US2] Set the tool set to exactly one entry in `src/agent/tools/index.ts`; `proposeMeeting` and `bookMeeting` stay declared and inert, and a model calling one receives today's unavailable result and cannot create a booking (FR-015)
 - [x] T041 [US2] Emit `model.act` and per-step `tool.*` spans with `step.index`, `step.refused`, `steps.count` and `steps.bounded` per [contracts/observability.md](contracts/observability.md) §1–§2 (FR-027, FR-028)
-- [x] T042 [P] [US2] Write the four bring-up cases from [quickstart.md](quickstart.md) §3 as `INTEGRATION=1` tests: obvious case, retry case, refusal case, bound case
-- [x] T043 [US2] Verify the trace shape in Langfuse matches [contracts/observability.md](contracts/observability.md) §3 exactly — a `steps.count` that disagrees with the number of `tool.*` children is a defect (SC-007)
+- [x] T042 [P] [US2] Write the four bring-up cases from [quickstart.md](quickstart.md) §3 as `INTEGRATION=1` tests: obvious case, retry case, refusal case, bound case *(2026-09-27: the retry case was never run separately — implementation log — and moves to the relaxation spec with SC-007)*
+- [x] T043 [US2] Verify the trace shape in Langfuse matches [contracts/observability.md](contracts/observability.md) §3 exactly — a `steps.count` that disagrees with the number of `tool.*` children is a defect (SC-007) *(2026-09-27: the trace was not read in the Langfuse UI — implementation log. The two-step shape moves to the relaxation spec with SC-007; the one-step shape is checked by T066)*
 
 - [x] T043a [US2] **SC-003 deferred.** The catalog already has Santana for zona norte, and a region name now matches as a region, but five model runs were not executed. One revision turn did call `searchProperties` once; that is not five-of-five. See the implementation log.
 
@@ -180,6 +181,24 @@ conversation to a broker and back and send a slot-free message.
 - [x] T059 [P] Confirm `docker compose exec app npm run lint` and `npm run build` both succeed
 
 ---
+
+## Phase 9: Closing the slice *(added 2026-09-27)*
+
+**Why**: two manual conversations after implementation (`b0561984…`, `28c0e0e5…`)
+showed a search result losing to a reconfirmation, a question about results
+answered with a restatement, and a no-match offering a widening nothing performs.
+Also records the ranking removal that was done in code with no requirement behind it.
+
+- [x] T060 [US4] (FR-032) In `src/agent/prompts/system.ts` `task()`, move the three `suggestions` branches (one card, several, none) **above** `askedAboutCriteria` and `reconfirmation`, so a search presented this turn decides what the reply says
+- [x] T061 [US4] (FR-032) In `src/agent/orchestrator.ts` `run()`, compute no reconfirmation when `search.searched` is true — pass `[]` to `reconfirmationSentence` — so a turn that showed results is not recorded with `reconfirmation: true`, and make the `fallbackText` choice prefer the search branch over the reconfirmation
+- [x] T062 [US3] (FR-033) Add `lastSearchOutcome(turn)` to `src/services/conversation.ts` beside `lastTurnWasReconfirmation`: from the most recent agent message whose `metadata.toolCalls` contains a `searchProperties` call, return `{ count }` from its `propertyIds`, else `null`. Return `null` when the current intent is not `purchase`/`rental`, since a search made under another intent does not describe the current one
+- [x] T062a [US3] (FR-033, FR-018) Widen the `askedAboutCriteria` field description in the extraction contract (`src/agent/tools/update-slots.ts` and the extraction prompt in `src/agent/prompts/system.ts`) so a question about the search's **results** — *"nenhum imóvel?"*, *"tem mais?"* — sets it too. No new field, no new call: this is what keeps such a question out of the FR-023 cannot-act branch
+- [x] T063 [US3] (FR-033) Carry that outcome into the briefing in `src/agent/prompts/system.ts` and `src/agent/orchestrator.ts` on turns where no search ran: the `askedAboutCriteria` task states the last search's result with the criteria (*"com esses critérios não encontrei nenhum imóvel"*) instead of only restating them. Add the field to `TurnPromptInput` — it is a count, not lead assessment, so FR-019's boundary holds; update `tests/briefing-boundary.test.ts`'s allowed list accordingly
+- [x] T064 (FR-035) Rewrite `RELAX_ASKS` in `src/agent/prompts/system.ts` and `RELAX_QUESTIONS` in `src/agent/prompts/fallback.ts` so each invites a **new value** for that one criterion (*"se tem outro bairro que a pessoa consideraria"*, *"se a pessoa quer rever o valor"*, *"se a pessoa consideraria outro número de quartos"*) and none offers to widen the search on the lead's behalf. Keep `relaxable` as the pointer to which criterion to suggest
+- [x] T065 [P] Tests in `tests/conversational.test.ts` or a new `tests/precedence.test.ts`: `task()` picks the search branch over reconfirmation and over `askedAboutCriteria`; a no-match with a reconfirmation due still says nothing matched; no `RELAX_*` string contains *"procurar"*; `lastSearchOutcome` returns the last search's count and `null` for an investor (SC-012, SC-013)
+- [x] T066 Replay both recorded conversations on the running stack per [quickstart.md](quickstart.md) §9 and confirm SC-012 and SC-013; while there, open one revision turn's trace in Langfuse and confirm the single search step shows its result before the reply
+- [x] T067 [P] (FR-034) Put a supersession banner on `specs/002-data-model-seed-catalog/spec.md` naming FR-019 and SC-005 as replaced by spec 007 FR-034, and a one-line pointer in that spec's `research.md` ranking decision, `contracts/properties-service.md` and `plan.md` mentions of `property-ranking.ts` — banners, not rewrites, per the spec 004 precedent. Also banner `specs/004-conversation/spec.md` FR-025: its "offer to relax exactly one filter" is superseded by this spec's FR-035 until the relaxation spec lands
+- [x] T068 [P] Strike the remaining "relaxed" claims in this spec's own `research.md` §4 rationale and `quickstart.md` §3 retry case, pointing both at the relaxation spec; correct the stale `property-ranking.ts` reference in `implementation-log.md`; and mark `contracts/observability.md` §3's two-step example trace as the relaxation spec's target shape, with the one-step shape as today's
 
 ## Dependencies
 

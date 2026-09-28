@@ -115,8 +115,8 @@ npm run tool-smoke            # one tool, obvious case
 ```
 
 1. **Obvious case.** A turn that should search, searches. One step.
-2. **Retry case.** A turn whose first search returns nothing searches again with
-   relaxed criteria. Two steps.
+2. **Retry case.** *Moved to backlog item 010 on 27/09/2026 — the search takes no
+   arguments since FR-034, so a second step cannot differ from the first.*
 3. **Refusal case.** A tool called when its preconditions do not hold returns a
    refusal the model reads, and the turn still replies.
 4. **Bound case.** A loop that would exceed three steps stops and still replies.
@@ -183,3 +183,19 @@ npm run build
 And the judgement call that no test makes: read three real conversations end to
 end in the widget. The defect this slice fixes is one a test can assert but a
 person notices — an agent that apologises for understanding you.
+
+## 9. Closing checks — SC-012, SC-013 *(added 2026-09-27)*
+
+One conversation at `http://localhost:3000/chat/demo`, in order:
+
+1. `quero comprar, até uns 900 mil` → `dois quartos, em vila mariana` → `em breve`
+   — cards appear.
+2. `posso ver até 600k?` — the reply talks about **the results**: the card(s), or
+   that nothing matched. **No** *"Só pra confirmar… Continua assim?"* in that reply.
+3. `nenhum imóvel nessa faixa?` — answered with the fact (*"com esses critérios
+   não encontrei nenhum"*), not a bare restatement of the criteria.
+4. `e até 400k?` — a no-match that invites **a new value** for one criterion.
+   It must **not** ask *"posso procurar em bairros vizinhos?"*.
+
+Then open step 2's `conversation.turn` in Langfuse: one `tool.searchProperties`
+step at `step.index` 0, its result, then `model.reply`.

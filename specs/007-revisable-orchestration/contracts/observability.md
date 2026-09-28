@@ -50,6 +50,8 @@ loop step, and that is the point.
 
 ## 3. What a good trace looks like
 
+*Note, 27/09/2026:* the two-step shape below is **backlog item 010's target**. Since FR-034 the search takes no arguments, so today's shape is one `tool.searchProperties` at `step.index` 0, its result, then `model.reply`.
+
 A turn where the lead moved their budget and the first search came back empty:
 
 ```

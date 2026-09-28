@@ -98,3 +98,18 @@ test("optional keys nothing reads yet are still declared", () => {
     assert.ok(configKeys.includes(key), `${key} missing from the schema`);
   }
 });
+
+test("spec 006: scheduling and follow-up keys default and parse", () => {
+  const config = loadConfig(valid);
+  assert.equal(config.FOLLOWUP_FIRST_DELAY_MINUTES, 240);
+  assert.equal(config.FOLLOWUP_BACKOFF_FACTOR, 3);
+  assert.equal(config.FOLLOWUP_BATCH_SIZE, 20);
+  assert.equal(config.SCHEDULING_MIN_NOTICE_MINUTES, 120);
+  assert.deepEqual(config.SCHEDULING_PREFERRED_TIMES, ["10:00", "14:00", "16:30"]);
+  // The order written is the preference, so it is kept, not sorted.
+  assert.deepEqual(
+    loadConfig({ ...valid, SCHEDULING_PREFERRED_TIMES: "16:30, 09:00" }).SCHEDULING_PREFERRED_TIMES,
+    ["16:30", "09:00"],
+  );
+  assert.throws(() => loadConfig({ ...valid, SCHEDULING_PREFERRED_TIMES: "10h" }));
+});

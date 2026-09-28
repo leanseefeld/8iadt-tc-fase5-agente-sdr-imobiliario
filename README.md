@@ -101,6 +101,17 @@ docker compose up
 O chat é a demonstração: abra `/chat/demo` no celular ou numa janela estreita,
 aceite o termo e converse. `demo` é o *slug* da imobiliária semeada.
 
+**Usuários semeados** — entre em http://localhost:3100/login. Todos com a senha
+`demo1234`, só para desenvolvimento local:
+
+| E-mail | Papel | O que vê |
+|---|---|---|
+| `carla@demo.com.br` | gerente comercial (Carla Nunes) | todos os leads e a agenda da imobiliária; liga e desliga o follow-up automático |
+| `ana@demo.com.br` | corretora (Ana Ribeiro) | começa em *Meus leads*; a agenda mostra só as visitas dela |
+| `bruno@demo.com.br` | corretor (Bruno Castro) | idem, com os leads e as visitas dele |
+
+Vêm de `src/db/seed/index.ts` (`npm run db:seed`, que é idempotente).
+
 As portas evitam de propósito as mais disputadas (3000, 5432, 8000, 8001, 80) para
 o projeto conviver com outros na mesma máquina. Para movê-las, altere `APP_PORT`,
 `WORKER_HEALTH_PORT` ou `DB_PORT` no `.env` — nada mais precisa mudar.

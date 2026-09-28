@@ -16,9 +16,13 @@ type SlotRules = {
   minNoticeMinutes: number;   // SCHEDULING_MIN_NOTICE_MINUTES
   preferredTimes: string[];   // SCHEDULING_PREFERRED_TIMES, in order
   timezone: string;           // FOLLOWUP_TIMEZONE, read as the agency's operating tz
+  type: 'viewing' | 'call';   // decided by the caller (FR-003a), carried onto every option
 };
+type Preference = { weekday?: Weekday; period?: 'morning' | 'afternoon' };
 
-proposeSlots(busy: Interval[], now: Date, rules: SlotRules): Option[];
+proposeSlots(busy: Interval[], now: Date, rules: SlotRules, preference?: Preference): Option[];
+// The preference narrows BEFORE the cap of three (FR-005b). checkSlot(at, busy, now, rules)
+// is the one rule behind both offering and booking.
 // Ten business days forward from `now`, in `rules.timezone`, testing
 // `rules.preferredTimes` in order, skipping any day/hour `rules.availability`
 // does not enable, skipping any hour inside a busy interval, skipping anything
@@ -46,11 +50,16 @@ what makes SC-002's 200 generated cases meaningful with no database.
 // services/scheduling.ts
 loadBusyIntervals(brokerId: string): Promise<Interval[]>;               // confirmed only
 loadBrokerAvailability(brokerId: string): Promise<Record<Weekday, WeekdayAvailability>>;
-saveBrokerAvailability(userId: string, rows: Record<Weekday, WeekdayAvailability>): Promise<void>;
-proposeAppointment(input: { leadId; conversationId; agencyId; intent; propertyId?: string }): Promise<ProposeResult>;
+// saveBrokerAvailability — cut with the availability editor (backlog 34).
+computeOptions(input: { agencyId; leadId; intent; propertyId?; constraint?: Preference; now? }): Promise<Computed>; // writes nothing, returns a broker id, never a name
+recordProposal(ctx, computed): Promise<ProposeResult>;                    // cancel-then-insert (FR-004)
+proposeAppointment(input: { leadId; conversationId; agencyId; intent; propertyId?: string; constraint?: Preference }): Promise<ProposeResult>;
+declineProposal(conversationId: string): Promise<boolean>;
+hasConfirmedFutureAppointment(leadId: string, now?: Date): Promise<boolean>;  // FR-004d, FR-008b
 // `type` is derived, not passed: 'call' with no property when `intent === 'investment'`
 // (FR-003a), 'viewing' otherwise when a property is in play, 'call' if not.
-bookAppointment(input: { conversationId; choice: { optionIndex: number } | { scheduledAt: Date } }): Promise<BookResult>;
+bookAppointment(input: { conversationId; choice: { optionIndex: number } | { scheduledAt: Date }; offered?: Date[]; now? }): Promise<BookResult>;
+// `optionIndex` is 1-based, into `offered` — the times the options message showed, read from its metadata.
 listAppointments(scope, range: { from: Date; to: Date }): Promise<AgendaGroup[]>;
 markAppointmentStatus(scope, appointmentId, status: 'done' | 'cancelled'): Promise<Result>;
 // 'done' also sets the lead's pipeline stage 'visited'; both emit their event
@@ -103,25 +112,33 @@ resolvePropertyRef(turn: LoadedTurn, ref: PropertyRef): Promise<{ propertyId: st
 Booking is the **one** tool, added to 007's `actionTools()`:
 
 ```ts
-bookMeeting(input: { optionIndex: number } | { scheduledAt: string }): Promise<
-  | { confirmed: true; appointmentId: string; scheduledAt: string; type: 'viewing' | 'call'; propertyCode?: string }
+bookMeeting(input: { optionIndex?: number | string; date?: string /* AAAA-MM-DD */; time?: string /* HH:MM */ }): Promise<
+  | { ok: true; scheduledAt: string; type: 'viewing' | 'call' }
   | { ok: false; reason: string; message: string }   // 007's ToolRefusal shape
 >;
+// As built: the 4-bit model sends `"1"` as often as `1`, and "10h" as often as "10:00"; both are read.
+// The turn collects the BookResult through the tool context; the confirmation is written from it.
 ```
 
 Its description states when to call — the lead picked an offered option or named a time while a proposal is
 open — and when not to: no open proposal, or the lead is talking about something else. It re-validates through
 the same function `proposeAppointment` uses.
 
-The extraction gains two facts, beside `askedForHuman` and `optOut`:
+The extraction gains these facts, beside `askedForHuman` and `optOut` (as built, flat fields — the 4-bit
+extraction is steadier with no nested objects):
 
 ```ts
-declinedOffer: boolean;                 // "agora não", "prefiro não marcar"
-askedForTimes: boolean;
-pickedTime: boolean;
-propertyRef?: { position: number } | { code: string };   // "o segundo", "VMA-0005", or the Interessado button's message (FR-004b)                    // the lead picked an offered option or named a time — gates bookMeeting (FR-005f)                 // "tem outro horário?", "só de manhã", and after a decline "quero marcar uma visita"
-timePreference?: { weekday?: Weekday; period?: 'morning' | 'afternoon' };
+declinedOffer: boolean;         // "agora não", "prefiro não marcar"
+askedForTimes: boolean;         // "tem outro horário?", "só de manhã", "quero marcar uma visita"
+pickedTime: boolean;            // picked an offered option or named a time — gates bookMeeting (FR-005f)
+preferredWeekday?: Weekday;     // with preferredPeriod, the Preference (FR-005b)
+preferredPeriod?: 'morning' | 'afternoon';
+propertyPosition?: number;      // "o segundo" — with propertyCode, the property reference (FR-004b)
+propertyCode?: string;          // "VMA-0005", or the Interessado button's message
 ```
+
+Code precedence among them, on one message: a pick outranks a request for times; and a message that picks,
+asks for or declines a meeting is never read as a request for a person, whatever `askedForHuman` says.
 
 The options sentence and the confirmation are code-written (`prompts/meeting.ts`) and said verbatim; the
 tool returns data, never wording.

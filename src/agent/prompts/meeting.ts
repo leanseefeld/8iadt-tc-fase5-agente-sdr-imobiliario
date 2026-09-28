@@ -1,0 +1,115 @@
+import { localParts, type MeetingType, type Weekday } from "../../domain/scheduling.ts";
+
+/**
+ * The scheduling sentences, written by code and said verbatim (spec 006 FR-005d).
+ *
+ * They are dates, times and counts — exactly what a model must not invent and
+ * what the `unbackedFigure` guard exists to stop — so no model phrases them.
+ * None of them names a broker (FR-005e): the team calendar is internal, and who
+ * attends can change at the last minute.
+ */
+
+const WEEKDAY: Record<Weekday, string> = {
+  mon: "seg",
+  tue: "ter",
+  wed: "qua",
+  thu: "qui",
+  fri: "sex",
+  sat: "sáb",
+  sun: "dom",
+};
+
+const WHO = "alguém da nossa equipe";
+
+/** "qui 02/10 às 10h", "sex 03/10 às 16h30" — in the agency's timezone. */
+export function slotLabel(at: Date, timeZone: string): string {
+  const local = localParts(at, timeZone);
+  const hours = Math.floor(local.minutes / 60);
+  const minutes = local.minutes % 60;
+  const time = minutes === 0 ? `${hours}h` : `${hours}h${String(minutes).padStart(2, "0")}`;
+  return `${WEEKDAY[local.weekday]} ${String(local.day).padStart(2, "0")}/${String(local.month).padStart(2, "0")} às ${time}`;
+}
+
+function what(type: MeetingType, propertyCode: string | null): string {
+  if (type === "call") return "uma conversa";
+  return propertyCode === null ? "uma visita" : `uma visita ao ${propertyCode}`;
+}
+
+/** FR-001, FR-004a: the options, numbered as the lead will pick them. */
+export function optionsSentence(
+  options: Date[],
+  type: MeetingType,
+  propertyCode: string | null,
+  timeZone: string,
+): string {
+  const list = options.map((at, index) => `${index + 1}) ${slotLabel(at, timeZone)}`).join(" · ");
+  const pick = options.length === 1 ? "Esse horário fica bom?" : "Qual fica melhor?";
+  return `Tenho estes horários para ${what(type, propertyCode)} com ${WHO}: ${list}. ${pick}`;
+}
+
+/** FR-006: the booking, confirmed. The widget also renders it as a card. */
+export function confirmationSentence(
+  at: Date,
+  type: MeetingType,
+  propertyCode: string | null,
+  timeZone: string,
+): string {
+  const kind = type === "call" ? "Sua conversa" : propertyCode === null ? "Sua visita" : `Sua visita ao ${propertyCode}`;
+  return `Pronto! ${kind} está confirmada para ${slotLabel(at, timeZone)}, com ${WHO}.`;
+}
+
+/**
+ * FR-001 as amended: no times, no invented calendar, and no handoff on the
+ * agent's own initiative. A lead who wants a person asks for one.
+ */
+export const NO_OPTIONS_SENTENCE =
+  "No momento não tenho horários disponíveis na agenda. Se quiser, posso tentar de novo mais tarde.";
+
+/** FR-005b: nothing matches the lead's constraint; an earlier proposal stays open. */
+export const NO_OPTIONS_FOR_CONSTRAINT_SENTENCE = "Nesse dia e horário não tenho disponibilidade.";
+
+/** FR-005a: reversible, so a decline the model misread costs one sentence, not the booking. */
+export const DECLINE_ACKNOWLEDGEMENT = "Sem problema — se quiser marcar depois, é só pedir.";
+
+/** FR-005b: a request before the script is complete. The script's question follows it. */
+export const DETAILS_FIRST_SENTENCE = "Claro! Assim que eu tiver seus dados, te passo os horários.";
+
+/** FR-005: why a pick could not be booked, said before the fresh options. */
+export const BOOKING_REFUSED: Record<"too_soon" | "unavailable" | "collision" | "no_such_option", string> = {
+  too_soon: "Esse horário está muito em cima.",
+  unavailable: "Nesse horário não temos agenda.",
+  collision: "Esse horário acabou de ser ocupado.",
+  no_such_option: "Não encontrei essa opção na lista.",
+};
+
+/**
+ * The action loop's instructions for a booking turn. The loop sees no
+ * conversation, only this — so it carries the offered list with the exact date
+ * and time of each, today's date, and what the lead wrote. The model maps "a
+ * segunda" or "quinta às 11" onto `optionIndex`, or onto `date` + `time`.
+ */
+export function bookingBriefing(offered: Date[], leadText: string, now: Date, timeZone: string): string {
+  const iso = (at: Date) => {
+    const local = localParts(at, timeZone);
+    const hh = String(Math.floor(local.minutes / 60)).padStart(2, "0");
+    const mm = String(local.minutes % 60).padStart(2, "0");
+    return `${local.year}-${String(local.month).padStart(2, "0")}-${String(local.day).padStart(2, "0")} ${hh}:${mm}`;
+  };
+  const today = localParts(now, timeZone);
+  const lines = offered.map((at, index) => `${index + 1}) ${slotLabel(at, timeZone)} (${iso(at)})`);
+  return [
+    `Hoje é ${WEEKDAY[today.weekday]} ${iso(now).slice(0, 10)}.`,
+    "Horários oferecidos à pessoa:",
+    ...lines,
+    `A pessoa escreveu: "${leadText}"`,
+    "Se ela escolheu um desses horários, chame bookMeeting com optionIndex.",
+    "Se ela disse outro dia e hora, chame bookMeeting com date (AAAA-MM-DD) e time (HH:MM).",
+    "Se ela não escolheu horário, não chame bookMeeting.",
+  ].join("\n");
+}
+
+/** FR-005b: a constraint nothing satisfies, with the earlier options still standing. */
+export function stillValidSentence(options: Date[], timeZone: string): string {
+  const list = options.map((at, index) => `${index + 1}) ${slotLabel(at, timeZone)}`).join(" · ");
+  return `Os horários que te passei continuam valendo: ${list}. Algum deles serve?`;
+}

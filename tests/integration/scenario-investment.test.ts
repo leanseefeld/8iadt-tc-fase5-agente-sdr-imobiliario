@@ -119,6 +119,8 @@ test("Cenário 2 runs end to end (SC-002, SC-003)", { skip: !integration }, asyn
 
   t.after(async () => {
     await query("delete from events where conversation_id = $1", [conversationId]);
+    // Spec 006: the offer is now a proposed appointment row.
+    await query("delete from appointments where conversation_id = $1", [conversationId]);
     await query("delete from messages where conversation_id = $1", [conversationId]);
     await query("delete from conversations where id = $1", [conversationId]);
     await query("delete from leads where id = $1", [leadId]);

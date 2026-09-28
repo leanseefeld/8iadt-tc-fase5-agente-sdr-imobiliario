@@ -95,7 +95,8 @@ export const EXTRACTION_FIELDS: readonly ExtractionField[] = [
     description:
       "true SÓ se a pessoa pediu explicitamente para falar com um corretor, um humano, " +
       "uma pessoa de verdade ou um atendente. Reclamar, discordar, não entender ou mudar " +
-      "de assunto NÃO é pedir. Na dúvida, false.",
+      "de assunto NÃO é pedir. Escolher um horário, pedir horários ou querer marcar uma visita " +
+      "ou conversa também NÃO é pedir, nem perguntar quem vai atender. Na dúvida, false.",
   },
   {
     key: "optOut",
@@ -118,6 +119,48 @@ export const EXTRACTION_FIELDS: readonly ExtractionField[] = [
       '("nossa", "haha"), cumprimento, agradecimento ("valeu"), checagem ("tá aí?") ou ' +
       "só um emoji. Na dúvida, false.",
   },
+  // Spec 006. Facts about a meeting offer; code decides what each one does.
+  {
+    key: "declinedOffer",
+    description:
+      "true SÓ se a pessoa recusou ou adiou os horários que você acabou de oferecer " +
+      '("agora não", "prefiro não marcar", "depois eu vejo"). Um "não" a outra pergunta NÃO ' +
+      "é recusa. Na dúvida, false.",
+  },
+  {
+    key: "askedForTimes",
+    description:
+      'true se a pessoa pediu horários, outros horários ("tem outro horário?", "só de manhã") ' +
+      'ou disse que quer marcar uma visita ou uma conversa ("quero marcar uma visita"). Na dúvida, false.',
+  },
+  {
+    key: "preferredWeekday",
+    description: "O dia da semana que a pessoa pediu para o horário, se pediu um. Senão, null.",
+    values: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+  },
+  {
+    key: "preferredPeriod",
+    description: 'morning se a pessoa pediu de manhã, afternoon se pediu à tarde. Senão, null.',
+    values: ["morning", "afternoon"],
+  },
+  {
+    key: "pickedTime",
+    description:
+      'true se a pessoa escolheu um dos horários oferecidos ("a segunda", "pode ser a 1", ' +
+      '"quinta às 10") ou disse um dia e uma hora para marcar. Na dúvida, false.',
+  },
+  {
+    key: "propertyPosition",
+    description:
+      'Se a pessoa apontou um dos imóveis mostrados pela posição ("o segundo", "gostei do primeiro"), ' +
+      "o número dessa posição, contando a partir de 1. Senão, null.",
+  },
+  {
+    key: "propertyCode",
+    description:
+      'Se a pessoa citou o código de um imóvel, como "VMA-0005" ou "Interessado em MOE-0003", ' +
+      "esse código, exatamente como escrito. Senão, null.",
+  },
 ];
 
 export interface Extracted {
@@ -136,6 +179,13 @@ export interface Extracted {
   /** The lead tried to convey something, rather than reacting, greeting or checking in. */
   attemptedAnswer: boolean;
   askedAboutCriteria: boolean;
+  declinedOffer: boolean;
+  askedForTimes: boolean;
+  preferredWeekday: string | null;
+  preferredPeriod: string | null;
+  pickedTime: boolean;
+  propertyPosition: number | null;
+  propertyCode: string | null;
 }
 
 /** The model writes `true`, `"true"` or `"sim"`; all three mean the same thing. */

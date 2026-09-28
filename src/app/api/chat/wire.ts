@@ -10,18 +10,37 @@ import type { TurnMessage } from "@/services/conversation";
  * cards are a property of that reply, not a column; it is lifted out here so
  * the client never learns what else metadata holds (tool calls, the guard that
  * fired) — none of which is a lead's business.
+ *
+ * `booking` is lifted the same way (spec 006 FR-006): the time, the kind and the
+ * property code the confirmation card shows. The appointment id and the broker
+ * stay behind — the lead was told "alguém da nossa equipe" (FR-005e).
  */
+export interface WireBooking {
+  scheduledAt: string;
+  type: "viewing" | "call";
+  propertyCode: string | null;
+}
+
 export interface WireMessage {
   id: string;
   role: "lead" | "agent" | "broker";
   content: string;
   propertyIds?: string[];
+  booking?: WireBooking;
   repliesToMessageId?: string;
   createdAt: string;
 }
 
+function readBooking(value: unknown): WireBooking | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { scheduledAt, type, propertyCode } = value as Record<string, unknown>;
+  if (typeof scheduledAt !== "string" || (type !== "viewing" && type !== "call")) return null;
+  return { scheduledAt, type, propertyCode: typeof propertyCode === "string" ? propertyCode : null };
+}
+
 export function toWireMessage(message: TurnMessage): WireMessage {
   const propertyIds = message.metadata.propertyIds;
+  const booking = readBooking(message.metadata.booking);
 
   return {
     id: message.id,
@@ -32,6 +51,7 @@ export function toWireMessage(message: TurnMessage): WireMessage {
     ...(Array.isArray(propertyIds) && propertyIds.length > 0
       ? { propertyIds: propertyIds as string[] }
       : {}),
+    ...(booking !== null ? { booking } : {}),
     ...(message.repliesToMessageId !== null
       ? { repliesToMessageId: message.repliesToMessageId }
       : {}),

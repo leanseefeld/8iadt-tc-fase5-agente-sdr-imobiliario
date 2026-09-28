@@ -65,4 +65,70 @@ On `006-scheduling-followup` before any code change: container suite **229 pass,
 - **Contract drift noted, not fixed:** `contracts/interfaces.md` §2 still lists `saveBrokerAvailability`
   (cut to backlog 34), and §1's `SlotRules` gained a `type` field so options carry their meeting type.
 
-**Next:** Phase 3 (US1), starting at T011 — needs the developer's go.
+**Next:** Phase 3 (US1), starting at T011 — needs the developer's go. *(Given 2026-09-28.)*
+
+## Phase 3 (T011–T022c) — US1: propose in code, book by tool, three ways out
+
+**As built.**
+- `prompts/meeting.ts` writes every scheduling sentence (options, confirmation, no options, a refused booking's
+  reason, the decline acknowledgement, "assim que eu tiver seus dados…"). None names a broker.
+- The extraction gains flat fields: `declinedOffer`, `askedForTimes`, `pickedTime`, `preferredWeekday`,
+  `preferredPeriod`, `propertyPosition` and `propertyCode`. They're flat rather than the nested
+  `timePreference`/`propertyRef` of the contract, because the 4-bit extraction is steadier without nesting.
+- `run()` decides the meeting in code, then offers `act()` for search and/or booking.
+- A written scheduling reply wins the turn. The decline and "details first" are prefixes to the phrased reply.
+- `bookMeeting` is the only new tool. `scheduling.stub.ts` is deleted.
+- The widget gains `MeetingCard` (from `booking` metadata, lifted by `wire.ts` without the appointment id) and
+  the **Interessado** button. The button is revealed on hover/focus on pointer devices, always visible on touch,
+  44 px tall, and wraps under the card's details on a phone.
+
+**The first live replays (4 conversations through `POST /api/chat`) found five bugs. All are fixed, and each fix
+is pinned by a test:**
+1. *Every pick handed off.* The extraction set `askedForHuman` on "a segunda", "quero agendar" and
+   "quem vai me atender?", because the meeting is with a person. Two fixes: the field's description now names
+   these, and a code rule ignores `askedForHuman` on a message that picks, asks for or declines a meeting.
+2. *A pick also read as a request for times* (both facts true). This re-offered instead of booking.
+   A pick now outranks a request on the same message.
+3. *The model called `bookMeeting` correctly and nothing booked.* It sent `{"optionIndex": "1"}`, a string,
+   and the schema wanted a number. The tool now reads numeric strings, and "10h"/"10h30"/"9:30"
+   (`tests/book-meeting.test.ts`).
+4. *`commitTurn` undid the booking's stage.* It recomputed the stage from the lead as loaded at the start of
+   the turn (`qualified`) and wrote it back over `scheduled`. It now reads the stage again when the turn
+   booked.
+5. *"Details first" repeated on every answer, and was said for a bare interest.* It's now said once, and only
+   when times were asked for (FR-004d: an interest before the script is complete just continues the script).
+6. *(Not a bug, a UX flag)* A "no" with nothing open to decline counted as a misunderstanding
+   ("Desculpa, eu não entendi"). It now counts as understood, with nothing to act on.
+
+**e4b and the tool (T019, spec 007 FR-030).** e4b drove `bookMeeting` **unaided** in every case: option index,
+a named time outside the week (read as `too_soon`/`unavailable`), a collision, and the interest flow. The only
+failure was the string index above, which was a contract fix, not a model limit. No 12B escalation.
+
+**Tests.**
+- Unit: `precedence` (every `replyKind` pair, the decline prefix, exact sentences, strict fact reading),
+  `briefing-boundary` (attendance neither confirmed nor denied), `property-ref`, `book-meeting`.
+- `INTEGRATION=1` on e4b: `booking.test.ts` 4/4 and `meeting-escapes.test.ts`, both green.
+- `offer-once.test.ts` was updated for two reasons. First, its cleanup must now delete the proposal row.
+  Second, with no property in play the offer is a **call** (contract §2), where it was a viewing before 006.
+
+**Flag for the developer.** A purchase lead who finishes the script without pointing at a card is offered
+*"uma conversa com alguém da nossa equipe"*. That still happens even if they typed "quero marcar uma visita",
+because a viewing needs a property and none was named. This is the contract as written (§2). The **Interessado**
+button, or "gostei do primeiro", is the path to a visit. Worth a sentence in the options if the demo shows it.
+
+**Docs.**
+- `docs/arquitetura/turno-do-agente.md` is updated in this commit (AGENTS rule): the meeting path is no longer
+  *planejado*, and there is a new written-reply branch plus the handoff exception. Both Mermaid diagrams parse.
+- `contracts/interfaces.md` drift is fixed: `saveBrokerAvailability` cut; `SlotRules.type` and `Preference`
+  added; the `bookAppointment` and `bookMeeting` shapes are as built; the extraction fields are flat.
+
+**Full `INTEGRATION=1` run (381 tests) after Phase 3.** Everything 006 touches is green. The failures that
+remained are not 006's:
+- `revision.test.ts` has failed since 007's closing commit `4d59f7d`. That commit removed region matching from
+  the chat search, so "zona norte" no longer finds Santana. It's a product question, whether the chat should
+  match regions.
+- `seed.test.ts` expects exactly 3 demo leads. The developer's own widget sessions add more.
+- `leads-scope.test.ts` failed only because `auth-service.test.ts` reassigns the seeded lead and never
+  restores it. Restored by hand; a clean-up task was suggested.
+
+I deleted my own replay and test leads (27) from the demo agency; the developer's sessions were kept.

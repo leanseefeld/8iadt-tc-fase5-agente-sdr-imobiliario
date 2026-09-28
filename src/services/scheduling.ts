@@ -352,3 +352,18 @@ export async function bookAppointment(input: BookInput): Promise<BookResult> {
     return { ok: true, appointmentId: proposal.id, scheduledAt: at, type: proposal.type, propertyCode };
   });
 }
+
+/**
+ * Does the lead already hold a confirmed meeting still to come? Several bookings
+ * per lead are spec 009; until then an interest or a request for times with one
+ * booked gets spec 007 FR-023's honest reply (FR-004d). Also the base of the
+ * dashboard's derived *Visita marcada* (FR-008b).
+ */
+export async function hasConfirmedFutureAppointment(leadId: string, now = new Date(), runner: Runner = getDb()): Promise<boolean> {
+  const rows = await runner
+    .select({ id: appointments.id })
+    .from(appointments)
+    .where(and(eq(appointments.leadId, leadId), eq(appointments.status, "confirmed"), gte(appointments.scheduledAt, now)))
+    .limit(1);
+  return rows.length > 0;
+}

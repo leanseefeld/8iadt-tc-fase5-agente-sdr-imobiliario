@@ -70,9 +70,13 @@ test("a finished script offers a meeting once across three messages", { skip: !i
       assert.equal(result.handoffReason, null, result.reply);
     }
 
-    assert.deepEqual(offers, ["viewing", null, null]);
+    // Spec 006: with no property in play the offer is a call (contracts/interfaces.md §2);
+    // a viewing needs a property the lead pointed at. What SC-008 pins is "once".
+    assert.deepEqual(offers, ["call", null, null]);
   } finally {
     await query("delete from events where conversation_id = $1", [conversationId]);
+    // Spec 006: the offer is now a proposed appointment row.
+    await query("delete from appointments where conversation_id = $1", [conversationId]);
     await query("delete from messages where conversation_id = $1", [conversationId]);
     await query("delete from conversations where id = $1", [conversationId]);
     await query("delete from leads where id = $1", [leadId]);

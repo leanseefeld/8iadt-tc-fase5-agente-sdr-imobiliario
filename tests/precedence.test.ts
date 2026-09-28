@@ -126,3 +126,71 @@ test("US4: the reconfirmation names what changed before what it puts in doubt", 
     "Só pra confirmar: até R$ 1,2 mi, 2 quartos. Continua assim?",
   );
 });
+
+// ---------------------------------------------------------------------------
+// Spec 006 FR-005g — one reply per turn, and the decline as a prefix (SC-017)
+// ---------------------------------------------------------------------------
+
+import { readSchedulingFacts, replyKind, type ReplyKind } from "../src/agent/orchestrator.ts";
+import {
+  confirmationSentence,
+  optionsSentence,
+  slotLabel,
+} from "../src/agent/prompts/meeting.ts";
+
+test("FR-005g: every pair of reply kinds that can meet — the higher-ranked one decides", () => {
+  const ranked: ReplyKind[] = ["confirmation", "options", "search", "criteria", "reconfirmation", "question"];
+  const flag: Record<ReplyKind, keyof Parameters<typeof replyKind>[0] | null> = {
+    confirmation: "booked",
+    options: "options",
+    search: "searched",
+    criteria: "askedAboutCriteria",
+    reconfirmation: "reconfirmation",
+    question: null,
+  };
+  const none = { booked: false, options: false, searched: false, askedAboutCriteria: false, reconfirmation: false };
+  for (let high = 0; high < ranked.length; high += 1) {
+    for (let low = high + 1; low < ranked.length; low += 1) {
+      const turn = { ...none };
+      for (const kind of [ranked[high], ranked[low]]) {
+        const key = flag[kind];
+        if (key !== null) turn[key] = true;
+      }
+      assert.equal(replyKind(turn), ranked[high], `${ranked[high]} over ${ranked[low]}`);
+    }
+  }
+  assert.equal(replyKind(none), "question");
+});
+
+test("FR-005g: after a decline, the briefing forbids offering again and the reconfirmation is not in it", () => {
+  const briefing = turnBriefing({ ...base, declinedOffer: true, suggestions: { count: 2, relaxable: null } });
+  assert.match(briefing, /Não ofereça horários, visita nem conversa de novo/);
+  assert.match(briefing, /separou 2/, "the search result still wins the phrased part");
+  assert.equal(briefing.includes(RECONFIRM), false);
+});
+
+test("FR-005d/FR-005e: the scheduling sentences are code-written and name no one", () => {
+  const tz = "America/Sao_Paulo";
+  const times = [new Date("2030-01-07T13:00:00Z"), new Date("2030-01-07T19:30:00Z")];
+  const options = optionsSentence(times, "viewing", "VMA-0005", tz);
+  assert.equal(
+    options,
+    "Tenho estes horários para uma visita ao VMA-0005 com alguém da nossa equipe: 1) seg 07/01 às 10h · 2) seg 07/01 às 16h30. Qual fica melhor?",
+  );
+  assert.equal(
+    confirmationSentence(times[0], "call", null, tz),
+    "Pronto! Sua conversa está confirmada para seg 07/01 às 10h, com alguém da nossa equipe.",
+  );
+  assert.equal(slotLabel(new Date("2030-01-11T13:00:00Z"), tz), "sex 11/01 às 10h");
+});
+
+test("spec 006: the extraction's meeting facts are read strictly, and anything malformed is absent", () => {
+  assert.deepEqual(
+    readSchedulingFacts({ pickedTime: "sim", preferredWeekday: "thu", preferredPeriod: "morning", propertyCode: " VMA-0005 " }),
+    { declinedOffer: false, askedForTimes: false, pickedTime: true, preference: { weekday: "thu", period: "morning" }, propertyRef: { code: "VMA-0005" } },
+  );
+  assert.deepEqual(readSchedulingFacts({ propertyPosition: 2 }).propertyRef, { position: 2 });
+  assert.deepEqual(readSchedulingFacts({ propertyPosition: 0, preferredWeekday: "quinta", preferredPeriod: "noite" }), {
+    declinedOffer: false, askedForTimes: false, pickedTime: false, preference: {}, propertyRef: null,
+  });
+});

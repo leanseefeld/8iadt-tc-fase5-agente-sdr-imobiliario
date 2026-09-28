@@ -1,8 +1,9 @@
 # O turno do agente — quem decide o quê
 
 > Mapa de referência para responder, a qualquer momento: **isto é uma chamada de modelo ou uma conta do código?
-> E o que liga isso neste turno?** Reflete o código das specs 004, 005 e 007. O que a **spec 006** acrescenta
-> aparece **tracejado** e marcado *(006, planejado)* — atualizar quando ela for implementada (tarefa T039a).
+> E o que liga isso neste turno?** Reflete o código das specs 004, 005, 007 e da primeira parte da **006**
+> (propor, reservar, as saídas e o botão *Interessado*, marcados *(006)*). O que a 006 ainda vai acrescentar — o
+> follow-up — aparece **tracejado** e marcado *(006, planejado)* — atualizar quando for implementado (tarefa T039a).
 
 ## A regra, em uma frase
 
@@ -43,21 +44,24 @@ flowchart TD
     OPT -- "sim" --> W_OPT["OPT_OUT_REPLY"]:::escrita
     OPT -- "não" --> ACC["accountTurn<br/>streak: zera · mantém · avança"]:::codigo
     ACC --> DEC["Decidir<br/>handoffDecision · shouldProposeMeeting<br/>+ offerOutstanding · nextQuestion"]:::codigo
-    DEC -.-> PROP["proposeAppointment · declineProposal · resolvePropertyRef<br/>por askedForTimes · declinedOffer · propertyRef<br/>(006, planejado)"]:::plano
-    DEC --> HO{"handoff?"}:::codigo
+    DEC --> HO{"handoff?<br/>006: não, se a mensagem é sobre o encontro"}:::codigo
     HO -- "sim" --> W_HO["handoffReply"]:::escrita
-    HO -- "não" --> ACTQ{"act() oferecido?<br/>busca devida<br/>006: proposta aberta + pickedTime"}:::codigo
+    HO -- "não" --> MEET["Encontro (006)<br/>recusa → declineProposal · pedido ou interesse → proposeAppointment<br/>interesse resolvido por resolvePropertyRef"]:::codigo
+    MEET --> ACTQ{"act() oferecido?<br/>busca devida, sem frase de agenda<br/>006: proposta aberta + pickedTime"}:::codigo
     ACTQ -- "sim" --> ACT["act() — até 3 passos<br/>searchProperties<br/>006: bookMeeting"]:::age
-    ACTQ -- "não" --> FACTS
-    ACT --> FACTS["reconfirmação · último resultado de busca<br/>fatos derivados do Postgres"]:::codigo
+    ACTQ -- "não" --> AGENDA
+    ACT --> AGENDA{"frase de agenda?<br/>opções · confirmação · recusa da reserva"}:::codigo
+    AGENDA -- "sim" --> W_MEET["frase escrita pelo código<br/>datas, horários e 'alguém da nossa equipe'"]:::escrita
+    AGENDA -- "não" --> FACTS["reconfirmação · último resultado de busca<br/>fatos derivados do Postgres"]:::codigo
     FACTS --> CANT{"tentou algo que não dá para usar<br/>e fez uma pergunta?"}:::codigo
     CANT -- "sim" --> W_CANT["ainda não consigo te ajudar com isso"]:::escrita
     CANT -- "não" --> TASK["task()<br/>escolhe UMA instrução por precedência"]:::codigo
-    TASK --> PHR["phrase()<br/>streaming frase a frase"]:::fala
+    TASK --> PHR["phrase()<br/>streaming frase a frase<br/>006: depois de um prefixo escrito, se houver"]:::fala
     PHR --> GRD{"guardas por frase<br/>sintaxe · idioma · valores · nº de perguntas"}:::codigo
     GRD -- "reprovou" --> W_FB["fallbackText"]:::escrita
     GRD -- "passou" --> COMMIT
-    W_REF & W_FAIL & W_OPT & W_HO & W_CANT & W_FB --> COMMIT["commitTurn<br/>mensagens · slots · eventos<br/>006: agenda ou cancela o follow-up"]:::codigo
+    W_REF & W_FAIL & W_OPT & W_HO & W_MEET & W_CANT & W_FB --> COMMIT["commitTurn<br/>mensagens · slots · eventos<br/>006: opções e reserva nos metadados"]:::codigo
+    COMMIT -.-> FUP["agenda ou cancela o follow-up<br/>(006, planejado)"]:::plano
 ```
 
 **Por que três chamadas de modelo, e não uma.** `extract()` é um contrato JSON estreito, estabilizado a duras
@@ -78,10 +82,11 @@ stateDiagram-v2
         ativa --> fechada: optOut
     }
 
-    state "Oferta de encontro (006, planejado)" as OFERTA {
+    state "Oferta de encontro (006)" as OFERTA {
         [*] --> semOferta
         semOferta --> proposta: shouldProposeMeeting, ou askedForTimes com roteiro completo
-        proposta --> proposta: askedForTimes (cancela a anterior e insere)
+        proposta --> proposta: askedForTimes ou interesse (cancela a anterior e insere)
+        proposta --> proposta: bookMeeting recusado (motivo + novas opções)
         proposta --> confirmada: pickedTime e bookMeeting, revalidado
         proposta --> recusada: declinedOffer com proposta aberta
         recusada --> proposta: o lead pede de novo
@@ -103,6 +108,11 @@ stateDiagram-v2
 - **Uma oferta recusada não é oferecida de novo por conta própria** — `offerOutstanding` continua verdadeiro
   porque a mensagem da oferta está no histórico. O lead pode sempre pedir.
 - **Sem horário, sem handoff automático** (006): o agente diz que não há horário agora e mantém a proposta anterior aberta; quem quer uma pessoa pede.
+- **Uma mensagem sobre o encontro não é pedido de humano** (006): a extração lê *"a segunda"* ou *"quero agendar"*
+  como `askedForHuman`, porque o encontro é com uma pessoa. Quando a mesma mensagem escolhe, pede ou recusa
+  horários, o código ignora esse fato. E uma escolha vence um pedido de horários na mesma mensagem.
+- **Nenhum nome de corretor chega ao modelo por causa da agenda** (006): opções e confirmação dizem *"alguém da
+  nossa equipe"*, escritas pelo código; depois de uma devolução, o modelo não confirma nem nega quem atende.
 - **Uma proposta aberta não sequestra a conversa**: o lead pode mudar de assunto e voltar a ela depois.
 - **O streak de não compreensão** é um número em `conversations.fallbackStreak`: zera quando o turno aprende
   algo, **mantém** em conversa fiada ou falha técnica, **avança** quando o lead tentou algo inutilizável. Em 2,
@@ -117,13 +127,13 @@ stateDiagram-v2
 | botão **Interessado** no card *(006)* | 🟩 widget envia | `app/(public)/chat/…/PropertyCard.tsx` | clique ou toque: posta *"Interessado em VMA-0005"* em nome do lead, como mensagem dele, e um turno normal começa; a resposta depende de onde a conversa está (FR-004d) |
 | debounce · `claimTurn` | 🟦 código | `channels/web.ts` · `services/conversation.ts` | toda mensagem; um turno por conversa, depois de `CHAT_DEBOUNCE_MS` de silêncio |
 | `looksLikeInjection` | 🟦 código | `domain/injection.ts` | todo turno; três frases fixas de tentativa de manipulação |
-| `extract()` | 🟨 modelo lê | `agent/orchestrator.ts` | todo turno que passou do portão. Devolve slots e os fatos `askedForHuman`, `optOut`, `attemptedAnswer`, `askedAboutCriteria`; **006:** `declinedOffer`, `askedForTimes`, `pickedTime`, `timePreference`, `propertyRef` |
+| `extract()` | 🟨 modelo lê | `agent/orchestrator.ts` | todo turno que passou do portão. Devolve slots e os fatos `askedForHuman`, `optOut`, `attemptedAnswer`, `askedAboutCriteria`; **006:** `declinedOffer`, `askedForTimes`, `pickedTime`, `preferredWeekday`, `preferredPeriod`, `propertyPosition`, `propertyCode` |
 | `recoverSlot()` | 🟨 modelo lê | `agent/recovery.ts` | slot pendente ficou vazio, a extração não disse nada dele, **e** o lead tentou responder |
 | `mergeSlots` | 🟦 código | `domain/slots.ts` | todo turno; separa preenchido, revisado, intenção trocada e recusado |
 | `accountTurn` | 🟦 código | `agent/orchestrator.ts` | todo turno; decide o streak |
-| `handoffDecision` | 🟦 código | `domain/handoff.ts` | lead pediu humano, ou streak chegou a 2 |
+| `handoffDecision` | 🟦 código | `domain/handoff.ts` | lead pediu humano (**006:** numa mensagem que não é sobre o encontro), ou streak chegou a 2 |
 | `shouldProposeMeeting` | 🟦 código | `domain/handoff.ts` | roteiro completo (compra/aluguel: quente e com contato; investimento: sempre) **e** nenhuma oferta já feita (`offerOutstanding`) |
-| `proposeAppointment` *(006)* | 🟦 código | `services/scheduling.ts` | `shouldProposeMeeting`, **ou** `askedForTimes` com roteiro completo. Datas e horários são escritos pelo código |
+| `proposeAppointment` *(006)* | 🟦 código | `services/scheduling.ts` | `shouldProposeMeeting`, **ou** `askedForTimes`/interesse com roteiro completo (incompleto: *"Assim que eu tiver seus dados…"*, uma vez; já agendado: *"ainda não consigo"*). Dia e período pedidos filtram **antes** do limite de três. Datas e horários são escritos pelo código |
 | `resolvePropertyRef` *(006)* | 🟦 código | `services/conversation.ts` | a extração trouxe `propertyRef` (*"o segundo"*, *"VMA-0005"*); resolve só contra imóveis **já mostrados nesta conversa**, nunca adivinha |
 | `declineProposal` *(006)* | 🟦 código | `services/scheduling.ts` | `declinedOffer` **com proposta aberta** |
 | `nextQuestion` | 🟦 código | `domain/slots.ts` | quando não há oferta nem handoff no turno — **quem escolhe a próxima pergunta é sempre o código** |
@@ -132,12 +142,13 @@ stateDiagram-v2
 | `bookMeeting` *(006)* | 🟥 tool | `agent/tools/book-meeting.ts` | dentro do `act()`. Revalida pelo mesmo cálculo que gerou as opções |
 | reconfirmação | 🟦 código | `domain/revision.ts` | slot já preenchido foi revisado, tem dependentes, o turno anterior não foi reconfirmação, **e nenhuma busca apareceu neste turno** |
 | `lastSearchOutcome` | 🟦 código | `services/conversation.ts` | turnos sem busca; é a última busca lida das mensagens gravadas |
-| `task()` | 🟦 código | `agent/prompts/system.ts` | escolhe **uma** instrução. **Hoje (007):** cards › sem resultado › pergunta sobre critérios ou resultados › reconfirmação › oferta › pergunta do roteiro. **006 (planejado):** confirmação › opções › resultado de busca › pergunta sobre critérios ou resultados › reconfirmação › pergunta do roteiro; a aceitação de uma recusa vem **antes** do vencedor e só suprime opções e reconfirmação |
+| `task()` | 🟦 código | `agent/prompts/system.ts` · `replyKind` em `agent/orchestrator.ts` | escolhe **uma** instrução. Ordem (006, FR-005g): confirmação › opções › resultado de busca › pergunta sobre critérios ou resultados › reconfirmação › pergunta do roteiro. As duas primeiras são frases escritas e nem chegam ao `task()`; a aceitação de uma recusa vem **antes** do vencedor, como prefixo, e só suprime opções e reconfirmação |
 | `phrase()` | 🟪 modelo fala | `agent/orchestrator.ts` | sempre que o turno não terminou numa frase escrita |
 | guardas | 🟦 código | `domain/reply-guards.ts` | cada frase: sintaxe vazada, idioma, valor sem lastro, número de perguntas |
-| frases escritas | 🟩 código | `agent/prompts/fallback.ts` · `services/handoff.ts` | recusa, falha técnica, opt-out, handoff, *"ainda não consigo"*, reentrada; **006:** opções, confirmação, recusa aceita |
-| `commitTurn` | 🟦 código | `services/conversation.ts` | fim de todo turno; **006:** agenda o follow-up se sobrou pergunta ou proposta, cancela a cada mensagem do lead |
-| varredura de follow-up *(006)* | 🟦 código + 🟪 modelo escreve | `jobs/followup.ts` · `agent/followup-writer.ts` | worker; elegibilidade checada duas vezes, incluindo a chave da agência |
+| frases escritas | 🟩 código | `agent/prompts/fallback.ts` · `services/handoff.ts` · `agent/prompts/meeting.ts` | recusa, falha técnica, opt-out, handoff, *"ainda não consigo"*, reentrada; **006:** opções, confirmação, motivo de uma reserva recusada, recusa aceita, *"assim que eu tiver seus dados"* |
+| card do encontro *(006)* | 🟩 widget | `app/(public)/chat/…/MeetingCard.tsx` | mensagem com `booking` nos metadados: dia, hora, tipo e — numa visita — o código do imóvel; nunca o corretor |
+| `commitTurn` | 🟦 código | `services/conversation.ts` | fim de todo turno; **006:** grava `meetingOptions`, `offerDeclined`, `interestedProperty` e `booking` nos metadados da resposta; **(006, planejado):** agenda o follow-up se sobrou pergunta ou proposta, cancela a cada mensagem do lead |
+| varredura de follow-up *(006, planejado)* | 🟦 código + 🟪 modelo escreve | `jobs/followup.ts` · `agent/followup-writer.ts` | worker; elegibilidade checada duas vezes, incluindo a chave da agência |
 
 ## Ver também
 

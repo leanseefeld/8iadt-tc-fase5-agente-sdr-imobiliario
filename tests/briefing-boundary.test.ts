@@ -21,6 +21,8 @@ const PERMITTED = [
   "reconfirmation",
   "askedAboutCriteria",
   "lastSearch",
+  "declinedOffer",
+  "detailsFirst",
 ] as const;
 
 test("TurnPromptInput carries only the permitted fields", () => {
@@ -43,4 +45,24 @@ test("TurnPromptInput carries only the permitted fields", () => {
   const briefing = turnBriefing(input);
   assert.equal(/score|temperatura|fallback|pipeline/i.test(briefing), false);
   assert.match(briefing, /critérios que já estão no estado/);
+});
+
+test("spec 006 FR-005e: after a handback, attendance is neither confirmed nor denied", () => {
+  const briefing = turnBriefing({
+    intent: "purchase",
+    slots: EMPTY_SLOTS,
+    filled: [],
+    question: null,
+    consented: true,
+    meeting: null,
+    notUnderstood: false,
+    broker: { name: "Ana", justReturned: false },
+  });
+  assert.match(briefing, /não confirme nem negue que será Ana/);
+});
+
+test("spec 006 FR-005e: the reply rules forbid naming who will attend", async () => {
+  const { REPLY_SYSTEM_PROMPT } = await import("../src/agent/prompts/system.ts");
+  assert.match(REPLY_SYSTEM_PROMPT, /quem vai atendê-la/);
+  assert.match(REPLY_SYSTEM_PROMPT, /Nunca diga que uma\s+pessoa específica da equipe vai atender/);
 });

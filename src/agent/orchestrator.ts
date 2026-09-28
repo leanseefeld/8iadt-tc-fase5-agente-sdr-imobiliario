@@ -1260,7 +1260,9 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   // not a request to leave the agent: the extraction reads "a segunda" or
   // "quero agendar" as asking for a person, because the meeting is with one.
   // The explicit ask still wins on any other message (spec 004 FR-027).
-  const aboutTheMeeting = declining || picking || wantsOffer || askingWhoAttends;
+  // A request refused as outside the domain ("uma corretora LGBT pra me
+  // atender") names a person too; it is still not a request to leave the agent.
+  const aboutTheMeeting = declining || picking || wantsOffer || askingWhoAttends || refused;
   const handoffReason = handoffDecision({
     leadAskedForHuman: extraction.leadAskedForHuman && !aboutTheMeeting,
     fallbackStreak,

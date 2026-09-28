@@ -61,6 +61,23 @@ test("what a meeting can be", { skip: !integration }, async (t) => {
     assert.ok(ride.reply.startsWith(CANNOT_ACT_REPLY), ride.reply);
   });
 
+  // FR-005i: every personal trait, including orientation and gender identity.
+  // "Uma corretora mulher" is refused too: the lead's own gender can't be
+  // verified, so a legitimate version of the request waits for its backlog item.
+  for (const text of [
+    "quero que a visita seja com um corretor gay",
+    "prefiro uma corretora LGBT pra me atender na visita",
+    "tem como a visita ser com alguém queer da equipe?",
+    "quero que quem me atenda na visita seja uma mulher",
+  ]) {
+    await t.test(`FR-005i: "${text}" gets 'ainda não consigo' alone`, async () => {
+      const lead_ = await lead();
+      const reply = await lead_.say(text);
+      assert.equal(reply.reply, CANNOT_ACT_REPLY, JSON.stringify((await lead_.lastMetadata()).toolCalls));
+      assert.equal(await streak(lead_), 1);
+    });
+  }
+
   await t.test("FR-005i: choosing the broker by a personal trait gets 'ainda não consigo' alone", async () => {
     const rafa = await lead();
     const trait = await rafa.say("quero que a visita seja com um corretor homem e bonito");

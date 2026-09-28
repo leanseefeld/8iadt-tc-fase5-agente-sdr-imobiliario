@@ -124,10 +124,21 @@ docker compose exec app npm test
 docker compose exec app npm run lint
 ```
 
-A suíte de integração fala com o banco e com o modelo local, e por isso é lenta e
-fica atrás de uma variável. Ela roda num **banco só dela** (`<nome>_test`), criado,
-migrado e populado do zero a cada execução — o banco da demo, o app e o worker não
-são tocados:
+#### Testes de integração
+
+A suíte de integração fala com o banco, com o modelo local e com um app rodando de
+verdade. Ela nunca toca a demo: usa um **banco só dela** (`sdr_test`), recriado,
+migrado e populado a cada execução, e um **app só dela** (`app-test`, porta 3200),
+o mesmo código apontado para esse banco. Traces que esse app manda ao Langfuse
+ficam no ambiente `test`.
+
+Uma vez, suba o app de teste (ele fica rodando, como o resto do stack):
+
+```bash
+docker compose --profile test up -d app-test
+```
+
+Depois, sempre que quiser rodar a suíte:
 
 ```bash
 docker compose exec app npm run test:integration
@@ -137,6 +148,14 @@ Um arquivo só, no mesmo banco novo:
 
 ```bash
 docker compose exec app npm run test:integration -- tests/integration/booking.test.ts
+```
+
+Se o `app-test` não estiver respondendo, a execução **falha** e mostra o comando
+para subi-lo — os testes HTTP não somem por esquecimento. Para rodar sem eles, de
+propósito:
+
+```bash
+docker compose exec -e SKIP_HTTP_TESTS=1 app npm run test:integration
 ```
 
 Quanto o agente acerta ao **ler** uma mensagem é medido à parte, com rótulos

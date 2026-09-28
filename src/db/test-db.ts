@@ -20,11 +20,38 @@ import pg from "pg";
  *
  * runs one file on a fresh database. With none, it runs every test file.
  *
- * `TEST_DATABASE=1` tells the few tests that also talk to the running app over
- * HTTP that the app is on another database, so they skip that half.
+ * **The HTTP tests.** Some tests also call a running app over HTTP (the SSE
+ * replay). That app is `app-test` — the same app, on port 3200 and this same
+ * database (`docker compose --profile test up -d app-test`). The run **fails**
+ * when it isn't answering, so the HTTP half can't be skipped by forgetting to
+ * start it. `SKIP_HTTP_TESTS=1` skips it on purpose, and says so.
  */
 
 const DEFAULT_FILES = ["tests/integration/*.test.ts", "tests/*.test.ts"];
+const TEST_APP_URL = process.env.TEST_APP_URL ?? "http://app-test:3200";
+const TEST_APP_WAIT_MS = 120_000;
+
+/**
+ * Waits for the test app to answer on this database, then warms the routes the
+ * HTTP tests call: `next dev` compiles a route on its first request, which can
+ * take longer than a test's own timeout.
+ */
+async function waitForTestApp(): Promise<boolean> {
+  const deadline = Date.now() + TEST_APP_WAIT_MS;
+  while (Date.now() < deadline) {
+    const ready = await fetch(`${TEST_APP_URL}/api/health/ready`, { signal: AbortSignal.timeout(20_000) })
+      .then((response) => response.ok)
+      .catch(() => false);
+    if (ready) {
+      await fetch(`${TEST_APP_URL}/api/chat/00000000-0000-0000-0000-000000000000/events`, {
+        signal: AbortSignal.timeout(60_000),
+      }).catch(() => undefined);
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+  return false;
+}
 
 function testUrl(source: string): { url: string; name: string; admin: string } {
   const url = new URL(source);
@@ -63,10 +90,31 @@ async function main(): Promise<number> {
   }
   console.log(`test database ${name}: created`);
 
-  const env: NodeJS.ProcessEnv = { ...process.env, DATABASE_URL: url, INTEGRATION: "1", TEST_DATABASE: "1" };
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    DATABASE_URL: url,
+    INTEGRATION: "1",
+    TEST_DATABASE: "1",
+    // A test run's traces are filed apart from the demo's in Langfuse.
+    LANGFUSE_TRACING_ENVIRONMENT: "test",
+  };
   if (run("node", ["src/db/migrate.ts"], env) !== 0) return 1;
   if (run("node", ["src/db/seed/index.ts"], env) !== 0) return 1;
   console.log(`test database ${name}: migrated and seeded`);
+
+  if (process.env.SKIP_HTTP_TESTS === "1") {
+    console.log("SKIP_HTTP_TESTS=1: the HTTP tests are skipped on purpose");
+  } else if (await waitForTestApp()) {
+    env.TEST_APP_URL = TEST_APP_URL;
+    console.log(`test app answering at ${TEST_APP_URL}`);
+  } else {
+    console.error(
+      `No test app at ${TEST_APP_URL}. Start it once with:\n\n` +
+        "  docker compose --profile test up -d app-test\n\n" +
+        "or run without the HTTP tests, on purpose, with SKIP_HTTP_TESTS=1.",
+    );
+    return 1;
+  }
 
   const files = process.argv.slice(2);
   return run("node", ["--test", "--test-concurrency=1", ...(files.length > 0 ? files : DEFAULT_FILES)], env);

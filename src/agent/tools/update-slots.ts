@@ -174,8 +174,9 @@ export const EXTRACTION_FIELDS: readonly ExtractionField[] = [
     key: "outOfScopeRequest",
     description:
       "true se a pessoa pediu algo ligado a uma visita que a imobiliária não faz: carona ou transporte, " +
-      "reembolso de passagem ou combustível, escolher quem atende pela aparência, cor, gênero, religião, " +
-      "ideologia ou outra característica pessoal. Perguntar quem vai atender NÃO é isso. Na dúvida, false.",
+      "reembolso de passagem ou combustível, escolher quem atende pela aparência, cor, gênero, identidade de " +
+      "gênero, orientação sexual (gay, LGBT, queer…), religião, ideologia ou outra característica pessoal. " +
+      "Perguntar quem vai atender NÃO é isso. Na dúvida, false.",
   },
   {
     key: "askedWhoAttends",

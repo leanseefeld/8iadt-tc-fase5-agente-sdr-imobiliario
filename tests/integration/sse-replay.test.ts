@@ -140,13 +140,14 @@ test("a reconnecting stream replays from Last-Event-ID out of the rows", {
   // The HTTP half. It needs the dev server, so it says so and skips rather than
   // failing when the suite is run against a database alone.
   await t.test("the SSE route replays those rows to a reconnecting client", async () => {
-    // The suite's own database (`npm run test:integration`) is not the one the
-    // running app reads, so the app cannot see this conversation.
-    if (process.env.TEST_DATABASE === "1") {
-      t.diagnostic("running on the test database; the app server reads another one — skipping the HTTP half");
+    // Under `npm run test:integration` the server is `app-test`, on this same
+    // database; the runner fails the run when it isn't up, unless told
+    // SKIP_HTTP_TESTS=1. Run on its own, the file falls back to the dev app.
+    if (process.env.SKIP_HTTP_TESTS === "1") {
+      t.diagnostic("SKIP_HTTP_TESTS=1: skipping the HTTP half on purpose");
       return;
     }
-    const base = `http://localhost:${getConfig().APP_PORT}`;
+    const base = process.env.TEST_APP_URL ?? `http://localhost:${getConfig().APP_PORT}`;
     const reachable = await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(2_000) })
       .then((response) => response.ok)
       .catch(() => false);

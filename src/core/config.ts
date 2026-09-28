@@ -95,6 +95,13 @@ export const configSchema = z.object({
   LANGFUSE_PUBLIC_KEY: z.string().min(1).optional(),
   LANGFUSE_SECRET_KEY: z.string().min(1).optional(),
   LANGFUSE_BASE_URL: z.url().optional(),
+  // Langfuse's environment for every trace; empty falls back to NODE_ENV. The
+  // integration runner sets `test`, so a test run's traces filter apart.
+  LANGFUSE_TRACING_ENVIRONMENT: z
+    .string()
+    .regex(/^[a-z0-9_-]*$/, "lowercase letters, digits, - and _")
+    .optional()
+    .transform((value) => (value === "" ? undefined : value)),
   // Read by docker-compose.yml, like DB_PORT — declared here because the
   // schema is the authoritative key set.
   LANGFUSE_UI_PORT: port.default(3102),

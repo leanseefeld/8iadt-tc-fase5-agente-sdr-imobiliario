@@ -309,3 +309,21 @@ after the first build"):
   `meetingKind` counts only what this message asks for. Test failures now print the extracted facts.
 - e4b drove every new case unaided. One flake in the change-of-subject escape (1 of 4 runs) is a model misread,
   not a pattern; no escalation.
+
+**Follow-ups the same day (T048–T050).**
+- Traits: the check is one extraction fact judged by the model from its description, not a keyword list.
+  - Orientation and gender identity weren't named, so four phrasings were tested: gay, LGBT, queer, "uma
+    mulher". All pass unchanged, and two conversations through the chat API behaved the same: before a booking,
+    the second trait request in a row handed off; after a booking, the refusal left the booking intact.
+  - The full suite then **failed two of them**, so they aren't reliable unchanged, and both causes are fixed:
+    - "corretora LGBT pra me atender" was read as out-of-scope **and** as asking for a human, and the handoff
+      won. A refused request is now not a request for a person, like a meeting message.
+    - "alguém queer" wasn't flagged. The description now names *identidade de gênero* and *orientação sexual
+      (gay, LGBT, queer…)*.
+  - After the fix: `meeting-limits.test.ts` passed 8 of 8, three runs in a row, and the chat-API conversation
+    refused both phrasings and handed off on the second.
+- Tenants: the follow-up, scheduling and agenda tests create their own agency. The conversation tests use the
+  seeded `demo`, but it's the copy in `sdr_test`.
+- HTTP tests: `app-test` serves `sdr_test` on port 3200. The runner **requires** it, which is verified: pointed
+  at a dead URL, it prints the start command and runs nothing. A turn sent to it was filed in Langfuse under
+  environment `test`.

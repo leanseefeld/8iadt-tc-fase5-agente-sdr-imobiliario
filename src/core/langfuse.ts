@@ -284,7 +284,7 @@ export async function registerLangfuse(process: ProcessName): Promise<void> {
       // carries — the prompt, the reply, tool arguments — goes through the same
       // function the logger uses.
       mask: ({ data }) => maskSpanData(data),
-      environment: config.NODE_ENV,
+      environment: config.LANGFUSE_TRACING_ENVIRONMENT ?? config.NODE_ENV,
     });
 
     // `service.name` is the OpenTelemetry way to say who emitted a span, and

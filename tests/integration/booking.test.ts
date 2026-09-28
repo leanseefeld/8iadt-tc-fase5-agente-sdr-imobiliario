@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { closePool } from "../../src/db/client.ts";
-import { BOOKING_REFUSED, NO_OPTIONS_FOR_CONSTRAINT_SENTENCE } from "../../src/agent/prompts/meeting.ts";
+import { ATTENDEE_UNKNOWN_SENTENCE, BOOKING_REFUSED, NO_OPTIONS_FOR_CONSTRAINT_SENTENCE } from "../../src/agent/prompts/meeting.ts";
 import { OPTIONS, qualifiedLead, query, toolNames, type Lead } from "./support/meeting.ts";
 
 /**
@@ -42,6 +42,11 @@ test("booking a meeting", { skip: !integration }, async (t) => {
     const [stage] = await query("select status from leads where id = $1", [camila.leadId]);
     assert.equal(stage.status, "scheduled");
     assert.equal(booked.stage, "scheduled");
+
+    // FR-005e: who attends is neither named nor guessed, and asking is not a handoff.
+    const who = await camila.say("quem vai me atender?");
+    assert.equal(who.reply, ATTENDEE_UNKNOWN_SENTENCE);
+    assert.equal(who.handoffReason, null);
   });
 
   await t.test("T020 a time outside the broker's week: a readable refusal, fresh options, nothing confirmed", async () => {

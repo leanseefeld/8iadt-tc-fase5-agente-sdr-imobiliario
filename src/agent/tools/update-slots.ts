@@ -156,6 +156,12 @@ export const EXTRACTION_FIELDS: readonly ExtractionField[] = [
       "o número dessa posição, contando a partir de 1. Senão, null.",
   },
   {
+    key: "askedWhoAttends",
+    description:
+      'true se a pessoa perguntou quem vai atendê-la na visita ou conversa ("quem vai me atender?", ' +
+      '"qual o nome do corretor?"). Na dúvida, false.',
+  },
+  {
     key: "propertyCode",
     description:
       'Se a pessoa citou o código de um imóvel, como "VMA-0005" ou "Interessado em MOE-0003", ' +
@@ -186,6 +192,7 @@ export interface Extracted {
   pickedTime: boolean;
   propertyPosition: number | null;
   propertyCode: string | null;
+  askedWhoAttends: boolean;
 }
 
 /** The model writes `true`, `"true"` or `"sim"`; all three mean the same thing. */

@@ -10,8 +10,15 @@ import styles from "./chat.module.css";
  */
 export default function MeetingCard({ booking, timeZone }: { booking: WireBooking; timeZone: string }) {
   const at = new Date(booking.scheduledAt);
-  const day = new Intl.DateTimeFormat("pt-BR", { timeZone, weekday: "long", day: "2-digit", month: "2-digit" }).format(at);
-  const time = new Intl.DateTimeFormat("pt-BR", { timeZone, hour: "2-digit", minute: "2-digit" }).format(at);
+  const longDay = new Intl.DateTimeFormat("pt-BR", { timeZone, weekday: "long", day: "2-digit", month: "2-digit" }).format(at);
+  // "Segunda-feira", not CSS capitalize's "Segunda-Feira".
+  const day = longDay.charAt(0).toUpperCase() + longDay.slice(1);
+  const [hours, minutes] = new Intl.DateTimeFormat("pt-BR", { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    .format(at)
+    .split(":")
+    .map(Number);
+  // "10h", "16h30" — the same spelling as the confirmation sentence above it.
+  const time = minutes === 0 ? `${hours}h` : `${hours}h${String(minutes).padStart(2, "0")}`;
   const what =
     booking.type === "call"
       ? "Conversa com a equipe"
@@ -23,7 +30,7 @@ export default function MeetingCard({ booking, timeZone }: { booking: WireBookin
     <article className={styles.meetingCard} aria-label={`${what}, ${day} às ${time}`}>
       <p className={styles.meetingLabel}>Agendado</p>
       <p className={styles.meetingWhen}>
-        <span className={styles.meetingDay}>{day}</span> · {time}
+        {day} · {time}
       </p>
       <p className={styles.meetingWhat}>{what}</p>
     </article>

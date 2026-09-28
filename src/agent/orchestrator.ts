@@ -60,6 +60,7 @@ import { plausiblyAnswers, recoverSlot } from "./recovery.ts";
 import { act } from "./act.ts";
 import { actionTools, type SearchOutcome } from "./tools/index.ts";
 import {
+  ATTENDEE_UNKNOWN_SENTENCE,
   BOOKING_REFUSED,
   DECLINE_ACKNOWLEDGEMENT,
   DETAILS_FIRST_SENTENCE,
@@ -331,6 +332,7 @@ interface SchedulingFacts {
   pickedTime: boolean;
   preference: Preference;
   propertyRef: PropertyRef | null;
+  askedWhoAttends: boolean;
 }
 
 const NO_SCHEDULING: SchedulingFacts = {
@@ -339,6 +341,7 @@ const NO_SCHEDULING: SchedulingFacts = {
   pickedTime: false,
   preference: {},
   propertyRef: null,
+  askedWhoAttends: false,
 };
 
 const WEEKDAYS: readonly Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -362,6 +365,7 @@ export function readSchedulingFacts(object: Record<string, unknown>): Scheduling
     pickedTime: isTrue(object.pickedTime),
     preference,
     propertyRef,
+    askedWhoAttends: isTrue(object.askedWhoAttends),
   };
 }
 
@@ -1165,7 +1169,16 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   const alreadyBooked = wantsOffer && scriptComplete && (await hasConfirmedFutureAppointment(turn.lead.id));
   // A "no" with nothing open to decline was still understood: it is not a
   // misunderstanding to count towards a handoff, only nothing to act on.
-  const acted = facts.declinedOffer || picking || (wantsOffer && !alreadyBooked);
+  // FR-005e: "quem vai me atender?" about a meeting that exists gets the
+  // code-written answer. With nothing proposed or booked, the phrased reply and
+  // its system rule answer instead.
+  const askingWhoAttends =
+    facts.askedWhoAttends &&
+    !declining &&
+    !picking &&
+    !wantsOffer &&
+    (proposalOpen || (await hasConfirmedFutureAppointment(turn.lead.id)));
+  const acted = facts.declinedOffer || picking || askingWhoAttends || (wantsOffer && !alreadyBooked);
 
   // A misunderstanding is an attempt the system could not use (FR-003a). A
   // reaction, a greeting or a failed extraction holds the streak instead of
@@ -1187,7 +1200,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   // not a request to leave the agent: the extraction reads "a segunda" or
   // "quero agendar" as asking for a person, because the meeting is with one.
   // The explicit ask still wins on any other message (spec 004 FR-027).
-  const aboutTheMeeting = declining || picking || wantsOffer;
+  const aboutTheMeeting = declining || picking || wantsOffer || askingWhoAttends;
   const handoffReason = handoffDecision({
     leadAskedForHuman: extraction.leadAskedForHuman && !aboutTheMeeting,
     fallbackStreak,
@@ -1206,7 +1219,9 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     offerTimes({ turn, intent, property, constraint, proposalOpen, timezone });
 
   if (handoffReason === null) {
-    if (declining) {
+    if (askingWhoAttends) {
+      written = ATTENDEE_UNKNOWN_SENTENCE;
+    } else if (declining) {
       await declineProposal(turn.conversation.id);
       scheduling = { ...scheduling, declined: true };
       prefix = DECLINE_ACKNOWLEDGEMENT;

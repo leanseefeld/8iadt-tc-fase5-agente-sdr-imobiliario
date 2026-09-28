@@ -110,7 +110,13 @@ export async function listLeads(scope: LeadScope, query: LeadQuery): Promise<Lea
     conditions.push(eq(conversations.status, "paused"));
     conditions.push(isNull(conversations.heldByUserId));
   } else if (query.filter === "visita_marcada") {
-    conditions.push(eq(leads.status, "scheduled"));
+    // Spec 006 FR-008b: derived from a confirmed meeting still to come, not
+    // from the stage. Stages only move forward (ADR 19), so a cancelled meeting
+    // would otherwise leave the lead marked *Visita marcada* with nothing booked.
+    conditions.push(sql`exists (
+      select 1 from appointments a
+       where a.lead_id = ${leads.id} and a.status = 'confirmed' and a.scheduled_at >= now()
+    )`);
   } else if (query.filter === "sem_resposta") {
     conditions.push(eq(conversations.followupState, "exhausted"));
   }

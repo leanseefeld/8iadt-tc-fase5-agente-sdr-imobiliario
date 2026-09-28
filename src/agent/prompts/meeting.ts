@@ -74,6 +74,13 @@ export const DECLINE_ACKNOWLEDGEMENT = "Sem problema — se quiser marcar depois
 /** FR-005b: a request before the script is complete. The script's question follows it. */
 export const DETAILS_FIRST_SENTENCE = "Claro! Assim que eu tiver seus dados, te passo os horários.";
 
+/**
+ * FR-005e: asked who will attend. Neither a name nor a guess — the team
+ * calendar is internal and who goes can change at the last minute.
+ */
+export const ATTENDEE_UNKNOWN_SENTENCE =
+  "Ainda não consigo te dizer o nome de quem vai te atender, mas está tudo registrado no sistema com alguém da nossa equipe.";
+
 /** FR-005: why a pick could not be booked, said before the fresh options. */
 export const BOOKING_REFUSED: Record<"too_soon" | "unavailable" | "collision" | "no_such_option", string> = {
   too_soon: "Esse horário está muito em cima.",

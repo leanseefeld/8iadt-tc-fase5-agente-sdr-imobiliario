@@ -143,14 +143,14 @@ statement are met. **Spec 009 can start.**
 
 **Independent test**: [quickstart.md](quickstart.md) §4, minus its cut step 5.
 
-- [ ] T033 [US3] Implement `listAppointments(scope, range)` and `markAppointmentStatus(scope, appointmentId, status)` in `src/services/scheduling.ts`:
+- [x] T033 [US3] Implement `listAppointments(scope, range)` and `markAppointmentStatus(scope, appointmentId, status)` in `src/services/scheduling.ts`:
   - grouped by day — *Hoje*, *Amanhã*, then weekday and date — ascending within a day, excluding `proposed`;
   - a broker sees their own, a manager the agency's (FR-007, FR-008).
   `done` also sets the lead's stage to `visited`; both transitions go through T009's transition function and emit their event with `actorType: 'user'` and `actorUserId`
-- [ ] T034 [US3] Replace spec 003's placeholder with `src/app/(app)/agenda/page.tsx`, `src/app/(app)/agenda/agenda.module.css` and `src/app/(app)/agenda/_components/AppointmentRow.tsx`. Each row shows time, lead name, meeting type, property code with neighbourhood, and status, plus explanatory copy when empty (FR-007). Per constitution principle X: the broker came to see today, so today comes first and is readable at 390 px
-- [ ] T035 [US3] Add `markDone` and `markCancelled` Server Actions in `src/app/(app)/agenda/actions.ts`, each revalidating the route
-- [ ] T036a [US3] (FR-008b) In `src/services/leads.ts`, derive the `visita_marcada` filter — and the matching label in `src/app/(app)/leads/_components/labels.ts` — from the lead having a **confirmed appointment in the future**, not from `leads.status = 'scheduled'`. Stages stay forward-only (ADR 19), so a cancelled meeting no longer leaves a lead marked *Visita marcada*. Cover it in `tests/agenda-scope.test.ts`
-- [ ] T036 [P] [US3] Write `tests/agenda-scope.test.ts` against Postgres: broker vs. manager scoping, ascending order within a day, `proposed` rows never listed, empty-state copy when nothing is listed
+- [x] T034 [US3] Replace spec 003's placeholder with `src/app/(app)/agenda/page.tsx`, `src/app/(app)/agenda/agenda.module.css` and `src/app/(app)/agenda/_components/AppointmentRow.tsx`. Each row shows time, lead name, meeting type, property code with neighbourhood, and status, plus explanatory copy when empty (FR-007). Per constitution principle X: the broker came to see today, so today comes first and is readable at 390 px
+- [x] T035 [US3] Add `markDone` and `markCancelled` Server Actions in `src/app/(app)/agenda/actions.ts`, each revalidating the route
+- [x] T036a [US3] (FR-008b) In `src/services/leads.ts`, derive the `visita_marcada` filter — and the matching label in `src/app/(app)/leads/_components/labels.ts` — from the lead having a **confirmed appointment in the future**, not from `leads.status = 'scheduled'`. Stages stay forward-only (ADR 19), so a cancelled meeting no longer leaves a lead marked *Visita marcada*. Cover it in `tests/agenda-scope.test.ts`
+- [x] T036 [P] [US3] Write `tests/agenda-scope.test.ts` against Postgres: broker vs. manager scoping, ascending order within a day, `proposed` rows never listed, empty-state copy when nothing is listed
 
 ---
 
@@ -164,7 +164,7 @@ statement are met. **Spec 009 can start.**
   Report transcripts with each turn's stored flags in the implementation log
 - [ ] T038 Run [quickstart.md](quickstart.md) end to end on the running stack, including the drawer's *send the follow-up now* button and the stale lead's first-sweep follow-up (SC-009)
 - [ ] T039 [P] Confirm SC-010 and the build: `docker compose exec -T app npm test` green, `npm run lint`, `npx tsc --noEmit` and `npm run build` all succeed
-- [ ] T039a [P] Update `docs/arquitetura/modelo-de-dados.md`: the `agencies` table gains `followupEnabled` (FR-019); §7's *Visita marcada* is derived from a confirmed future appointment (FR-008b). Update `docs/arquitetura/turno-do-agente.md` so every step marked *(006, planejado)* matches what was built
+- [x] T039a [P] Update `docs/arquitetura/modelo-de-dados.md`: the `agencies` table gains `followupEnabled` (FR-019); §7's *Visita marcada* is derived from a confirmed future appointment (FR-008b). Update `docs/arquitetura/turno-do-agente.md` so every step marked *(006, planejado)* matches what was built
 - [ ] T040 [P] Update `specs/BACKLOG.md`: the 006 row's status, and a note that 009 starts next on top of plan step 3a
 - [ ] T041 Record in the implementation log anything the replay or the quickstart contradicted in the spec, and stop for direction if any of it changes a requirement
 

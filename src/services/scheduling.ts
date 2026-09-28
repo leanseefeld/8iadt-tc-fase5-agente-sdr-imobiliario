@@ -367,3 +367,177 @@ export async function hasConfirmedFutureAppointment(leadId: string, now = new Da
     .limit(1);
   return rows.length > 0;
 }
+
+// ---------------------------------------------------------------------------
+// The agenda (US3, FR-007, FR-008)
+// ---------------------------------------------------------------------------
+
+export interface AgendaScope {
+  agencyId: string;
+  userId: string;
+  role: "broker" | "salesManager";
+}
+
+export interface AgendaRow {
+  id: string;
+  scheduledAt: Date;
+  /** "10h", "16h30" — in the agency's timezone. */
+  time: string;
+  leadId: string;
+  leadName: string | null;
+  type: MeetingType;
+  propertyCode: string | null;
+  neighborhood: string | null;
+  status: "confirmed" | "done" | "cancelled";
+  /** The manager's view names who attends; a broker's own agenda does not need to. */
+  brokerName: string;
+}
+
+export interface AgendaGroup {
+  /** "Hoje", "Amanhã", "qui 02/10". */
+  label: string;
+  /** YYYY-MM-DD in the agency's timezone. */
+  day: string;
+  rows: AgendaRow[];
+}
+
+const WEEKDAY_PT: Record<string, string> = {
+  mon: "seg", tue: "ter", wed: "qua", thu: "qui", fri: "sex", sat: "sáb", sun: "dom",
+};
+
+function localDay(at: Date, timeZone: string): { key: string; label: string; minutes: number } {
+  const parts: Record<string, string> = {};
+  for (const part of new Intl.DateTimeFormat("en-US", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", weekday: "short", hourCycle: "h23",
+  }).formatToParts(at)) parts[part.type] = part.value;
+  return {
+    key: `${parts.year}-${parts.month}-${parts.day}`,
+    label: `${WEEKDAY_PT[parts.weekday.toLowerCase().slice(0, 3)]} ${parts.day}/${parts.month}`,
+    minutes: Number(parts.hour) * 60 + Number(parts.minute),
+  };
+}
+
+/**
+ * FR-007/FR-008: booked meetings in `range`, grouped by day in the agency's
+ * timezone — *Hoje*, *Amanhã*, then weekday and date — ascending within each.
+ * A broker sees their own; a manager, the agency's. A `proposed` row is an
+ * offer still on the table, not a meeting, and is never listed.
+ */
+export async function listAppointments(
+  scope: AgendaScope,
+  range: { from: Date; to: Date },
+  now: Date = new Date(),
+): Promise<AgendaGroup[]> {
+  const timeZone = getConfig().FOLLOWUP_TIMEZONE;
+  const conditions = [
+    eq(appointments.agencyId, scope.agencyId),
+    inArray(appointments.status, ["confirmed", "done", "cancelled"]),
+    gte(appointments.scheduledAt, range.from),
+    sql`${appointments.scheduledAt} < ${range.to}`,
+  ];
+  if (scope.role !== "salesManager") conditions.push(eq(appointments.brokerId, scope.userId));
+
+  const rows = await getDb()
+    .select({
+      id: appointments.id,
+      scheduledAt: appointments.scheduledAt,
+      leadId: appointments.leadId,
+      leadName: leads.name,
+      type: appointments.type,
+      status: appointments.status,
+      propertyCode: properties.code,
+      neighborhood: properties.neighborhood,
+      brokerName: users.name,
+    })
+    .from(appointments)
+    .innerJoin(leads, eq(leads.id, appointments.leadId))
+    .innerJoin(users, eq(users.id, appointments.brokerId))
+    .leftJoin(properties, eq(properties.id, appointments.propertyId))
+    .where(and(...conditions))
+    .orderBy(asc(appointments.scheduledAt));
+
+  const today = localDay(now, timeZone).key;
+  const tomorrow = localDay(new Date(now.getTime() + 24 * 60 * 60_000), timeZone).key;
+  const groups: AgendaGroup[] = [];
+  for (const row of rows) {
+    const day = localDay(row.scheduledAt, timeZone);
+    let group = groups.at(-1);
+    if (group?.day !== day.key) {
+      group = {
+        day: day.key,
+        label: day.key === today ? "Hoje" : day.key === tomorrow ? "Amanhã" : day.label,
+        rows: [],
+      };
+      groups.push(group);
+    }
+    const hours = Math.floor(day.minutes / 60);
+    const minutes = day.minutes % 60;
+    group.rows.push({
+      id: row.id,
+      scheduledAt: row.scheduledAt,
+      time: minutes === 0 ? `${hours}h` : `${hours}h${String(minutes).padStart(2, "0")}`,
+      leadId: row.leadId,
+      leadName: row.leadName,
+      type: row.type,
+      propertyCode: row.propertyCode,
+      neighborhood: row.neighborhood,
+      status: row.status as AgendaRow["status"],
+      brokerName: row.brokerName,
+    });
+  }
+  return groups;
+}
+
+export type AgendaResult = { ok: true } | { ok: false; message: string };
+
+/**
+ * FR-008: the broker marks a meeting done or cancelled. `done` also moves the
+ * lead to `visited` when the pipeline allows it (forward-only, ADR 19). Both go
+ * through `transitionAppointment`, and both are recorded as the person's act.
+ * A broker acts on their own meetings; a manager on the agency's.
+ */
+export async function markAppointmentStatus(
+  scope: AgendaScope,
+  appointmentId: string,
+  status: "done" | "cancelled",
+): Promise<AgendaResult> {
+  return getDb().transaction(async (tx) => {
+    const [row] = await tx
+      .select({ status: appointments.status, leadId: appointments.leadId, brokerId: appointments.brokerId, conversationId: appointments.conversationId })
+      .from(appointments)
+      .where(and(eq(appointments.id, appointmentId), eq(appointments.agencyId, scope.agencyId)));
+    if (row === undefined || (scope.role !== "salesManager" && row.brokerId !== scope.userId)) {
+      return { ok: false, message: "Compromisso não encontrado." };
+    }
+    if (row.status !== "confirmed") return { ok: false, message: "Este compromisso já foi encerrado." };
+    const moved = await transitionAppointment(tx, appointmentId, "confirmed", status);
+    if (!moved) return { ok: false, message: "O compromisso mudou enquanto você olhava." };
+
+    await tx.insert(events).values({
+      agencyId: scope.agencyId,
+      leadId: row.leadId,
+      conversationId: row.conversationId,
+      type: status === "done" ? "appointment.done" : "appointment.cancelled",
+      actorType: "user",
+      actorUserId: scope.userId,
+      payload: { appointmentId },
+    });
+
+    if (status === "done") {
+      const [lead] = await tx.select({ status: leads.status }).from(leads).where(eq(leads.id, row.leadId));
+      if (lead !== undefined && isLeadStage(lead.status) && canTransition(lead.status, "visited")) {
+        await tx.update(leads).set({ status: "visited", updatedAt: new Date() }).where(eq(leads.id, row.leadId));
+        await tx.insert(events).values({
+          agencyId: scope.agencyId,
+          leadId: row.leadId,
+          conversationId: row.conversationId,
+          type: "lead.status_changed",
+          actorType: "user",
+          actorUserId: scope.userId,
+          payload: { from: lead.status, to: "visited" },
+        });
+      }
+    }
+    return { ok: true };
+  });
+}

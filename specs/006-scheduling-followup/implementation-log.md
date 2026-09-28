@@ -195,3 +195,29 @@ A stub-writer test marked it `sent` and queued a 2030 retry. No message reached 
 sends. Repaired by hand: attempt back to `pending` at 09:00, count 0, the stray row and event removed.
 `sweepFollowups` now takes an optional scope (`agencyId` / `conversationIds`), and every test sweep uses it;
 production claims everything as before. The query for `isFollowUp` messages and 2030 rows returns nothing.
+
+## Phase 5 (T033–T036a) — US3: the agenda
+
+- `listAppointments` groups meetings by day in the agency's zone: *Hoje*, *Amanhã*, then "qui 02/10".
+  They're ascending within a day and never include `proposed`; a broker sees their own, a manager the agency's
+  (with who attends).
+- `markAppointmentStatus` goes through `transitionAppointment`. A broker can't act on a colleague's meeting,
+  and `done` moves the lead to `visited` when the pipeline allows. Both write the person's event.
+- `/agenda` replaces the placeholder. Today comes first, each row reads at 390 px with no horizontal scroll,
+  and the actions have 44 px targets. The empty state says where meetings come from.
+- **FR-008b.** The *Visita marcada* filter is now a confirmed future appointment. The stage `scheduled` is
+  labelled *Agendamento feito*, so a lead whose meeting was cancelled no longer reads as having one.
+- `tests/agenda-scope.test.ts`: 5 cases.
+
+**Found in the scenario replay (T037, first half).**
+- Scenario 1 via "Interessado em VMA-0001" and scenario 2 (investor) both booked through `POST /api/chat`:
+  a visit to VMA-0001 and a specialist call.
+- Afterwards, "quem vai me atender?" **handed off to a broker**. The extraction still set `askedForHuman`
+  despite its description. There's now an `askedWhoAttends` fact. With a proposal open or a meeting booked,
+  the agent answers with a code-written sentence (no name, "registrado no sistema"), and the message is not a
+  handoff. T019 pins it.
+- The booked-meeting card said "Segunda-Feira … 10:00". It now says "Segunda-feira, 28/09 · 10h", matching the
+  sentence above it.
+- Seen, not 006's: the phrased reply after a search sometimes numbers cards that aren't numbered ("Os imóveis
+  1, 3 e 5…"). That's for the fact guard (012). The app shell's top nav crowds at 390 px; that's for the UX
+  pass (014).

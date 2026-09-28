@@ -513,10 +513,6 @@
   font-weight: 700;
 }
 
-.meetingDay {
-  text-transform: capitalize;
-}
-
 .meetingWhat {
   margin: 0.1rem 0 0;
   font-size: 0.8rem;

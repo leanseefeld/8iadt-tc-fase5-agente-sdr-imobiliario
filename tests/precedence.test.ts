@@ -187,10 +187,10 @@ test("FR-005d/FR-005e: the scheduling sentences are code-written and name no one
 test("spec 006: the extraction's meeting facts are read strictly, and anything malformed is absent", () => {
   assert.deepEqual(
     readSchedulingFacts({ pickedTime: "sim", preferredWeekday: "thu", preferredPeriod: "morning", propertyCode: " VMA-0005 " }),
-    { declinedOffer: false, askedForTimes: false, pickedTime: true, preference: { weekday: "thu", period: "morning" }, propertyRef: { code: "VMA-0005" } },
+    { declinedOffer: false, askedForTimes: false, pickedTime: true, preference: { weekday: "thu", period: "morning" }, propertyRef: { code: "VMA-0005" }, askedWhoAttends: false },
   );
   assert.deepEqual(readSchedulingFacts({ propertyPosition: 2 }).propertyRef, { position: 2 });
   assert.deepEqual(readSchedulingFacts({ propertyPosition: 0, preferredWeekday: "quinta", preferredPeriod: "noite" }), {
-    declinedOffer: false, askedForTimes: false, pickedTime: false, preference: {}, propertyRef: null,
+    declinedOffer: false, askedForTimes: false, pickedTime: false, preference: {}, propertyRef: null, askedWhoAttends: false,
   });
 });

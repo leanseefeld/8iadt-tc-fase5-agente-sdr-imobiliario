@@ -107,7 +107,8 @@ export const EXTRACTION_FIELDS: readonly ExtractionField[] = [
     key: "askedAboutCriteria",
     description:
       "true SÓ se a pessoa perguntou o que você está considerando, filtrando ou usando " +
-      "como critério. Na dúvida, false.",
+      "como critério, OU perguntou sobre o resultado da busca: se tem imóvel, se tem mais " +
+      "opções, se não achou nada. Na dúvida, false.",
   },
   {
     key: "attemptedAnswer",

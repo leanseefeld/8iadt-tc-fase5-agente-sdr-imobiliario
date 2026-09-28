@@ -69,10 +69,11 @@ export const SUGGESTION_REPLY =
   "Separei algumas opções que combinam com o que você me contou. Qual delas te interessou mais?";
 
 /** FR-025: nothing matched, and exactly one filter is offered for relaxing. */
+/** FR-035 — ask for a new value; never offer a widening nothing performs yet. */
 const RELAX_QUESTIONS: Record<"neighborhoods" | "priceMax" | "bedrooms", string> = {
-  neighborhoods: "Posso procurar em bairros vizinhos também?",
-  priceMax: "Você toparia esticar um pouco o valor?",
-  bedrooms: "Você consideraria um imóvel com um quarto a menos?",
+  neighborhoods: "Tem outro bairro ou região que você consideraria?",
+  priceMax: "Até quanto você poderia chegar no valor?",
+  bedrooms: "Quantos quartos, no mínimo, ainda serviriam pra você?",
 };
 
 export function noMatchReply(relaxable: "neighborhoods" | "priceMax" | "bedrooms" | null): string {

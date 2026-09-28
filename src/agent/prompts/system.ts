@@ -164,15 +164,28 @@ export interface TurnPromptInput {
   };
   /** The one sentence to say when this turn reconfirms dependants (FR-008). */
   reconfirmation?: string;
-  /** The lead asked what the current criteria are (FR-018). */
+  /** The lead asked what the current criteria are, or about the results (FR-018). */
   askedAboutCriteria?: boolean;
+  /**
+   * FR-033 — how many properties the most recent search matched, on a turn that
+   * did not search. A count of catalog rows, not an assessment of the lead, so
+   * FR-019's boundary holds.
+   */
+  lastSearch?: { count: number };
 }
 
 /** FR-025, in the two shapes a search can end in. */
+/**
+ * FR-035. Each asks the lead for a new value for one criterion — something a
+ * revision can act on. None offers to widen the search on the lead's behalf:
+ * nothing performs that widening until the relaxation spec (backlog 010), and a
+ * "sim" to "posso procurar em bairros vizinhos?" left the lead with a promise and
+ * no action.
+ */
 const RELAX_ASKS: Record<"neighborhoods" | "priceMax" | "bedrooms", string> = {
-  neighborhoods: "se pode procurar em bairros vizinhos",
-  priceMax: "se a pessoa toparia esticar um pouco o valor",
-  bedrooms: "se a pessoa consideraria um quarto a menos",
+  neighborhoods: "que outro bairro ou região a pessoa consideraria",
+  priceMax: "até quanto a pessoa poderia chegar no valor",
+  bedrooms: "quantos quartos, no mínimo, ainda serviriam",
 };
 
 function acknowledgement(input: TurnPromptInput): string {
@@ -188,12 +201,6 @@ function acknowledgement(input: TurnPromptInput): string {
 }
 
 function task(input: TurnPromptInput): string {
-  if (input.askedAboutCriteria === true) {
-    return `\nSua tarefa nesta mensagem: repita em uma frase os critérios que já estão no estado, e pergunte se a pessoa quer mudar algum. Uma pergunta só. Não diga que não entendeu.`;
-  }
-  if (input.reconfirmation !== undefined && input.reconfirmation !== "") {
-    return `\nSua tarefa nesta mensagem: diga exatamente isto, e mais nada: ${input.reconfirmation}`;
-  }
   // The cards are rendered from the search result, under this message. Anything
   // the model writes about a specific imóvel is prose the lead can already read
   // off the card — and prose is exactly where an invented price comes from.
@@ -219,7 +226,23 @@ da sua mensagem e a pessoa consegue ler tudo neles.`;
     const ask = input.suggestions.relaxable === null ? null : RELAX_ASKS[input.suggestions.relaxable];
     return `\nSua tarefa nesta mensagem: diga com franqueza que não encontrou nenhum imóvel com
 exatamente essas características agora${ask === null ? "" : `, e pergunte ${ask}`}.
-Não invente imóvel nenhum e não ofereça mais de uma mudança nos filtros.`;
+Não invente imóvel nenhum e não ofereça mais de uma mudança nos filtros. Não se ofereça
+para procurar em outros bairros, valores ou quartos por conta própria: peça que a pessoa
+diga o novo valor.`;
+  }
+  // FR-032: a search presented this turn outranks both of these, so they come
+  // after the three `suggestions` branches above.
+  if (input.askedAboutCriteria === true) {
+    if (input.lastSearch !== undefined && input.lastSearch.count === 0) {
+      return `\nSua tarefa nesta mensagem: diga com franqueza que, com os critérios que já estão no estado, não encontrou nenhum imóvel. Repita esses critérios em uma frase e pergunte qual deles a pessoa quer mudar, pedindo o novo valor. Uma pergunta só. Não se ofereça para procurar em outros bairros, valores ou quartos por conta própria. Não diga que não entendeu.`;
+    }
+    if (input.lastSearch !== undefined && input.lastSearch.count > 0) {
+      return `\nSua tarefa nesta mensagem: diga que, com os critérios que já estão no estado, encontrou ${input.lastSearch.count === 1 ? "um imóvel, o que já foi mostrado" : `${input.lastSearch.count} imóveis, os que já foram mostrados`}. Repita esses critérios em uma frase e pergunte se a pessoa quer mudar algum. Uma pergunta só. Não descreva imóvel nenhum. Não diga que não entendeu.`;
+    }
+    return `\nSua tarefa nesta mensagem: repita em uma frase os critérios que já estão no estado, e pergunte se a pessoa quer mudar algum. Uma pergunta só. Não diga que não entendeu.`;
+  }
+  if (input.reconfirmation !== undefined && input.reconfirmation !== "") {
+    return `\nSua tarefa nesta mensagem: diga exatamente isto, e mais nada: ${input.reconfirmation}`;
   }
   if (input.meeting === "call") {
     return `\nSua tarefa nesta mensagem: agradeça, diga que um especialista em investimentos
@@ -320,10 +343,19 @@ export const REPLY_SYSTEM_PROMPT = [PERSONA, "", RULES].join("\n");
  * job, and the caveats. Goes at the end of the conversation, immediately before
  * the message it is about — instructions, then the thing to answer.
  */
+/** FR-033 — the last search's outcome, as a fact, on a turn that did not search. */
+function lastSearchLine(input: TurnPromptInput): string {
+  if (input.lastSearch === undefined || input.suggestions !== undefined) return "";
+  const { count } = input.lastSearch;
+  if (count === 0) return "- Última busca com estes critérios: nenhum imóvel encontrado.";
+  return `- Última busca com estes critérios: ${count === 1 ? "1 imóvel encontrado e já mostrado" : `${count} imóveis encontrados e já mostrados`}.`;
+}
+
 export function turnBriefing(input: TurnPromptInput): string {
   return [
     "O que já se sabe sobre esta pessoa (não pergunte nada disso de novo):",
     renderSlots(input.intent, input.slots),
+    lastSearchLine(input),
     acknowledgement(input),
     task(input),
     multiParty(input),

@@ -270,6 +270,31 @@ export function offerOutstanding(turn: LoadedTurn): boolean {
 }
 
 /** FR-009 — the previous agent turn was a reconfirmation. No query of its own. */
+/**
+ * FR-033 — how many properties the most recent search matched, or `null` when
+ * there was none. Read from the last agent message that recorded a
+ * `searchProperties` call, so a later turn can answer "nenhum imóvel?" without
+ * searching again. A search made under another intent does not describe this one,
+ * so an intent that never searches (`investment`, `undefined`) gets `null`.
+ */
+export function lastSearchOutcome(
+  turn: LoadedTurn,
+  intent: Intent = turn.lead.intent,
+): { count: number } | null {
+  if (intent !== "purchase" && intent !== "rental") return null;
+  const last = [...turn.history].reverse().find(
+    (message) =>
+      message.role === "agent" &&
+      Array.isArray(message.metadata.toolCalls) &&
+      (message.metadata.toolCalls as { name?: unknown }[]).some(
+        (call) => call.name === "searchProperties",
+      ),
+  );
+  if (last === undefined) return null;
+  const ids = last.metadata.propertyIds;
+  return { count: Array.isArray(ids) ? ids.length : 0 };
+}
+
 export function lastTurnWasReconfirmation(turn: LoadedTurn): boolean {
   const lastAgent = [...turn.history].reverse().find((message) => message.role === "agent");
   return lastAgent?.metadata.reconfirmation === true;

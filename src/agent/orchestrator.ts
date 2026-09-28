@@ -8,6 +8,7 @@ import { looksLikeInjection, looksLikeSteering } from "../domain/injection.ts";
 import { createReplyGuard, figuresIn, splitSentences } from "../domain/reply-guards.ts";
 import { scoreLead } from "../domain/score.ts";
 import {
+  CONTACT_SLOTS,
   hasEvidence,
   isQualified,
   mergeSlots,
@@ -25,6 +26,7 @@ import {
 import {
   claimTurn,
   commitTurn,
+  lastSearchOutcome,
   lastTurnWasReconfirmation,
   loadTurn,
   offerOutstanding,
@@ -313,6 +315,22 @@ const NOTHING: Extraction = {
  * turn and a failed extraction hold it. An attempt the system could not use
  * advances it. A dropped slot also holds, because it was understood.
  */
+/** When a second, narrow extraction call is worth making for the pending slot. */
+export function shouldRecover(input: {
+  stillPending: boolean;
+  pendingIsIntent: boolean;
+  saidSomething: boolean;
+  attemptedAnswer: boolean;
+  leadText: string;
+}): boolean {
+  return (
+    input.stillPending &&
+    input.attemptedAnswer &&
+    (input.pendingIsIntent || !input.saidSomething) &&
+    plausiblyAnswers(input.leadText)
+  );
+}
+
 export function accountTurn(
   currentStreak: number,
   turn: {
@@ -891,12 +909,23 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   // `intent` is the exception, because it is not an answer to anything: every
   // first message implies one, and the extraction reporting a neighbourhood is
   // exactly the message whose intent is worth recovering.
-  const recoveryDue =
-    stillPending &&
-    (pending.slot === "intent" || !extraction.saidSomething) &&
-    plausiblyAnswers(leadText);
+  // The model's own reading gates recovery too, not only the noise list: "opa,
+  // tá aí?" passed `plausiblyAnswers` ("tá" is not noise), the extraction said it
+  // attempted nothing, and recovery guessed the name "Opa" out of a greeting —
+  // then greeted the lead by it. A slot the lead never spoke about is worse than
+  // a question asked once more (see above), so an explicit "attempted nothing"
+  // ends it here (US1 scenario 6).
+  const recoveryDue = shouldRecover({
+    stillPending,
+    pendingIsIntent: pending?.slot === "intent",
+    saidSomething: extraction.saidSomething,
+    attemptedAnswer: extraction.attemptedAnswer,
+    leadText,
+  });
 
-  if (recoveryDue) {
+  // `stillPending` already implies a pending question; the check restores the
+  // narrowing the extracted predicate cannot carry.
+  if (recoveryDue && pending !== null) {
     const recovered = await recoverSlot({ slot: pending.slot, text: leadText });
     if (Object.keys(recovered).length > 0) {
       toolCalls.push({ name: "recoverSlot", arguments: recovered });
@@ -1084,16 +1113,34 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
             ),
         };
   // A meeting offer speaks for itself this turn. The reconfirmation waits rather
-  // than replacing the offer the lead was about to hear.
+  // than replacing the offer the lead was about to hear. So does a search result
+  // (FR-032): the cards, or the fact that nothing matched, are the answer to the
+  // revision, and "continua assim?" over them is noise. Not computing it here also
+  // keeps the turn from being recorded as a reconfirmation it never made, which
+  // FR-009's derived fact depends on.
   const reconfirmKeys =
-    meeting !== null
+    meeting !== null || search.searched
       ? []
       : reconfirmationKeys(
           { revised: revisedThisTurn, intentChanged },
           slots,
           lastTurnWasReconfirmation(turn),
         );
-  const reconfirmText = reconfirmationSentence(slots, reconfirmKeys);
+  // What changed comes first, then what it puts in doubt — the shape of US4's own
+  // example ("até R$ 1,2 mi, 3 quartos, Moema"). The sentence is said verbatim, so
+  // without the revised value the lead's change would never be acknowledged
+  // (US1 scenario 3). Contact slots never appear in a restatement.
+  const reconfirmText =
+    reconfirmKeys.length === 0
+      ? null
+      : reconfirmationSentence(slots, [
+          ...revisedThisTurn.filter(
+            (slot) => !(CONTACT_SLOTS as readonly string[]).includes(slot) && !reconfirmKeys.includes(slot),
+          ),
+          ...reconfirmKeys,
+        ]);
+  // FR-033: what the last search found, for a turn that did not search.
+  const lastSearch = search.searched ? null : lastSearchOutcome(turn, intent);
 
   // A question this agent cannot act on yet still counts toward a handoff,
   // and the reply says so instead of claiming the message was not understood.
@@ -1135,7 +1182,9 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       ...(brokerContext === undefined ? {} : { broker: brokerContext }),
       ...(search.searched
         ? { suggestions: { count: search.properties.length, relaxable: search.relaxable } }
-        : {}),
+        : lastSearch === null
+          ? {}
+          : { lastSearch }),
     }),
     question,
     // On a search turn the script's question waits for the next one, but the
@@ -1151,13 +1200,14 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       ...search.properties.map((property) => property.price),
     ],
     allowedPercentages: lead.percentages,
-    ...(reconfirmText !== null
-      ? { fallbackText: reconfirmText }
-      : search.searched
-        ? {
-            fallbackText:
-              search.properties.length > 0 ? SUGGESTION_REPLY : noMatchReply(search.relaxable),
-          }
+    // FR-032 again, for the written fallback: the search first.
+    ...(search.searched
+      ? {
+          fallbackText:
+            search.properties.length > 0 ? SUGGESTION_REPLY : noMatchReply(search.relaxable),
+        }
+      : reconfirmText !== null
+        ? { fallbackText: reconfirmText }
         : {}),
     sink: context.sink,
     startedAt: context.startedAt,

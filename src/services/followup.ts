@@ -48,7 +48,13 @@ export function followupDelayMinutes(attempt: number): number {
  * conversation row — that row lock is what keeps two turns from inserting two
  * pending attempts.
  */
-export async function scheduleFollowup(tx: Runner, conversationId: string, now: Date): Promise<boolean> {
+export async function scheduleFollowup(
+  tx: Runner,
+  conversationId: string,
+  now: Date,
+  /** Who left the lead waiting: the agent's turn, or the broker handing back (FR-009a). */
+  actor: { type: "agent" } | { type: "user"; userId: string } = { type: "agent" },
+): Promise<boolean> {
   const config = getConfig();
   const eligible = sql`
     exists (
@@ -96,7 +102,8 @@ export async function scheduleFollowup(tx: Runner, conversationId: string, now: 
     leadId: conversation.leadId,
     conversationId,
     type: "followup.scheduled",
-    actorType: "system",
+    actorType: actor.type,
+    actorUserId: actor.type === "user" ? actor.userId : null,
     payload: { attempt, scheduledFor: due.toISOString() },
     createdAt: now,
   });
@@ -258,7 +265,11 @@ export async function cancelIneligibleAttempt(runner: Runner, jobId: string, con
  * still owes the lead something — the script's next question, or an open
  * proposal. An appointment closing never calls this.
  */
-export async function restartAfterHandback(conversationId: string, now: Date = new Date()): Promise<boolean> {
+export async function restartAfterHandback(
+  conversationId: string,
+  userId: string,
+  now: Date = new Date(),
+): Promise<boolean> {
   const db = getDb();
   const [row] = await db
     .select({ intent: leads.intent, slots: conversations.slots, consentAt: leads.consentAt })
@@ -273,7 +284,7 @@ export async function restartAfterHandback(conversationId: string, now: Date = n
     row.consentAt !== null,
   );
   if (question === null && proposal.rows.length === 0) return false;
-  return db.transaction((tx) => scheduleFollowup(tx, conversationId, now));
+  return db.transaction((tx) => scheduleFollowup(tx, conversationId, now, { type: "user", userId }));
 }
 
 // ---------------------------------------------------------------------------

@@ -181,7 +181,7 @@ export async function returnToAgent(
     content: `Sofia de volta! ${brokerName} saiu da conversa, mas se precisar de alguma coisa, é só chamar!`,
   });
   // Spec 006 FR-009a: back with the agent and still owing the lead something.
-  await restartAfterHandback(found.conversationId);
+  await restartAfterHandback(found.conversationId, userId);
 
   announce(found, "active");
   return ok;

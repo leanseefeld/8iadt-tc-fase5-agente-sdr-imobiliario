@@ -221,3 +221,50 @@ production claims everything as before. The query for `isFollowUp` messages and 
 - Seen, not 006's: the phrased reply after a search sometimes numbers cards that aren't numbered ("Os imóveis
   1, 3 e 5…"). That's for the fact guard (012). The app shell's top nav crowds at 390 px; that's for the UX
   pass (014).
+
+## Phase 6 (T037–T041) — replay, records, verification
+
+**T037, replayed through `POST /api/chat`.** Conversations are left in the demo DB so they can be seen in the
+dashboard and on the agenda.
+- **Scenario 1** (`7f237180…`): budget, bedrooms and neighbourhood, then cards, then *"Interessado em VMA-0001"*
+  (the button's message). The script continues with name and contact. Options come *for VMA-0001*, "a primeira
+  opção" books it, and the confirmation plus a card follow. Stage `scheduled`; the agenda shows the visit.
+- **Scenario 2** (`acd1746b…`, investor): the four questions, then call options, "a segunda opção" booked.
+  Specialist rotation, `call`, no property.
+- **Escape routes**: `meeting-escapes.test.ts`, 4 of 4 on e4b (decline + three unrelated messages; morning only;
+  change of subject then a pick; a revision leaving the proposal open).
+- **Idle follow-up** (`3fc123fc…`): stalled on "Quantos quartos?". The turn scheduled one attempt, and the next
+  lead message cancelled and re-scheduled it, as designed. It was made due and sent by a **scoped** one-off
+  sweep, with the window passed as that process's environment. The developer's `.env` and the running worker
+  were untouched. Result: *"Oi! Passando para retomar sua busca por imóveis para alugar até R$ 3 mil. 😊
+  Quantos quartos você precisa?"* It shows in `GET /api/chat`, and `followup.sent` carries trace
+  `c78868825597c737c04f00a4172b9105`.
+
+**T038 (quickstart), all but one step.**
+- Done: the drawer's *Enviar follow-up agora*, the switch, the agenda, and the widget's cards and button.
+- Not done: the stale lead's first-sweep **send**. It was claimed and correctly moved to 09:00 local, because
+  it was ~04:00. It sends at 09:00 if the worker is up; that's where to read the worker-side trace too.
+
+**T039.** Unit suite 252 pass / 0 fail; `tsc`, lint and `npm run build` all clean. The build ran in a throwaway
+container with its own `.next`, so the dev server kept serving.
+
+**Last full `INTEGRATION=1` run: 392 of 402 pass.** The failures:
+- 3 not 006's, and deterministic:
+  - `revision` (zona norte, since `4d59f7d`);
+  - `seed` (exact lead count, broken by any local use);
+  - `leads-scope` (`auth-service.test.ts` reassigns a seeded lead and doesn't restore it — this run Julia as
+    well as Camila, both restored by hand).
+- 2 races with the **live worker**: its unanswered-turns sweep answered a test's message before the test's own
+  `runTurn` ("nothingUnanswered"). They passed on rerun.
+- 1 was 006's, and is fixed: `followup.scheduled` was written as `system`. A turn's event is now the agent's,
+  and a handback's is the broker's.
+
+**T041, what the replay contradicted.** Nothing that changes a requirement. Two product questions for the
+developer:
+1. With no property pointed at, a purchase lead's offer is a **call** (contract §2). That now includes graded
+   scenario 1 when the lead never presses *Interessado*.
+2. Whether chat search should match regions again ("zona norte"). That's 007's decision, not 006's.
+
+**Noticed, filed as separate tasks:**
+- tests that pollute the demo DB;
+- the log masker printing trace ids as phone numbers.

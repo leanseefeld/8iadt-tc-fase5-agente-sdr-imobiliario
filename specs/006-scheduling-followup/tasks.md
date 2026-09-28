@@ -156,17 +156,17 @@ statement are met. **Spec 009 can start.**
 
 ## Phase 6: Replay, records and verification
 
-- [ ] T037 Replay 006's conversations through the real API, following spec 007's closing harness: a Node script in the session scratchpad that `POST`s to `/api/chat` (`agencySlug: "demo"`, `consent: true`) and reads replies back via `GET /api/chat?agencySlug=demo&sessionId=…`, **up to 4 conversations in parallel**. Cover:
+- [x] T037 Replay 006's conversations through the real API, following spec 007's closing harness: a Node script in the session scratchpad that `POST`s to `/api/chat` (`agencySlug: "demo"`, `consent: true`) and reads replies back via `GET /api/chat?agencySlug=demo&sessionId=…`, **up to 4 conversations in parallel**. Cover:
   - scenario 1 to a booking (SC-001, and SC-003's first half);
   - scenario 2 to a specialist call (SC-012);
   - the escape routes (SC-013); a booking reached through the card's interest button (SC-016);
   - one conversation left idle so the sweep writes to it — with `FOLLOWUP_FIRST_DELAY_MINUTES=5` and `WORKER_SWEEP_INTERVAL_MS=15000`, restarting the worker first.
   Report transcripts with each turn's stored flags in the implementation log
 - [ ] T038 Run [quickstart.md](quickstart.md) end to end on the running stack, including the drawer's *send the follow-up now* button and the stale lead's first-sweep follow-up (SC-009)
-- [ ] T039 [P] Confirm SC-010 and the build: `docker compose exec -T app npm test` green, `npm run lint`, `npx tsc --noEmit` and `npm run build` all succeed
+- [x] T039 [P] Confirm SC-010 and the build: `docker compose exec -T app npm test` green, `npm run lint`, `npx tsc --noEmit` and `npm run build` all succeed
 - [x] T039a [P] Update `docs/arquitetura/modelo-de-dados.md`: the `agencies` table gains `followupEnabled` (FR-019); §7's *Visita marcada* is derived from a confirmed future appointment (FR-008b). Update `docs/arquitetura/turno-do-agente.md` so every step marked *(006, planejado)* matches what was built
-- [ ] T040 [P] Update `specs/BACKLOG.md`: the 006 row's status, and a note that 009 starts next on top of plan step 3a
-- [ ] T041 Record in the implementation log anything the replay or the quickstart contradicted in the spec, and stop for direction if any of it changes a requirement
+- [x] T040 [P] Update `specs/BACKLOG.md`: the 006 row's status, and a note that 009 starts next on top of plan step 3a
+- [x] T041 Record in the implementation log anything the replay or the quickstart contradicted in the spec, and stop for direction if any of it changes a requirement
 
 ---
 

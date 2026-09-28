@@ -72,35 +72,51 @@ triggerNow(scope, leadId: string): Promise<Result>;                       // Res
 a pt-BR message the caller renders — failure (no proposal to book, nothing pending
 to trigger) is an expected outcome, not an exception.
 
-**Contract on spec 004**: at the point in the turn where the conversation is left
+**Contract on the turn** (spec 007's `run()` and 004's `commitTurn`): at the point in the turn where the conversation is left
 waiting on the lead, the orchestrator calls `scheduleFollowup`; on any inbound
 lead message, before generating a reply, it calls `cancelFollowup`; on a broker
 returning a held conversation to the agent (`heldByUserId` cleared) with
 something still open, it calls `scheduleFollowup` again — the clock restart of
-FR-009a. All three run inside 004's own turn transaction — this slice does not
+FR-009a. All three run inside `commitTurn`'s own transaction — this slice does not
 open one.
 
-## 3 · Agent tools — `src/agent/tools/scheduling.ts`
+## 3 · Proposing in code, booking by tool *(revised 2026-09-28)*
 
-Replaces `tools/scheduling.stub.ts`, registered in `tools/index.ts` with the
-schemas 004 declares as placeholders:
+Proposing is **not** a tool. `run()` calls the service directly:
 
 ```ts
-proposeMeeting(): Promise<{ options: Option[] } | { unavailable: true; reason: string }>;
-// No arguments — reads the active conversation from orchestrator context.
-// `unavailable` covers FR-001's "no free hour" and "no brokers" edges; the
-// orchestrator's prompt turns that into asking the lead for a time and raising
-// a handoff, per the spec's edge case.
+// services/scheduling.ts
+proposeAppointment(ctx: { agencyId: string; conversationId: string; leadId: string; intent: Intent;
+  propertyId?: string; constraint?: { weekday?: Weekday; period?: 'morning' | 'afternoon' } }):
+  Promise<{ appointmentId: string; brokerName: string; options: Option[] } | { unavailable: true; reason: string }>;
+declineProposal(conversationId: string): Promise<void>;   // proposed → cancelled, recorded so the offer does not re-fire
+```
 
+`unavailable` covers FR-001's "no free hour" and "no brokers" edges, and a constraint nothing satisfies.
+
+Booking is the **one** tool, added to 007's `actionTools()`:
+
+```ts
 bookMeeting(input: { optionIndex: number } | { scheduledAt: string }): Promise<
-  | { confirmed: true; scheduledAt: string; type: 'viewing' | 'call'; propertyCode?: string; weekday: string }
-  | { confirmed: false; reason: string }
+  | { confirmed: true; appointmentId: string; scheduledAt: string; type: 'viewing' | 'call'; propertyCode?: string }
+  | { ok: false; reason: string; message: string }   // 007's ToolRefusal shape
 >;
 ```
 
-Both tools return data; the confirmation card and any re-proposal wording render
-in the orchestrator's commit step, never inside the tool — per constitution
-principle V, the model does not decide the meeting time or the retry message.
+Its description states when to call — the lead picked an offered option or named a time while a proposal is
+open — and when not to: no open proposal, or the lead is talking about something else. It re-validates through
+the same function `proposeAppointment` uses.
+
+The extraction gains two facts, beside `askedForHuman` and `optOut`:
+
+```ts
+declinedOffer: boolean;                 // "agora não", "prefiro não marcar"
+askedForTimes: boolean;                 // "tem outro horário?", "só de manhã", and after a decline "quero marcar uma visita"
+timePreference?: { weekday?: Weekday; period?: 'morning' | 'afternoon' };
+```
+
+The options sentence and the confirmation are code-written (`prompts/meeting.ts`) and said verbatim; the
+tool returns data, never wording.
 
 ## 4 · Worker consumer — `src/jobs/followup.ts`
 

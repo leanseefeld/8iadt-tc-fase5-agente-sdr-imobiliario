@@ -34,6 +34,24 @@ Restart the worker after changing `.env`: `docker compose restart worker`.
    no property, and the assigned broker's `specializations` include
    `investment` — falling back to any broker if none does.
 
+### 1a · Getting out of an offer (FR-005a–c, SC-013) *(added 2026-09-28)*
+
+In one conversation, after options were offered:
+
+1. *"e em Vila Mariana, tem algo?"* — handled as a revision (cards or a no-match);
+   the options are **not** repeated.
+2. *"pode ser aquela de quinta então"* — books the Thursday option that is still
+   open from two turns ago.
+
+In a second conversation, after options were offered:
+
+3. *"tem outro horário? só de manhã"* — a new proposal replaces the old one, all
+   morning slots.
+4. *"agora não, obrigado"* — acknowledged without insisting. Three more unrelated
+   messages bring **no** new offer.
+5. *"na verdade quero marcar uma visita"* — the lead's own request still reaches
+   proposing.
+
 ## 2 · The follow-up sweep (US2 — the graded scenario)
 
 1. Answer two qualification questions in the widget, then stop replying; confirm
@@ -74,8 +92,7 @@ Restart the worker after changing `.env`: `docker compose restart worker`.
    `actorUserId`.
 4. Clear all appointments for a broker (or view an empty day range); confirm
    the explanatory empty-state copy renders, not a blank list.
-5. On "Minha disponibilidade", disable one weekday and narrow another's hours;
-   save; confirm the next proposal computed for that broker skips them.
+5. *Cut 2026-09-28 — the availability editor is backlog 34.*
 
 ## 5 · Eligibility and window rules (SC-007)
 

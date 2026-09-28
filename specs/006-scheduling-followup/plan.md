@@ -160,16 +160,18 @@ reports `askedForTimes` — with an open proposal (other times) or without one (
 including after a decline) — re-proposing with the optional weekday/period as a filter on `proposeSlots`'
 output, and never after `declinedOffer` closed one — a decline moves the proposed row to
 `cancelled` and records it so `offerOutstanding`'s derived fact stops a re-fire (FR-005a). The options sentence
-is **written by code** from the returned options — *"Tenho estes horários com a Ana: 1) qui 02/10 às 10h …"* —
+is **written by code** from the returned options — *"Tenho estes horários com alguém da nossa equipe: 1) qui 02/10 às 10h …"* — never a broker's name (FR-005e) —
 and said verbatim, like 007's reconfirmation, because dates and times are exactly what the `unbackedFigure`
 guard exists to stop a model inventing (FR-005d). `bookMeeting({ optionIndex } | { scheduledAt })` is the one
 tool, added to `actionTools()` with 007's contract discipline: when to call (the lead picked an offered option
 or named a time while a proposal is open), when not to (no open proposal; the lead is asking about something
 else), and a readable refusal carrying the reason when validation fails (FR-005). `act()` is offered when a
-search is due **or** a proposal is open, so *"pode ser aquela de quinta então"* two turns after a change of
+search is due, **or** a proposal is open **and** the extraction reports the lead picked or named a time (FR-005f), so *"pode ser aquela de quinta então"* two turns after a change of
 subject still books (FR-005c). The confirmation card renders from the booked row in the commit step.
 
-**3a · Built for 009.** Booking is transitions of the one appointment row — `proposed → confirmed`,
+**3a · Built for 009.** Proposing is **two functions**: `computeOptions` (computes, writes nothing) and
+`recordProposal` (cancels the open proposed row and inserts the new one). 009's reschedule reuses
+`computeOptions` for a confirmed appointment and moves that row. Booking is transitions of the one appointment row — `proposed → confirmed`,
 `proposed → cancelled` (declined or replaced), `confirmed → done | cancelled` from the agenda. Spec 009's
 reschedule is `confirmed → confirmed` at a new instant, re-validated by the same `proposeSlots` rules through
 the same service function; its cancel is `confirmed → cancelled`. Nothing here may validate a time any other way.
@@ -181,6 +183,11 @@ the same service function; its cancel is `confirmed → cancelled`. Nothing here
 **6 · Demo trigger.** `triggerNow(scope, leadId)` in `services/followup.ts` sets the lead's one pending row's `scheduledFor = now()`, or returns "nothing pending". One Server Action in `leads/actions.ts` calls it and revalidates; the drawer's `ActionsRow` gets one button, disabled with the reason when nothing applies.
 
 **7 · Agenda.** `listAppointments(scope, range)` in `services/scheduling.ts` — broker sees their own, manager the agency's, grouped by day server-side. `page.tsx` renders the groups plus `markDone`/`markCancelled` Server Actions; `markDone` also sets the lead's stage `visited`, and both emit their event with `actorType: 'user'` and `actorUserId` (FR-008). Empty state is copy, not a spinner.
+
+**7a · The agency's follow-up switch (FR-019).** `agencies.followupEnabled`, default on, set by a sales manager
+from the leads dashboard. The worker reads it in **both** eligibility checks and cancels a due attempt if it's
+off; enqueueing never reads it, so switching back on needs no backfill. **7b · *Visita marcada* (FR-008b)**
+becomes "has a confirmed future appointment" in `services/leads.ts`, so stages can stay forward-only.
 
 **8 · Broker availability.** *Cut 2026-09-28 → backlog 34.* `loadBrokerAvailability` still reads the seeded `users.availability`; nothing writes it.
 

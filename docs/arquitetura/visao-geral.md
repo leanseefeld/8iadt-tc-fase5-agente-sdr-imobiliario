@@ -116,6 +116,9 @@ nada.
 
 ## 5. Fluxos
 
+> **Mapa detalhado do turno** — o que é chamada de modelo, o que é conta do código, e o que liga cada coisa em
+> cada turno: [`turno-do-agente.md`](turno-do-agente.md).
+
 **Síncrono — mensagem do lead**
 
 1. Canal → route handler → `ChannelAdapter` normaliza

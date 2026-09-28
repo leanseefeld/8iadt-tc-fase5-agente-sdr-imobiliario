@@ -70,3 +70,13 @@ It moves to `pending` with the first enqueued attempt (FR-009) — including fro
 `followupAttempts` resets with it), and to `exhausted` only when the last attempt
 at the configured maximum sends unanswered (FR-016) — never set directly by a
 booking or an appointment closure.
+
+## 4 · Added 2026-09-28
+
+- **`agencies.followupEnabled`** — `boolean not null default true`. One agency-wide switch set by a sales manager
+  (FR-019), read at send time, never at enqueue. Lands in the same migration as §1's indexes.
+- **Replacing a proposal** is cancel-then-insert: the open `proposed` row goes to `cancelled` through the same
+  transition function as every other status change, and the new proposal is a new row. No unique index is needed;
+  "at most one open proposal per conversation" is kept by that function.
+- **Visita marcada** is derived: the lead has an appointment with `status = 'confirmed'` and `scheduledAt` in the
+  future (FR-008b). `leads.status` keeps moving forward only (ADR 19).

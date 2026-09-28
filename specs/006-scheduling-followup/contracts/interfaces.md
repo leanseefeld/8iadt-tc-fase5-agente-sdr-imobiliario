@@ -86,10 +86,14 @@ Proposing is **not** a tool. `run()` calls the service directly:
 
 ```ts
 // services/scheduling.ts
-proposeAppointment(ctx: { agencyId: string; conversationId: string; leadId: string; intent: Intent;
-  propertyId?: string; constraint?: { weekday?: Weekday; period?: 'morning' | 'afternoon' } }):
-  Promise<{ appointmentId: string; brokerName: string; options: Option[] } | { unavailable: true; reason: string }>;
-declineProposal(conversationId: string): Promise<void>;   // proposed → cancelled, recorded so the offer does not re-fire
+computeOptions(ctx: { agencyId: string; leadId: string; intent: Intent; propertyId?: string;
+  constraint?: { weekday?: Weekday; period?: 'morning' | 'afternoon' } }):
+  Promise<{ brokerId: string; options: Option[] } | { unavailable: true; reason: string }>;   // writes nothing
+recordProposal(ctx: { conversationId: string; leadId: string }, computed: { brokerId: string; options: Option[] }):
+  Promise<{ appointmentId: string; options: Option[] }>;   // cancels the open proposed row, inserts the new one
+proposeAppointment(ctx): Promise<{ appointmentId: string; options: Option[] } | { unavailable: true; reason: string }>;
+declineProposal(conversationId: string): Promise<void>;   // proposed → cancelled
+// No broker name is returned towards the agent (FR-005e); brokerId stays inside the service and the row.
 ```
 
 `unavailable` covers FR-001's "no free hour" and "no brokers" edges, and a constraint nothing satisfies.
@@ -111,7 +115,8 @@ The extraction gains two facts, beside `askedForHuman` and `optOut`:
 
 ```ts
 declinedOffer: boolean;                 // "agora não", "prefiro não marcar"
-askedForTimes: boolean;                 // "tem outro horário?", "só de manhã", and after a decline "quero marcar uma visita"
+askedForTimes: boolean;
+pickedTime: boolean;                    // the lead picked an offered option or named a time — gates bookMeeting (FR-005f)                 // "tem outro horário?", "só de manhã", and after a decline "quero marcar uma visita"
 timePreference?: { weekday?: Weekday; period?: 'morning' | 'afternoon' };
 ```
 
@@ -165,3 +170,12 @@ edited on the agenda (FR-008a).
 `core/config.ts` and `.env.example` in the same commit — the Environment Contract
 gate. The demo column is documentation in [quickstart.md](quickstart.md), not a
 second set of defaults in `.env.example`.
+
+## 6 · The agency's follow-up switch *(added 2026-09-28)*
+
+```ts
+// services/followup.ts
+setFollowupEnabled(scope: SessionScope, enabled: boolean): Promise<Result>;   // salesManager only
+```
+
+Read by the worker in both eligibility checks (FR-012, FR-019). Never read when enqueuing.

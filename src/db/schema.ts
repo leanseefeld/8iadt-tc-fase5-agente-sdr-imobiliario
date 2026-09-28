@@ -10,6 +10,7 @@ import {
   unique,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /**
  * The Drizzle-shaped translation of `docs/arquitetura/modelo-de-dados.md` §1,
@@ -93,6 +94,9 @@ export const agencies = pgTable("agencies", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   slug: text("slug").notNull(),
+  // Spec 006 FR-019: automatic follow-up for the whole agency, set by a sales
+  // manager. Read when an attempt is about to be sent, never when it is queued.
+  followupEnabled: boolean("followup_enabled").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [unique("agencies_slug_unique").on(table.slug)]);
 
@@ -241,7 +245,13 @@ export const appointments = pgTable("appointments", {
   type: appointmentTypeEnum("type").notNull(),
   status: appointmentStatusEnum("status").notNull().default("proposed"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  // Spec 006: busy intervals and the booking collision check only ever want a
+  // broker's confirmed appointments.
+  index("appointments_broker_busy_idx")
+    .on(table.brokerId, table.scheduledAt)
+    .where(sql`${table.status} = 'confirmed'`),
+]);
 
 export const events = pgTable("events", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -283,4 +293,10 @@ export const followupJobs = pgTable("followup_jobs", {
 }, (table) => [
   // Serves `where status = 'pending' and scheduledFor <= now()`.
   index("followup_jobs_status_scheduled_idx").on(table.status, table.scheduledFor),
+  // Spec 006: the worker's claim, over pending rows only. Largely overlaps the
+  // full index above, which spec 002 created; kept because 006's data model asks
+  // for it, and dropping 002's index is not this slice's decision.
+  index("followup_jobs_claim_idx")
+    .on(table.status, table.scheduledFor)
+    .where(sql`${table.status} = 'pending'`),
 ]);

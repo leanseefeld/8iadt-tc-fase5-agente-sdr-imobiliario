@@ -30,4 +30,17 @@ do nothing.
 
 ## Baseline (T001)
 
-*To be filled by T001.*
+On `006-scheduling-followup` before any code change: container suite **229 pass, 0 fail, 4 skipped**;
+`npx tsc --noEmit` clean; `npm run lint` clean.
+
+## Phase 1 (T001–T003)
+
+- **T002** — five keys in `core/config.ts` and `.env.example`, one commit (`ec4b764`).
+  `SCHEDULING_PREFERRED_TIMES` is a comma list whose written order is the preference; a config test pins it.
+  The developer's own gitignored `.env` still carries the obsolete `FOLLOWUP_FIRST_DELAY_HOURS=4`; harmless
+  (the schema ignores unknown keys), left for them to remove.
+- **T003** — `agencies.followupEnabled` (default on) and both partial indexes, **in the Drizzle model**, with the
+  migration generated from it (`0003_scheduling_followup.sql`) — unlike 005's hand-written index migration,
+  because a new column has to live in the model's snapshot or the next `db:generate` re-adds it. **Recorded
+  overlap:** `followup_jobs` already had spec 002's full index on `(status, scheduled_for)`; the new partial
+  `followup_jobs_claim_idx` makes it largely redundant. Not dropped — that index is 002's.

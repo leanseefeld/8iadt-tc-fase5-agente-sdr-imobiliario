@@ -22,6 +22,13 @@
       "when": 1789430000000,
       "tag": "0002_broker_surface_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790571988869,
+      "tag": "0003_scheduling_followup",
+      "breakpoints": true
     }
   ]
 }

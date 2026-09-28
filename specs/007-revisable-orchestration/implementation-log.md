@@ -120,12 +120,21 @@ written, and both are fixed:
 
 Re-run serially after the fixes (`c221d9a9…`, `006d453a…`): both hold.
 
-**Observation for the concurrency record (T053).** Three replies in the parallel
-run had digits glued to the preceding word: *"de2 quartos"*, *"procurando2"*,
-*"mostrei3"*. No agent message stored before 27/09 has that pattern, and the
-serial re-run produced none. That fits a batched-decoding artifact in the local
-server at N=4 rather than an app defect. It is not proven. It adds to the case
-that 4-way concurrency on e4b is not free: it came out ~3× slower, and possibly
-lossy.
+**Correction, 28/09/2026 — the glued digits were ours, not the model server's.**
+Three replies in the parallel run read *"de2 quartos"*, *"procurando2"*,
+*"mostrei3"*. I first logged that as a likely batched-decoding artifact in oMLX
+under load. That was wrong. A diagnostic subagent compared each glued turn's raw
+`model.reply` output in Langfuse with the stored message: the model had written
+the space all three times. Direct requests to oMLX with the same prompt glued
+nothing at N=1 or N=4. The cause was `drain()` carrying a **trimmed** unfinished
+sentence into the next stream chunk, so a chunk ending on *"de "* lost its space.
+Concurrency only moved where chunks end. Latent since spec 004, and leads saw it.
+Fixed on main in `147c922` with a regression test that fails on the old code with
+the exact replay strings. The concurrency record (T053) stands on latency alone:
+~3× slower at N=4, **not** lossy.
+
+The same data explains why S1's *"nenhum imóvel?"* reply ended without inviting a
+change: `questionCount` counted the tag *"viu?"* as a question and cut the real
+one. That is backlog item 18's territory (guards too strict), not fixed here.
 
 Container suite after: **226 pass, 0 fail, 4 skipped**. Lint and typecheck clean.

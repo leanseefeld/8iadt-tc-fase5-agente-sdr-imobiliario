@@ -44,3 +44,25 @@ On `006-scheduling-followup` before any code change: container suite **229 pass,
   because a new column has to live in the model's snapshot or the next `db:generate` re-adds it. **Recorded
   overlap:** `followup_jobs` already had spec 002's full index on `(status, scheduled_for)`; the new partial
   `followup_jobs_claim_idx` makes it largely redundant. Not dropped — that index is 002's.
+
+## Phase 2 (T004–T010) — done; stopped here as agreed, before US1
+
+- **Domain** (`src/domain/scheduling.ts`): one rule, `checkSlot`, behind both offering and booking. The lead's
+  preference is applied **before** the cap of three (applied after, "quinta" found nothing when Mon/Tue filled
+  the three) — `filterByPreference` stays as a pure helper, but `proposeSlots` takes the preference itself.
+- **SC-002:** 200 seeded calendars (127 → three options, 32 → one or two, 41 → none; 101 with a preference, 189
+  with busy slots) equal a brute-force oracle written with plain UTC−3 arithmetic, independent of the module's
+  Intl code. Mutation-checked: dropping the notice rule, letting a meeting overrun the broker's hours, or
+  ignoring collisions each fails it.
+- **Service** (`src/services/scheduling.ts`): `transitionAppointment` is the only writer of status;
+  `computeOptions` reads only and returns a broker **id**, never a name; `recordProposal` is cancel-then-insert
+  and writes the lead's assignment; booking takes a per-broker advisory lock so the second of two racing leads
+  gets `collision`. `bookAppointment` takes the `offered` times from the caller (the message that presented
+  them) — 1-based `optionIndex`, as the lead reads the list.
+- **Tests:** `tests/scheduling-service.test.ts` (INTEGRATION=1, throwaway agency, fixed 2030 Monday): 10/10.
+  Container suite **239 pass, 0 fail, 5 skipped** (the new DB test is the fifth skip without INTEGRATION=1).
+  Typecheck and lint clean.
+- **Contract drift noted, not fixed:** `contracts/interfaces.md` §2 still lists `saveBrokerAvailability`
+  (cut to backlog 34), and §1's `SlotRules` gained a `type` field so options carry their meeting type.
+
+**Next:** Phase 3 (US1), starting at T011 — needs the developer's go.

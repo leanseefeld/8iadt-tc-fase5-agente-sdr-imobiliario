@@ -131,7 +131,7 @@ test("US4: the reconfirmation names what changed before what it puts in doubt", 
 // Spec 006 FR-005g — one reply per turn, and the decline as a prefix (SC-017)
 // ---------------------------------------------------------------------------
 
-import { readSchedulingFacts, replyKind, type ReplyKind } from "../src/agent/orchestrator.ts";
+import { accountTurn, meetingTarget, readSchedulingFacts, replyKind, type ReplyKind } from "../src/agent/orchestrator.ts";
 import {
   confirmationSentence,
   optionsSentence,
@@ -179,7 +179,7 @@ test("FR-005d/FR-005e: the scheduling sentences are code-written and name no one
   );
   assert.equal(
     confirmationSentence(times[0], "call", null, tz),
-    "Pronto! Sua conversa está confirmada para seg 07/01 às 10h, com alguém da nossa equipe.",
+    "Pronto! Sua conversa por telefone está confirmada para seg 07/01 às 10h, com alguém da nossa equipe.",
   );
   assert.equal(slotLabel(new Date("2030-01-11T13:00:00Z"), tz), "sex 11/01 às 10h");
 });
@@ -187,10 +187,39 @@ test("FR-005d/FR-005e: the scheduling sentences are code-written and name no one
 test("spec 006: the extraction's meeting facts are read strictly, and anything malformed is absent", () => {
   assert.deepEqual(
     readSchedulingFacts({ pickedTime: "sim", preferredWeekday: "thu", preferredPeriod: "morning", propertyCode: " VMA-0005 " }),
-    { declinedOffer: false, askedForTimes: false, pickedTime: true, preference: { weekday: "thu", period: "morning" }, propertyRef: { code: "VMA-0005" }, askedWhoAttends: false },
+    { declinedOffer: false, askedForTimes: false, pickedTime: true, preference: { weekday: "thu", period: "morning" }, propertyRef: { code: "VMA-0005" }, askedWhoAttends: false, meetingKind: null, unsupportedMeeting: false, outOfScopeRequest: false },
   );
   assert.deepEqual(readSchedulingFacts({ propertyPosition: 2 }).propertyRef, { position: 2 });
   assert.deepEqual(readSchedulingFacts({ propertyPosition: 0, preferredWeekday: "quinta", preferredPeriod: "noite" }), {
     declinedOffer: false, askedForTimes: false, pickedTime: false, preference: {}, propertyRef: null, askedWhoAttends: false,
+    meetingKind: null, unsupportedMeeting: false, outOfScopeRequest: false,
   });
+});
+
+test("FR-004e/f: a visit needs a property; the only other meeting is by phone", () => {
+  const vma = { id: "p1", code: "VMA-0001" };
+  const base = { intent: "purchase" as const, kind: null, property: null, reofferingCall: false, cardsShown: false };
+  assert.equal(meetingTarget({ ...base, property: vma }), "viewing");
+  assert.equal(meetingTarget({ ...base, cardsShown: true }), "ask_property", "cards on screen, none pointed at");
+  assert.equal(meetingTarget({ ...base, kind: "visit", cardsShown: true }), "ask_property");
+  assert.equal(meetingTarget(base), "call", "nothing ever shown: the phone is what there is");
+  assert.equal(meetingTarget({ ...base, kind: "call", property: vma }), "call", "asked for the phone, gets the phone");
+  assert.equal(meetingTarget({ ...base, reofferingCall: true, cardsShown: true }), "call", "other times for a phone offer");
+  assert.equal(meetingTarget({ ...base, kind: "visit", reofferingCall: true, cardsShown: true }), "ask_property");
+  assert.equal(meetingTarget({ ...base, intent: "investment", kind: "visit", property: vma }), "call", "FR-003a");
+});
+
+test("FR-005h/i: a request the agency can't meet advances the streak, even when something was learned", () => {
+  const turn = { learnedSomething: false, extractionFailed: false, attemptedAnswer: true, droppedCount: 0 };
+  assert.deepEqual(accountTurn(0, { ...turn, refused: true }), { notUnderstood: true, fallbackStreak: 1 });
+  assert.deepEqual(accountTurn(1, { ...turn, refused: true, learnedSomething: true }), { notUnderstood: true, fallbackStreak: 2 });
+  assert.deepEqual(accountTurn(1, { ...turn, acted: true }), { notUnderstood: false, fallbackStreak: 0 });
+});
+
+test("the new meeting facts are read strictly", () => {
+  const facts = readSchedulingFacts({ meetingKind: "call", unsupportedMeeting: "sim", outOfScopeRequest: true });
+  assert.equal(facts.meetingKind, "call");
+  assert.equal(facts.unsupportedMeeting, true);
+  assert.equal(facts.outOfScopeRequest, true);
+  assert.equal(readSchedulingFacts({ meetingKind: "zoom" }).meetingKind, null);
 });

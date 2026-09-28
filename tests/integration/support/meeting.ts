@@ -49,11 +49,20 @@ export async function qualifiedLead(options: { brokerName?: string; shownPropert
   if (!("conversationId" in inbound)) throw new Error(JSON.stringify(inbound));
   const { conversationId, leadId } = inbound;
 
-  await query("insert into messages (conversation_id, role, content, metadata) values ($1, 'agent', $2, $3::jsonb)", [
-    conversationId,
-    "Separei algumas opções para você.",
-    JSON.stringify(options.shownPropertyIds === undefined ? {} : { propertyIds: options.shownPropertyIds }),
-  ]);
+  // Backdated by a second or two. The next lead message gets a JavaScript
+  // timestamp (milliseconds, truncated); Postgres' `now()` has microseconds. Two
+  // writes in the same millisecond would order the lead's message *before* this
+  // reply, and the turn would find nothing to answer.
+  await query("update messages set created_at = now() - interval '2 seconds' where conversation_id = $1", [conversationId]);
+  await query(
+    `insert into messages (conversation_id, role, content, metadata, created_at)
+     values ($1, 'agent', $2, $3::jsonb, now() - interval '1 second')`,
+    [
+      conversationId,
+      "Separei algumas opções para você.",
+      JSON.stringify(options.shownPropertyIds === undefined ? {} : { propertyIds: options.shownPropertyIds }),
+    ],
+  );
   await query("update leads set intent = 'purchase', status = 'qualified', score = 100 where id = $1", [leadId]);
   await query("update conversations set slots = $2::jsonb, fallback_streak = 0 where id = $1", [
     conversationId,

@@ -268,3 +268,44 @@ developer:
 **Noticed, filed as separate tasks:**
 - tests that pollute the demo DB;
 - the log masker printing trace ids as phone numbers.
+
+## Phase 7 (T042–T047) — the developer's amendments of 28/09
+
+**What changed** (spec FR-004e, FR-004f, FR-005h, FR-005i, FR-020, SC-018; clarification session "developer,
+after the first build"):
+- **A visit needs a property.** `meetingTarget` decides what an offer is for:
+  - an investor gets a call;
+  - asked for the phone, or re-offering phone times already on the table, it's a call;
+  - with a property in play, a visit;
+  - with cards on screen and none pointed at, the code-written `VISIT_NEEDS_PROPERTY_SENTENCE` asks which (the
+    *Interessado* button or the code) and offers the phone. It counts as the offer, so it isn't repeated;
+  - with nothing ever shown, the phone.
+- The only other meeting is **por telefone** in every sentence, the widget card and the agenda.
+  A new fact, `meetingKind`, reads "quero uma visita" / "prefiro por telefone".
+- **Formats and requests the agency doesn't do:**
+  - New facts `unsupportedMeeting` (office, Meet, Zoom, FaceTime, …) and `outOfScopeRequest` (a ride,
+    reimbursement, choosing who attends by looks, colour, gender, ideology…).
+  - Code answers *"Ainda não consigo te ajudar com isso."*; for a format it adds the phone offer, unless a call
+    is already booked.
+  - `accountTurn` gets `refused` and **advances the streak** even when the turn learned something, so a second
+    in a row hands off (with the same "ainda não consigo" plus "vou chamar um corretor").
+- **Region search** (FR-020): a named area matches the neighbourhood *or* `lower(region)`, so "zona norte"
+  finds Santana. Nothing else is widened.
+- **The log masker** protects 16+ hex-digit ids (Langfuse trace and span ids) like UUIDs, so trace ids are
+  printed whole. Real phones next to them are still masked.
+- **Integration tests have their own database.** `npm run test:integration` runs `src/db/test-db.ts`:
+  - it drops and recreates `<name>_test`, migrates and seeds it **once per run**, then runs the files;
+  - arguments pass through, for one file;
+  - `seed.test` counts only what the seed owns, `auth-service.test` restores the lead it reassigns, and the SSE
+    test skips its HTTP half on the test database (the app reads the other one).
+
+**Found on the way.**
+- *Correction to Phase 6:* I blamed "nothingUnanswered" on the live worker. It recurred on a database no worker
+  touches. The cause was the test helper: it inserted its setup reply with Postgres `now()` (microseconds), and
+  the next lead message gets a JavaScript timestamp (milliseconds, truncated). In the same millisecond, the lead's
+  message sorted before the reply. The helper now backdates its setup rows.
+- "Quem vai me atender?" after a phone booking came back with `askedWhoAttends` **and** `meetingKind: "call"`,
+  echoed from the confirmation, and got "already booked". Now the question outranks a meeting request, and
+  `meetingKind` counts only what this message asks for. Test failures now print the extracted facts.
+- e4b drove every new case unaided. One flake in the change-of-subject escape (1 of 4 runs) is a model misread,
+  not a pattern; no escalation.

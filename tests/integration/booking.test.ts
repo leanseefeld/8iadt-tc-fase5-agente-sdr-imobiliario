@@ -45,7 +45,7 @@ test("booking a meeting", { skip: !integration }, async (t) => {
 
     // FR-005e: who attends is neither named nor guessed, and asking is not a handoff.
     const who = await camila.say("quem vai me atender?");
-    assert.equal(who.reply, ATTENDEE_UNKNOWN_SENTENCE);
+    assert.equal(who.reply, ATTENDEE_UNKNOWN_SENTENCE, JSON.stringify((await camila.lastMetadata()).toolCalls));
     assert.equal(who.handoffReason, null);
   });
 

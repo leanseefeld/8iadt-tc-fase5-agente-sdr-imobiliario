@@ -44,7 +44,7 @@ flowchart TD
     ACC --> DEC["Decidir<br/>handoffDecision · shouldProposeMeeting<br/>+ offerOutstanding · nextQuestion"]:::codigo
     DEC --> HO{"handoff?<br/>006: não, se a mensagem é sobre o encontro"}:::codigo
     HO -- "sim" --> W_HO["handoffReply"]:::escrita
-    HO -- "não" --> MEET["Encontro (006)<br/>recusa → declineProposal · pedido ou interesse → proposeAppointment<br/>interesse resolvido por resolvePropertyRef"]:::codigo
+    HO -- "não" --> MEET["Encontro (006)<br/>formato ou pedido fora do domínio → ainda não consigo (streak avança)<br/>recusa → declineProposal · pedido ou interesse → meetingTarget<br/>visita sem imóvel → pergunta qual · senão proposeAppointment"]:::codigo
     MEET --> ACTQ{"act() oferecido?<br/>busca devida, sem frase de agenda<br/>006: proposta aberta + pickedTime"}:::codigo
     ACTQ -- "sim" --> ACT["act() — até 3 passos<br/>searchProperties<br/>006: bookMeeting"]:::age
     ACTQ -- "não" --> AGENDA
@@ -110,6 +110,11 @@ stateDiagram-v2
 - **Uma mensagem sobre o encontro não é pedido de humano** (006): a extração lê *"a segunda"* ou *"quero agendar"*
   como `askedForHuman`, porque o encontro é com uma pessoa. Quando a mesma mensagem escolhe, pede ou recusa
   horários, o código ignora esse fato. E uma escolha vence um pedido de horários na mesma mensagem.
+- **Visita só com imóvel; o outro encontro é por telefone** (006): com cards na tela e nenhum apontado, o agente pergunta
+  qual imóvel (botão *Interessado* ou código) e oferece o telefone; isso já conta como a oferta, para não repetir.
+  Pedido de encontro no escritório, por Meet, Zoom, FaceTime ou outro formato: *"ainda não consigo te ajudar com
+  isso"* e o telefone, se nenhum já estiver marcado. Pedido fora do domínio numa visita (carona, reembolso, escolher
+  quem atende por uma característica pessoal): só *"ainda não consigo"*. Os dois avançam o streak.
 - **Nenhum nome de corretor chega ao modelo por causa da agenda** (006): opções e confirmação dizem *"alguém da
   nossa equipe"*, escritas pelo código; depois de uma devolução, o modelo não confirma nem nega quem atende.
 - **Uma proposta aberta não sequestra a conversa**: o lead pode mudar de assunto e voltar a ela depois.
@@ -126,18 +131,19 @@ stateDiagram-v2
 | botão **Interessado** no card *(006)* | 🟩 widget envia | `app/(public)/chat/…/PropertyCard.tsx` | clique ou toque: posta *"Interessado em VMA-0005"* em nome do lead, como mensagem dele, e um turno normal começa; a resposta depende de onde a conversa está (FR-004d) |
 | debounce · `claimTurn` | 🟦 código | `channels/web.ts` · `services/conversation.ts` | toda mensagem; um turno por conversa, depois de `CHAT_DEBOUNCE_MS` de silêncio |
 | `looksLikeInjection` | 🟦 código | `domain/injection.ts` | todo turno; três frases fixas de tentativa de manipulação |
-| `extract()` | 🟨 modelo lê | `agent/orchestrator.ts` | todo turno que passou do portão. Devolve slots e os fatos `askedForHuman`, `optOut`, `attemptedAnswer`, `askedAboutCriteria`; **006:** `declinedOffer`, `askedForTimes`, `pickedTime`, `preferredWeekday`, `preferredPeriod`, `propertyPosition`, `propertyCode`, `askedWhoAttends` |
+| `extract()` | 🟨 modelo lê | `agent/orchestrator.ts` | todo turno que passou do portão. Devolve slots e os fatos `askedForHuman`, `optOut`, `attemptedAnswer`, `askedAboutCriteria`; **006:** `declinedOffer`, `askedForTimes`, `pickedTime`, `preferredWeekday`, `preferredPeriod`, `propertyPosition`, `propertyCode`, `askedWhoAttends`, `meetingKind`, `unsupportedMeeting`, `outOfScopeRequest` |
 | `recoverSlot()` | 🟨 modelo lê | `agent/recovery.ts` | slot pendente ficou vazio, a extração não disse nada dele, **e** o lead tentou responder |
 | `mergeSlots` | 🟦 código | `domain/slots.ts` | todo turno; separa preenchido, revisado, intenção trocada e recusado |
-| `accountTurn` | 🟦 código | `agent/orchestrator.ts` | todo turno; decide o streak |
+| `accountTurn` | 🟦 código | `agent/orchestrator.ts` | todo turno; decide o streak. **006:** um pedido que a imobiliária não atende (encontro no escritório ou por vídeo, carona, escolher quem atende por aparência, cor, gênero, ideologia…) **avança** o streak, mesmo que o turno tenha aprendido algo |
 | `handoffDecision` | 🟦 código | `domain/handoff.ts` | lead pediu humano (**006:** numa mensagem que não é sobre o encontro), ou streak chegou a 2 |
 | `shouldProposeMeeting` | 🟦 código | `domain/handoff.ts` | roteiro completo (compra/aluguel: quente e com contato; investimento: sempre) **e** nenhuma oferta já feita (`offerOutstanding`) |
+| `meetingTarget` *(006)* | 🟦 código | `agent/orchestrator.ts` | antes de propor: investidor → conversa por telefone; pediu telefone → telefone; imóvel em jogo → visita; cards na tela e nenhum apontado → **pergunta qual imóvel** (ou oferece o telefone), sem horários; nada mostrado ainda → telefone |
 | `proposeAppointment` *(006)* | 🟦 código | `services/scheduling.ts` | `shouldProposeMeeting`, **ou** `askedForTimes`/interesse com roteiro completo (incompleto: *"Assim que eu tiver seus dados…"*, uma vez; já agendado: *"ainda não consigo"*). Dia e período pedidos filtram **antes** do limite de três. Datas e horários são escritos pelo código |
 | `resolvePropertyRef` *(006)* | 🟦 código | `services/conversation.ts` | a extração trouxe `propertyRef` (*"o segundo"*, *"VMA-0005"*); resolve só contra imóveis **já mostrados nesta conversa**, nunca adivinha |
 | `declineProposal` *(006)* | 🟦 código | `services/scheduling.ts` | `declinedOffer` **com proposta aberta** |
 | `nextQuestion` | 🟦 código | `domain/slots.ts` | quando não há oferta nem handoff no turno — **quem escolhe a próxima pergunta é sempre o código** |
 | `act()` | 🟥 modelo age | `agent/act.ts` | critério de busca preenchido ou revisado com o roteiro qualificado; **006:** ou proposta aberta **e** `pickedTime` sem recusa |
-| `searchProperties` | 🟥 tool | `agent/tools/search-properties.ts` | dentro do `act()`. Agência e a recusa para investidor vêm do código, nunca do argumento |
+| `searchProperties` | 🟥 tool | `agent/tools/search-properties.ts` | dentro do `act()`. Agência e a recusa para investidor vêm do código, nunca do argumento. **006 FR-020:** uma área pedida casa com o bairro **ou a região** (*"zona norte"* acha Santana) |
 | `bookMeeting` *(006)* | 🟥 tool | `agent/tools/book-meeting.ts` | dentro do `act()`. Revalida pelo mesmo cálculo que gerou as opções |
 | reconfirmação | 🟦 código | `domain/revision.ts` | slot já preenchido foi revisado, tem dependentes, o turno anterior não foi reconfirmação, **e nenhuma busca apareceu neste turno** |
 | `lastSearchOutcome` | 🟦 código | `services/conversation.ts` | turnos sem busca; é a última busca lida das mensagens gravadas |

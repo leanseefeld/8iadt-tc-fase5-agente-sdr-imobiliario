@@ -203,3 +203,14 @@ Setup (T001–T003)
 2. **Phase 3 (US1).** The one new tool comes up alone. If e4b won't drive it after the contract is narrowed, 007's escalation order applies: contract, then the 12B model, then Azure.
 3. **Phase 4 (US2)** — the graded scenario. **This is the MVP line and the moment 009 can start.**
 4. **Phase 5 (US3)**, then **Phase 6**, including the parallel replay.
+
+---
+
+## Phase 7: Developer amendments of 28/09 (after the first build)
+
+- [x] T042 [US1] (FR-004e, FR-004f) `meetingTarget` in `src/agent/orchestrator.ts`: a visit needs a property — with cards on screen and none pointed at, the code-written `VISIT_NEEDS_PROPERTY_SENTENCE` asks which (or offers the phone) and counts as the offer; the only other meeting is a phone conversation, asked for with the new `meetingKind` extraction fact. Wording *"conversa por telefone"* in `prompts/meeting.ts`, `MeetingCard.tsx` and the agenda row
+- [x] T043 [US1] (FR-005h, FR-005i) extraction facts `unsupportedMeeting` and `outOfScopeRequest`; code answers `CANNOT_ACT_REPLY` (plus `PHONE_OFFER_SENTENCE` for a format, unless a call is booked) and `accountTurn` advances the streak (`refused`)
+- [x] T044 (FR-020) region search in `searchProperties` (`src/services/properties.ts`), tested in `tests/properties-service.test.ts`
+- [x] T045 Integration tests on their own database: `src/db/test-db.ts` behind `npm run test:integration` — drop, create, migrate and seed `<name>_test` once per run; `tests/seed.test.ts` counts only what the seed owns; `tests/auth-service.test.ts` restores the lead it reassigns; the SSE test skips its HTTP half on the test database; README updated
+- [x] T046 Log masking: 16+ hex-digit ids (Langfuse trace and span ids) are protected from the phone mask like UUIDs (`src/core/security.ts`, `tests/masking.test.ts`)
+- [x] T047 `tests/integration/meeting-limits.test.ts` (SC-018) and the unit cases in `tests/precedence.test.ts`; turn map updated

@@ -31,7 +31,7 @@ export function slotLabel(at: Date, timeZone: string): string {
 }
 
 function what(type: MeetingType, propertyCode: string | null): string {
-  if (type === "call") return "uma conversa";
+  if (type === "call") return "uma conversa por telefone";
   return propertyCode === null ? "uma visita" : `uma visita ao ${propertyCode}`;
 }
 
@@ -54,7 +54,8 @@ export function confirmationSentence(
   propertyCode: string | null,
   timeZone: string,
 ): string {
-  const kind = type === "call" ? "Sua conversa" : propertyCode === null ? "Sua visita" : `Sua visita ao ${propertyCode}`;
+  const kind =
+    type === "call" ? "Sua conversa por telefone" : propertyCode === null ? "Sua visita" : `Sua visita ao ${propertyCode}`;
   return `Pronto! ${kind} está confirmada para ${slotLabel(at, timeZone)}, com ${WHO}.`;
 }
 
@@ -80,6 +81,20 @@ export const DETAILS_FIRST_SENTENCE = "Claro! Assim que eu tiver seus dados, te 
  */
 export const ATTENDEE_UNKNOWN_SENTENCE =
   "Ainda não consigo te dizer o nome de quem vai te atender, mas está tudo registrado no sistema com alguém da nossa equipe.";
+
+/**
+ * FR-004e: a visit is about a property. With cards on screen and none pointed
+ * at, the lead is asked which — and offered the phone instead.
+ */
+export const VISIT_NEEDS_PROPERTY_SENTENCE =
+  "Para marcar uma visita, me diz qual imóvel te interessou: é só tocar em Interessado no card ou me mandar o código. " +
+  "Se preferir, também posso marcar uma conversa por telefone com alguém da nossa equipe.";
+
+/** FR-004e: a visit asked for before any property was shown — the phone is what there is. */
+export const NO_PROPERTY_YET_SENTENCE = "Ainda não tenho um imóvel para te levar, mas dá para conversar por telefone.";
+
+/** FR-005h: the one format besides a visit, offered after an unsupported one. */
+export const PHONE_OFFER_SENTENCE = "Se quiser, posso marcar uma conversa por telefone com alguém da nossa equipe.";
 
 /** FR-005: why a pick could not be booked, said before the fresh options. */
 export const BOOKING_REFUSED: Record<"too_soon" | "unavailable" | "collision" | "no_such_option", string> = {

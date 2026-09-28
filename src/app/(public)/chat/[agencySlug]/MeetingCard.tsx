@@ -21,7 +21,7 @@ export default function MeetingCard({ booking, timeZone }: { booking: WireBookin
   const time = minutes === 0 ? `${hours}h` : `${hours}h${String(minutes).padStart(2, "0")}`;
   const what =
     booking.type === "call"
-      ? "Conversa com a equipe"
+      ? "Conversa por telefone"
       : booking.propertyCode === null
         ? "Visita"
         : `Visita ao ${booking.propertyCode}`;

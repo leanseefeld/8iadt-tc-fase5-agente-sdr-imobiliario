@@ -125,10 +125,18 @@ docker compose exec app npm run lint
 ```
 
 A suíte de integração fala com o banco e com o modelo local, e por isso é lenta e
-fica atrás de uma variável:
+fica atrás de uma variável. Ela roda num **banco só dela** (`<nome>_test`), criado,
+migrado e populado do zero a cada execução — o banco da demo, o app e o worker não
+são tocados:
 
 ```bash
 docker compose exec app npm run test:integration
+```
+
+Um arquivo só, no mesmo banco novo:
+
+```bash
+docker compose exec app npm run test:integration -- tests/integration/booking.test.ts
 ```
 
 Quanto o agente acerta ao **ler** uma mensagem é medido à parte, com rótulos

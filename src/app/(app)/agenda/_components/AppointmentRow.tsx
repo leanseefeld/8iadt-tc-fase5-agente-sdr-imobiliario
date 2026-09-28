@@ -44,7 +44,7 @@ export function AppointmentRow({ row }: { row: AppointmentRowData }) {
 
   const what =
     row.type === "call"
-      ? "Conversa"
+      ? "Conversa por telefone"
       : row.propertyCode === null
         ? "Visita"
         : `Visita · ${row.propertyCode}${row.neighborhood ? `, ${row.neighborhood}` : ""}`;

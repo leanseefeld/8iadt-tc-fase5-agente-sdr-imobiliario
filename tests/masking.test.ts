@@ -180,3 +180,15 @@ test("leaves the other machinery keys alone", () => {
     fileName: "seed.ts",
   });
 });
+
+test("a Langfuse trace or span id is an id, not a phone number", () => {
+  const traceId = "c78868825597c737c04f00a4172b9105";
+  assert.equal(maskText(`trace ${traceId}`), `trace ${traceId}`);
+  assert.equal(maskText("span 7b1c49d2a1156123"), "span 7b1c49d2a1156123");
+  assert.deepEqual(maskPII({ traceId, outcome: "sent" }), { traceId, outcome: "sent" });
+});
+
+test("a phone next to an id is still masked", () => {
+  const out = maskText("ligar 11987654321 sobre c78868825597c737c04f00a4172b9105");
+  assert.equal(out, "ligar (11) *****-**21 sobre c78868825597c737c04f00a4172b9105");
+});

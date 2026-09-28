@@ -54,10 +54,10 @@ test("the ways out of an offer", { skip: !integration }, async (t) => {
     const camila = await lead();
     await camila.say("ok");
     const aside = await camila.say("vocês trabalham com financiamento?");
-    assert.doesNotMatch(aside.reply, /Tenho estes horários/);
+    assert.doesNotMatch(aside.reply, /Tenho estes horários/, JSON.stringify((await camila.lastMetadata()).toolCalls));
     assert.deepEqual((await camila.appointments()).map((row) => row.status), ["proposed"]);
     const booked = await camila.say("pode ser a primeira opção");
-    assert.match(booked.reply, /^Pronto!/);
+    assert.match(booked.reply, /^Pronto!/, JSON.stringify((await camila.lastMetadata()).toolCalls));
     assert.deepEqual((await camila.appointments()).map((row) => row.status), ["confirmed"]);
   });
 

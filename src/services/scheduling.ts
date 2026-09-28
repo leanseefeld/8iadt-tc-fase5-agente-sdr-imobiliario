@@ -359,11 +359,24 @@ export async function bookAppointment(input: BookInput): Promise<BookResult> {
  * booked gets spec 007 FR-023's honest reply (FR-004d). Also the base of the
  * dashboard's derived *Visita marcada* (FR-008b).
  */
-export async function hasConfirmedFutureAppointment(leadId: string, now = new Date(), runner: Runner = getDb()): Promise<boolean> {
+export async function hasConfirmedFutureAppointment(
+  leadId: string,
+  now = new Date(),
+  runner: Runner = getDb(),
+  /** Only meetings of this kind — FR-005h offers the phone unless a call is already booked. */
+  type?: MeetingType,
+): Promise<boolean> {
   const rows = await runner
     .select({ id: appointments.id })
     .from(appointments)
-    .where(and(eq(appointments.leadId, leadId), eq(appointments.status, "confirmed"), gte(appointments.scheduledAt, now)))
+    .where(
+      and(
+        eq(appointments.leadId, leadId),
+        eq(appointments.status, "confirmed"),
+        gte(appointments.scheduledAt, now),
+        ...(type === undefined ? [] : [eq(appointments.type, type)]),
+      ),
+    )
     .limit(1);
   return rows.length > 0;
 }

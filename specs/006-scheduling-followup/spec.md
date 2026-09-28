@@ -167,6 +167,16 @@ one appointment done and one cancelled.
   - **declined earlier** → treated as the lead asking again (FR-005a), so options for that property;
   - **already booked** → several bookings are spec 009; until then, spec 007 FR-023's honest *"ainda não consigo
     te ajudar com isso"*.
+- **FR-004e** *(28/09, developer)*: A **visit MUST be about a property**. When a visit would be offered or was asked
+  for and no property is in play (FR-004b), the agent MUST NOT offer visit times: a code-written sentence asks the lead
+  which of the properties already shown interests them — the card's **Interessado** button or its code — and offers a
+  phone conversation instead, if they prefer. When nothing was ever shown (no search yet, or nothing matched), the
+  offer is the phone conversation. This applies both to the offer code makes on its own (FR-004a) and to a lead's
+  explicit *"quero marcar uma visita"*. The prompt counts as the offer for FR-004a's offer-outstanding fact, so it is
+  not repeated turn after turn.
+- **FR-004f** *(28/09, developer)*: The only other meeting is a **conversation by phone** (`call`), bookable on its
+  own, with or without a property in play: a lead who asks for one gets phone times. Every code-written sentence and
+  the widget card call it *"conversa por telefone"*.
 - **FR-004a**: Proposing MUST be triggered by code when the offer is due — spec 007's `shouldProposeMeeting`
   with its offer-outstanding fact — never by the model deciding on its own that it is time to offer. The reply
   MUST present the computed options, replacing today's instruction to ask which weekday suits the lead.
@@ -207,6 +217,15 @@ one appointment done and one cancelled.
   script's next question. What the lead most needs to know comes first. This extends spec 007 FR-032, which ranked
   (3)–(6). A **decline acknowledgement** does not compete: it is a short code-written sentence placed **before**
   whatever wins, and it suppresses only what a decline makes pointless — the options and the reconfirmation.
+- **FR-005h** *(28/09, developer)*: A meeting in a **format the agency doesn't offer** — at the agency's office, by
+  video (Google Meet, Zoom, FaceTime, …) or anything else outside visit-to-a-property and phone conversation — MUST
+  get spec 007 FR-023's *"ainda não consigo te ajudar com isso"*, followed by the offer of a phone conversation
+  unless one is already booked. It MUST NOT propose times for the unsupported format, and it MUST **advance the
+  handoff streak** (spec 004 FR-027), like any request the agent cannot act on.
+- **FR-005i** *(28/09, developer)*: A request about a visit that is **outside the agency's domain** — a ride, transit
+  reimbursement, choosing the broker by looks, colour, gender, ideology or any other personal trait, and anything
+  else the agency doesn't do — MUST get the same *"ainda não consigo te ajudar com isso"*, with no lecture and no
+  offer, and MUST advance the handoff streak.
 - **FR-005c**: An open proposal MUST NOT take over the conversation. A message that does not answer it MUST be
   handled by the normal turn; the options MUST NOT be repeated on every following turn; and the proposal MUST
   stay open, so a later pick still books it, until it is booked, declined or replaced.
@@ -214,6 +233,12 @@ one appointment done and one cancelled.
   stage to *scheduled* regardless of conversation state — a `paused` conversation may still hold a booking made
   earlier — producing a confirmation naming weekday, date, time, type and — for a viewing — the property code,
   rendered in the widget as a compact card.
+
+**Search**
+
+- **FR-020** *(28/09, developer; amends spec 007 FR-034)*: A requested area MUST match a property's **neighbourhood
+  or its region** — *"zona norte"* finds Santana. Matching a region is not widening: the lead named that area.
+  Everything else in FR-034 stands — no criterion is relaxed to fill the list.
 
 **Agenda**
 
@@ -336,6 +361,10 @@ one appointment done and one cancelled.
   decline arriving with a criterion change gets the acknowledgement followed by the search result.
 - **SC-016**: A viewing booked after the lead pointed at a card — by *"o segundo"*, by its code, or by the card's
   interest button — carries that property, and its confirmation names the code. The button works by tap at 390 px.
+- **SC-018**: A visit is never proposed without a property: with cards shown and none pointed at, the lead is asked
+  which one (or offered a phone conversation); a request for a meeting at the office or by video gets *"ainda não
+  consigo"* plus the phone offer, and an out-of-domain request about a visit gets *"ainda não consigo"* alone — both
+  advancing the handoff streak, so a second one in a row hands off.
 - **SC-013**: In scripted conversations: a decline is never followed by an unprompted offer; a request for other
   times yields a replacing proposal; a change of subject after an offer gets its own answer without the options
   repeated, and a pick two turns later still books.
@@ -348,6 +377,14 @@ one appointment done and one cancelled.
 - Q: Can the lead get out of an offer? → A: Yes, three ways, none of which the offer may block: **decline** it; ask for **other times** (optionally *"só de manhã"*, *"quinta"*); or **change the subject** — other neighbourhoods, and later the investment specialist or general questions — which the normal turn handles while the offer stays open to pick later.
 - Q: Keep the per-broker availability editor? → A: No. Cut to protect the 08/10 deadline; recorded as backlog 34, a low-priority extra. Seeded availability drives the slot computation unchanged.
 - Q: How does this slice prepare for spec 009? → A: 009 (reschedule, cancel from the conversation) follows immediately. Booking is built as transitions of **one appointment row**, so a reschedule re-runs this spec's own validation (FR-002) on that row rather than opening a second path.
+
+### Session 2026-09-28 (developer, after the first build)
+
+- Q: A purchase lead who never points at a card was offered *"uma conversa"*, even after *"quero marcar uma visita"*. Keep it? → A: **Visits require a property**; the agent asks for one (Interessado or the code) and offers a phone conversation as the alternative (FR-004e). A conversation is by **phone** only (FR-004f).
+- Q: What about a meeting at the agency, or by Meet, Zoom, FaceTime — or anything else we don't offer? → A: *"Ainda não consigo te ajudar com isso"*, then the phone path if none is booked; the handoff streak advances (FR-005h).
+- Q: And a ride, transit reimbursement, a broker chosen for looks, colour, gender or ideology? → A: *"Ainda não consigo te ajudar com isso"*, streak advances (FR-005i).
+- Q: Should chat search match regions (*"zona norte"*) again? → A: **Yes** (FR-020).
+- Q: The integration tests share the demo database with the running worker and leave data behind. → A: They run in **their own database**, created, migrated and seeded fresh at the start of each suite run — not per test, which would make the run explode.
 
 ### Session 2026-09-28 (after /speckit-analyze)
 

@@ -140,11 +140,10 @@ test("Cenário 1 runs end to end (SC-001, SC-003, SC-004)", { skip: !integration
     }
   });
 
-  await t.test("the last turn proposes a meeting and keeps the conversation active (FR-040)", async () => {
-    // Spec 006 contracts/interfaces.md §2: a viewing needs a property the lead
-    // pointed at; with none, the offer is a call with the team. Flagged to the
-    // developer as a product question for graded scenario 1.
-    assert.equal(last.meeting, "call", `meeting was ${String(last.meeting)}`);
+  await t.test("the last turn offers a visit and keeps the conversation active (FR-040)", async () => {
+    // Spec 006 FR-004e: cards are on screen and none was pointed at, so the offer
+    // is a visit that first asks which property (or the phone instead).
+    assert.equal(last.meeting, "viewing", `meeting was ${String(last.meeting)}`);
     assert.equal(last.handoffReason, null, "a hot lead with contact is not a handoff (ADR 19)");
 
     const [row] = await query("select status from conversations where id = $1", [conversationId]);

@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, ilike, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
 import { agencies, properties } from "../db/schema.ts";
 
@@ -144,7 +144,7 @@ export async function listProperties(
 
 /**
  * Active properties that match the criteria as stated. A maximum price is a
- * maximum, a named neighborhood is that neighborhood, a bedroom count is a
+ * maximum, a named area is that neighbourhood or region (FR-020), a bedroom count is a
  * minimum. Nothing is widened to return a fuller set. At most three, cheapest
  * first. An empty list is a normal result.
  */
@@ -159,7 +159,12 @@ export async function searchProperties(agencyId: string, criteria: SearchCriteri
   if (criteria.bedrooms !== undefined) conditions.push(gte(properties.bedrooms, criteria.bedrooms));
   if (criteria.priceMax !== undefined) conditions.push(lte(properties.price, criteria.priceMax));
   if (criteria.neighborhoods !== undefined && criteria.neighborhoods.length > 0) {
-    conditions.push(inArray(properties.neighborhood, criteria.neighborhoods));
+    // Spec 006 FR-020: an area the lead names is a neighbourhood **or** a region
+    // — "zona norte" finds Santana. Not a widening: the lead named that area.
+    const areas = criteria.neighborhoods.map((area) => area.trim().toLowerCase());
+    conditions.push(
+      or(inArray(properties.neighborhood, criteria.neighborhoods), inArray(sql`lower(${properties.region})`, areas))!,
+    );
   }
 
   const rows = await db

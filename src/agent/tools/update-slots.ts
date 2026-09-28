@@ -156,6 +156,28 @@ export const EXTRACTION_FIELDS: readonly ExtractionField[] = [
       "o número dessa posição, contando a partir de 1. Senão, null.",
   },
   {
+    key: "meetingKind",
+    description:
+      "visit SÓ se, nesta mensagem, a pessoa pediu para visitar um imóvel pessoalmente; call SÓ se, nesta " +
+      "mensagem, pediu uma conversa ou ligação por telefone. Uma visita ou conversa já marcada, citada numa " +
+      "mensagem anterior, não conta. Senão, null.",
+    values: ["visit", "call"],
+  },
+  {
+    key: "unsupportedMeeting",
+    description:
+      "true se a pessoa pediu um encontro num formato que não é visita a um imóvel nem conversa por telefone: " +
+      "reunião na imobiliária ou no escritório, videochamada (Google Meet, Zoom, FaceTime, vídeo no WhatsApp) " +
+      "ou qualquer outro formato. Na dúvida, false.",
+  },
+  {
+    key: "outOfScopeRequest",
+    description:
+      "true se a pessoa pediu algo ligado a uma visita que a imobiliária não faz: carona ou transporte, " +
+      "reembolso de passagem ou combustível, escolher quem atende pela aparência, cor, gênero, religião, " +
+      "ideologia ou outra característica pessoal. Perguntar quem vai atender NÃO é isso. Na dúvida, false.",
+  },
+  {
     key: "askedWhoAttends",
     description:
       'true se a pessoa perguntou quem vai atendê-la na visita ou conversa ("quem vai me atender?", ' +
@@ -193,6 +215,9 @@ export interface Extracted {
   propertyPosition: number | null;
   propertyCode: string | null;
   askedWhoAttends: boolean;
+  meetingKind: string | null;
+  unsupportedMeeting: boolean;
+  outOfScopeRequest: boolean;
 }
 
 /** The model writes `true`, `"true"` or `"sim"`; all three mean the same thing. */

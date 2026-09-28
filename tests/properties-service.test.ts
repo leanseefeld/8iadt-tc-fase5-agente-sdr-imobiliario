@@ -83,6 +83,16 @@ test("properties service against the seeded catalog", { skip: !integration }, as
     assert.deepEqual(result, []);
   });
 
+  await t.test("searchProperties: a region names an area too — 'zona norte' finds Santana (FR-020)", async () => {
+    const result = await searchProperties(agencyId!, { transaction: "sale", neighborhoods: ["zona norte"] });
+    assert.ok(result.length > 0, "the seeded catalog has sales in zona norte");
+    const { rows } = await getPool().query<{ id: string; region: string }>(
+      "select id, region from properties where id = any($1)",
+      [result.map((property) => property.id)],
+    );
+    assert.ok(rows.every((row) => row.region === "zona norte"), JSON.stringify(rows));
+  });
+
   await t.test("searchProperties: never throws for no match, returns []", async () => {
     const result = await searchProperties(agencyId!, {
       transaction: "sale",

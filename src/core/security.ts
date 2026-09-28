@@ -120,7 +120,13 @@ function maskPhoneValue(value: string): string | null {
  * which spec 005 reads back). Masking one corrupts it silently, so a UUID is cut
  * out of the text before the phone scan runs and put back untouched.
  */
-const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+/*
+ * The same holds for a Langfuse trace id (32 hex digits) or span id (16):
+ * `c78868825597c737…` was logged as `c(78) *****-**97…`, and a trace nobody can
+ * look up is a trace thrown away. Sixteen hex characters or more, standing
+ * alone, is an id; no telephone number is written that way.
+ */
+const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(?<![0-9a-z])[0-9a-f]{16,}(?![0-9a-z])/gi;
 
 function maskOutsideIds(text: string, mask: (segment: string) => string): string {
   const parts: string[] = [];

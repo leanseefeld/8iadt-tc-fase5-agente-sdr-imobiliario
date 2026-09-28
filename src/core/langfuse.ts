@@ -347,6 +347,8 @@ export async function flushLangfuse(timeoutMs: number = FLUSH_TIMEOUT_MS): Promi
 // ---------------------------------------------------------------------------
 
 export interface TurnTraceAttributes {
+  /** Defaults to `conversation.turn`; spec 006's follow-up sends as `followup.send`. */
+  traceName?: string;
   agencyId: string;
   leadId: string;
   conversationId: string;
@@ -418,7 +420,7 @@ export async function withTurnTrace<T>(
         // Contract §1's Name row. Without it every row in Langfuse's trace list
         // is blank and the turns are told apart only by their timestamps: the
         // root span carries the name, but the trace does not inherit it.
-        traceName: "conversation.turn",
+        traceName: attributes.traceName ?? "conversation.turn",
         sessionId: attributes.conversationId,
         userId: maskedLeadId(attributes.leadId),
         metadata: {
@@ -435,7 +437,7 @@ export async function withTurnTrace<T>(
       },
       () =>
         tracing.startActiveObservation(
-          "conversation.turn",
+          attributes.traceName ?? "conversation.turn",
           async (span) => {
             const trace: TurnTrace = {
               traceId: span.traceId,

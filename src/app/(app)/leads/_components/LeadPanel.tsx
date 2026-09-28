@@ -21,12 +21,15 @@ export function LeadPanel({
   currentUserId,
   role,
   brokers,
+  followupBlocker,
   langfuseUiPort,
 }: {
   detail: LeadDetail;
   currentUserId: string;
   role: UserRole;
   brokers: Array<{ id: string; name: string }>;
+  /** Spec 006 FR-017: why "Enviar follow-up agora" is unavailable, or null. */
+  followupBlocker: string | null;
   langfuseUiPort: number;
 }) {
   const heldByUserId = detail.conversation.heldByUserId;
@@ -107,6 +110,7 @@ export function LeadPanel({
           stage={detail.stage}
           role={role}
           brokers={brokers}
+          followupBlocker={followupBlocker}
         />
       </section>
 

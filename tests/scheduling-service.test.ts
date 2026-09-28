@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { closePool, getDb } from "../src/db/client.ts";
-import { agencies, appointments, conversations, events, leads, users } from "../src/db/schema.ts";
+import { agencies, appointments, conversations, events, followupJobs, leads, users } from "../src/db/schema.ts";
 import {
   bookAppointment,
   computeOptions,
@@ -72,6 +72,7 @@ test("scheduling service", { skip: !integration }, async (t) => {
   t.after(async () => {
     await db.delete(events).where(eq(events.agencyId, agencyId));
     await db.delete(appointments).where(eq(appointments.agencyId, agencyId));
+    await db.delete(followupJobs).where(eq(followupJobs.agencyId, agencyId));
     await db.delete(conversations).where(eq(conversations.agencyId, agencyId));
     await db.delete(leads).where(eq(leads.agencyId, agencyId));
     await db.delete(users).where(eq(users.agencyId, agencyId));

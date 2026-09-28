@@ -40,6 +40,8 @@ export interface OutboundMessage {
   propertyIds?: string[];
   /** The conversation was handed to a broker this turn (FR-028). */
   paused?: boolean;
+  /** Spec 006 FR-015: written by the follow-up worker, not in reply to anything. */
+  isFollowUp?: boolean;
 }
 
 export interface ChannelAdapter {

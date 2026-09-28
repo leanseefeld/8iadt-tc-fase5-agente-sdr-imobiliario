@@ -63,6 +63,8 @@ test("handback posts the re-entry line before the lead writes again", { skip: !i
   } finally {
     await pool.query("delete from events where conversation_id = $1", [conversationId]);
     await pool.query("delete from messages where conversation_id = $1", [conversationId]);
+    await pool.query("delete from appointments where conversation_id = $1", [conversationId]);
+    await pool.query("delete from followup_jobs where conversation_id = $1", [conversationId]);
     await pool.query("delete from conversations where id = $1", [conversationId]);
     await pool.query("delete from leads where id = $1", [leadId]);
     await closeNotifier();

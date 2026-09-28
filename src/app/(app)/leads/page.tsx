@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/core/auth";
 import { getConfig } from "@/core/config";
 import { scopeForUser } from "@/services/auth";
+import { isFollowupEnabled, triggerNowBlocker } from "@/services/followup";
 import { getFunnelMetrics } from "@/services/metrics";
 import {
   getLeadDetail,
@@ -19,6 +20,7 @@ import { LeadRow } from "./_components/LeadRow";
 import { LiveLeads } from "./_components/LiveLeads";
 import { LeadDrawer } from "./_components/LeadDrawer";
 import { LeadPanel } from "./_components/LeadPanel";
+import { FollowupSwitch } from "./_components/FollowupSwitch";
 import { buildHref, first, type SearchParamsRecord } from "./_components/query";
 import styles from "./leads.module.css";
 
@@ -52,12 +54,14 @@ export default async function LeadsPage({
   const page = Math.max(1, Number(first(params.page)) || 1);
   const leadId = first(params.lead);
 
-  const [metrics, list, detail, brokers] = await Promise.all([
+  const [metrics, list, detail, brokers, followupEnabled, followupBlocker] = await Promise.all([
     getFunnelMetrics(scope),
     listLeads(scope, { filter, mine, userId: session.userId, search, page }),
     leadId ? getLeadDetail(scope, leadId) : Promise.resolve(null),
     // Only a sales manager can reassign, so only a manager pays for the read.
     session.role === "salesManager" ? listAgencyBrokers(scope) : Promise.resolve([]),
+    isFollowupEnabled(scope.agencyId),
+    leadId ? triggerNowBlocker(scope, leadId) : Promise.resolve(null),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(list.total / list.pageSize));
@@ -68,7 +72,10 @@ export default async function LeadsPage({
     <div className={styles.page}>
       <LiveLeads pulseIntervalMs={getConfig().SSE_PULSE_INTERVAL_MS} />
       <header className={styles.header}>
-        <h1 className={styles.title}>Leads</h1>
+        <div className={styles.titleRow}>
+          <h1 className={styles.title}>Leads</h1>
+          <FollowupSwitch enabled={followupEnabled} role={session.role} />
+        </div>
         <MetricTiles metrics={metrics} />
       </header>
 
@@ -137,6 +144,7 @@ export default async function LeadsPage({
             brokers={brokers}
             currentUserId={session.userId}
             role={session.role}
+            followupBlocker={followupBlocker}
             langfuseUiPort={getConfig().LANGFUSE_UI_PORT}
           />
         </LeadDrawer>

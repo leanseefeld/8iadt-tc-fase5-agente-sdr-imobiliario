@@ -810,6 +810,9 @@ async function finish(input: FinishInput): Promise<TurnResult> {
     meeting: input.meeting ?? null,
     reconfirmation: input.reconfirmation === true,
     ...(input.scheduling === undefined ? {} : { scheduling: input.scheduling }),
+    // FR-009: a question left for the lead, or times awaiting a pick. Handoff
+    // and opt-out never reach here with either set; the guards catch the rest.
+    awaitingLead: input.question !== null || (input.scheduling?.options?.length ?? 0) > 0,
     toolCalls: input.toolCalls ?? [],
     // Absent rather than empty: `commitTurn` writes the key only when there are
     // cards, and no search is not the same thing as a search that found nothing.

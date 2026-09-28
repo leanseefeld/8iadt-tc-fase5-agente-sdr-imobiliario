@@ -170,6 +170,7 @@ test("Cenário 1 runs end to end (SC-001, SC-003, SC-004)", { skip: !integration
     // Spec 006: the offer is now a proposed appointment row.
     await query("delete from appointments where conversation_id = $1", [conversationId]);
     await query("delete from messages where conversation_id = $1", [conversationId]);
+    await query("delete from followup_jobs where conversation_id = $1", [conversationId]);
     await query("delete from conversations where id = $1", [conversationId]);
     await query("delete from leads where id = $1", [leadId]);
     await closePool();

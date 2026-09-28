@@ -132,3 +132,66 @@ remained are not 006's:
   restores it. Restored by hand; a clean-up task was suggested.
 
 I deleted my own replay and test leads (27) from the demo agency; the developer's sessions were kept.
+
+## Phase 4 (T023–T032) — US2: reopening a stalled conversation
+
+**As built.**
+- `services/followup.ts` has the three rules:
+  - `scheduleFollowup`: an upsert keyed by conversation, with every FR-009 guard in the statement's own `where`.
+  - `cancelFollowup`: resets the state and reads the old count in the same statement, so `followup.recovered`
+    fires once.
+  - `followupEligibility`: the agency switch, active and unheld, no opt-out, under the maximum, no confirmed
+    future appointment, inside the window.
+- Also in the service: `triggerNow` and `setFollowupEnabled` (salesManager only), plus `restartAfterHandback`
+  (FR-009a).
+- `commitTurn` schedules when the reply leaves the script's next question or options awaiting a pick.
+  `recordLeadMessage` cancels on every stored lead message. `returnToAgent` restarts the clock when something
+  is still open.
+- `jobs/followup.ts` runs as a registered consumer:
+  - it claims with `UPDATE … WHERE id IN (… FOR UPDATE SKIP LOCKED)` and reclaims rows stuck `running`
+    for 10 minutes;
+  - it checks eligibility twice, around the composition;
+  - outside the window it moves the attempt, and any other failed check cancels it (FR-013a clears the
+    *pending* state);
+  - a failed compose or send puts the row back untouched.
+- The sweep's clock is its `now` plus elapsed time, so tests pin the window.
+- The writer (`agent/followup-writer.ts`) splits the message. **The model writes only the opening sentence.**
+  It's checked: no question, no date/hour/weekday, no team name, no "[placeholder]". If it fails, a code-written
+  opening replaces it. **Code appends the pending question verbatim**, which is "ends with the pending question"
+  by construction, and a proposal is invited back without quoting a time (FR-014).
+- Delivery goes through `ChannelAdapter.send` with `isFollowUp`, stored on the message metadata (FR-015).
+  The event is `followup.sent`, with `actorType: worker` and the trace id of a `followup.send` trace
+  (`withTurnTrace` gained an optional trace name).
+- Dashboard: a switch in the leads header. The manager can press it; a broker sees its state in words.
+  The drawer gets **Enviar follow-up agora**, disabled with its reason when nothing is pending or the switch
+  is off.
+- Seed: the stale demo lead gets its due attempt. The live DB's Julia got the same by hand, and the worker
+  moved it to 09:00 local, so at 09:00 it sends her a real follow-up.
+
+**Found on the way.**
+- e4b's first opening read like the broker summary ("Entendi, Camila procura…"). The prompt now asks for
+  second person, with an example on other data. Three runs in a row came out right.
+- With no name known, the model wrote a literal "Oi, [Nome da pessoa]!". Brackets are now refused, and the name
+  falls back to the `name` slot.
+
+**Tests.**
+- `followup-claim` (SC-005): 2 claimers over 100 rows; 100 sent, 0 twice, 0 lost, and both claimed.
+- `followup-eligibility` (SC-007, SC-008, SC-014, FR-013a, FR-009): 7 cases.
+- `followup-writer` unit: 4 cases.
+- `INTEGRATION=1` `followup-writer` (SC-006) and `followup-send`: real e4b, real web channel, message marked
+  as a follow-up.
+- Verified in the browser as the seeded manager:
+  - the switch turns off and on, with its feedback in words;
+  - with it off, the drawer button is disabled and explains why;
+  - with it on, pressing it queues the attempt, and the worker claimed it and moved it to the window.
+- Every integration cleanup now deletes `followup_jobs` and `appointments` before the conversation.
+
+**Not verified.** A `followup.sent` trace id from the **worker** process. The test process doesn't register
+Langfuse. The first real send (Julia, 09:00) is where to read it.
+
+**Incident, fixed before commit.** A full `INTEGRATION=1` run swept with a clock pinned to 2030 (to be inside
+the window). That made *every* pending attempt in the database due, including the demo's real one for Julia.
+A stub-writer test marked it `sent` and queued a 2030 retry. No message reached her, because the stub never
+sends. Repaired by hand: attempt back to `pending` at 09:00, count 0, the stray row and event removed.
+`sweepFollowups` now takes an optional scope (`agencyId` / `conversationIds`), and every test sweep uses it;
+production claims everything as before. The query for `isFollowUp` messages and 2030 rows returns nothing.

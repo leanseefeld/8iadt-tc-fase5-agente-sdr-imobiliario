@@ -5,6 +5,7 @@ import { getConfig } from "../core/config.ts";
 import { EMPTY_SLOTS, slotsSchema, type Intent, type SlotKey, type Slots } from "../domain/slots.ts";
 import type { HandoffReason } from "../domain/handoff.ts";
 import { recordToolSpans } from "../core/langfuse.ts";
+import { cancelFollowup, scheduleFollowup } from "./followup.ts";
 import { maskPII, maskText } from "../core/security.ts";
 import { MESSAGE_CHANNEL } from "../core/notifier.ts";
 
@@ -642,6 +643,8 @@ export async function recordLeadMessage(inbound: InboundLeadMessage): Promise<In
         .update(conversations)
         .set({ lastLeadMessageAt: now, updatedAt: now })
         .where(and(eq(conversations.id, conversationId), eq(conversations.agencyId, agency.id)));
+      // Spec 006 FR-010: the lead wrote, so nothing is owed to them any more.
+      await cancelFollowup(tx, conversationId, now);
     }
 
     if (newEvents.length > 0) {
@@ -729,6 +732,12 @@ export interface CommitTurnInput {
   reconfirmation?: boolean;
   /** Spec 006: what this turn did about a meeting, for later turns and the widget. */
   scheduling?: SchedulingRecord;
+  /**
+   * Spec 006 FR-009: the reply leaves the lead something to answer — the
+   * script's next question, or options awaiting a pick. The follow-up clock
+   * starts when this is true; its guards decide whether it may.
+   */
+  awaitingLead?: boolean;
   toolCalls?: CommittedToolCall[];
   traceId?: string | null;
   now?: Date;
@@ -920,6 +929,10 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
       .where(
         and(eq(conversations.id, turn.conversation.id), eq(conversations.agencyId, turn.agency.id)),
       );
+
+    if (input.awaitingLead === true) {
+      await scheduleFollowup(tx, turn.conversation.id, now);
+    }
 
     await tx
       .update(leads)

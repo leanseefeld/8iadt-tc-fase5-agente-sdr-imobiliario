@@ -36,6 +36,8 @@ async function query(sql: string, params: unknown[] = []): Promise<Row[]> {
 async function cleanUp(conversationId: string, leadId: string): Promise<void> {
   await query("delete from events where conversation_id = $1", [conversationId]);
   await query("delete from messages where conversation_id = $1", [conversationId]);
+  await query("delete from appointments where conversation_id = $1", [conversationId]);
+  await query("delete from followup_jobs where conversation_id = $1", [conversationId]);
   await query("delete from conversations where id = $1", [conversationId]);
   await query("delete from leads where id = $1", [leadId]);
 }

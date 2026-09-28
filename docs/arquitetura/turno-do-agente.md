@@ -1,9 +1,8 @@
 # O turno do agente — quem decide o quê
 
 > Mapa de referência para responder, a qualquer momento: **isto é uma chamada de modelo ou uma conta do código?
-> E o que liga isso neste turno?** Reflete o código das specs 004, 005, 007 e da primeira parte da **006**
-> (propor, reservar, as saídas e o botão *Interessado*, marcados *(006)*). O que a 006 ainda vai acrescentar — o
-> follow-up — aparece **tracejado** e marcado *(006, planejado)* — atualizar quando for implementado (tarefa T039a).
+> E o que liga isso neste turno?** Reflete o código das specs 004, 005, 007 e 006 (propor, reservar, as saídas,
+> o botão *Interessado* e o follow-up, marcados *(006)*).
 
 ## A regra, em uma frase
 
@@ -27,7 +26,6 @@ flowchart TD
     classDef age fill:#fee2e2,stroke:#b91c1c,color:#0f172a
     classDef fala fill:#ede9fe,stroke:#6d28d9,color:#0f172a
     classDef escrita fill:#dcfce7,stroke:#15803d,color:#0f172a
-    classDef plano fill:#f8fafc,stroke:#64748b,stroke-dasharray:5 5,color:#334155
 
     IN(["Mensagem do lead<br/>digitada, ou pelo botão Interessado do card (006)"]) --> GATE{"Portão<br/>conversa ativa · consentimento<br/>um turno por vez · debounce"}:::codigo
     GATE -- "não" --> QUIET(["Silêncio<br/>corretor assumiu ou falta consentimento"])
@@ -60,8 +58,7 @@ flowchart TD
     PHR --> GRD{"guardas por frase<br/>sintaxe · idioma · valores · nº de perguntas"}:::codigo
     GRD -- "reprovou" --> W_FB["fallbackText"]:::escrita
     GRD -- "passou" --> COMMIT
-    W_REF & W_FAIL & W_OPT & W_HO & W_MEET & W_CANT & W_FB --> COMMIT["commitTurn<br/>mensagens · slots · eventos<br/>006: opções e reserva nos metadados"]:::codigo
-    COMMIT -.-> FUP["agenda ou cancela o follow-up<br/>(006, planejado)"]:::plano
+    W_REF & W_FAIL & W_OPT & W_HO & W_MEET & W_CANT & W_FB --> COMMIT["commitTurn<br/>mensagens · slots · eventos<br/>006: opções e reserva nos metadados<br/>006: agenda o follow-up se sobrou pergunta ou opções"]:::codigo
 ```
 
 **Por que três chamadas de modelo, e não uma.** `extract()` é um contrato JSON estreito, estabilizado a duras
@@ -95,13 +92,15 @@ stateDiagram-v2
         confirmada --> confirmada: 009 remarcar, mesma linha
     }
 
-    state "Follow-up (006, planejado)" as FU {
+    state "Follow-up (006)" as FU {
         [*] --> none
-        none --> pending: turno deixa pergunta ou proposta por último
+        none --> pending: turno deixa pergunta ou opções por último
         pending --> none: lead respondeu
-        pending --> pending: enviado, próxima tentativa
+        pending --> pending: enviado, próxima tentativa (intervalo × fator)
+        pending --> pending: fora da janela (move para a abertura)
+        pending --> none: chave desligada, opt-out, pausa ou visita confirmada
         pending --> exhausted: tentativas esgotadas
-        exhausted --> none: lead respondeu
+        exhausted --> none: lead respondeu (followup.recovered)
     }
 ```
 
@@ -147,8 +146,9 @@ stateDiagram-v2
 | guardas | 🟦 código | `domain/reply-guards.ts` | cada frase: sintaxe vazada, idioma, valor sem lastro, número de perguntas |
 | frases escritas | 🟩 código | `agent/prompts/fallback.ts` · `services/handoff.ts` · `agent/prompts/meeting.ts` | recusa, falha técnica, opt-out, handoff, *"ainda não consigo"*, reentrada; **006:** opções, confirmação, motivo de uma reserva recusada, recusa aceita, *"assim que eu tiver seus dados"* |
 | card do encontro *(006)* | 🟩 widget | `app/(public)/chat/…/MeetingCard.tsx` | mensagem com `booking` nos metadados: dia, hora, tipo e — numa visita — o código do imóvel; nunca o corretor |
-| `commitTurn` | 🟦 código | `services/conversation.ts` | fim de todo turno; **006:** grava `meetingOptions`, `offerDeclined`, `interestedProperty` e `booking` nos metadados da resposta; **(006, planejado):** agenda o follow-up se sobrou pergunta ou proposta, cancela a cada mensagem do lead |
-| varredura de follow-up *(006, planejado)* | 🟦 código + 🟪 modelo escreve | `jobs/followup.ts` · `agent/followup-writer.ts` | worker; elegibilidade checada duas vezes, incluindo a chave da agência |
+| `commitTurn` | 🟦 código | `services/conversation.ts` | fim de todo turno; **006:** grava `meetingOptions`, `offerDeclined`, `interestedProperty` e `booking` nos metadados da resposta, e agenda o follow-up (`scheduleFollowup`) se sobrou pergunta do roteiro ou opções |
+| `cancelFollowup` *(006)* | 🟦 código | `services/followup.ts` · chamado por `recordLeadMessage` | toda mensagem do lead: cancela tentativas pendentes, zera contagem e estado; se um follow-up já tinha saído, `followup.recovered` uma vez |
+| varredura de follow-up *(006)* | 🟦 código + 🟪 modelo escreve | `jobs/followup.ts` · `agent/followup-writer.ts` | worker, a cada varredura; claim com `SKIP LOCKED`; elegibilidade checada duas vezes (depois do claim e antes do envio), incluindo a chave da agência; o modelo escreve só a frase de abertura, conferida (sem pergunta, data, hora ou nome da equipe) e trocada por uma escrita pelo código se reprovar; a pergunta pendente é do código |
 
 ## Ver também
 

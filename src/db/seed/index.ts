@@ -9,6 +9,7 @@ import {
   appointments,
   conversations,
   events,
+  followupJobs,
   leads,
   messages,
   properties,
@@ -487,6 +488,18 @@ async function seedLeads(agencyId: string, brokers: { ana: string; bruno: string
         scheduledAt: minutesFromNow(demo.appointment.minutesFromNow),
         type: "viewing",
         status: "confirmed",
+      });
+    }
+
+    // Spec 006 SC-009: the stale lead's attempt is already due, so the first
+    // sweep after a fresh start sends a follow-up with nobody pressing anything
+    // (inside the window; outside it, the sweep moves it to the next opening).
+    if (demo.followupState === "pending") {
+      await db.insert(followupJobs).values({
+        agencyId,
+        conversationId: conversation.id,
+        attempt: 1,
+        scheduledFor: minutesFromNow(-1),
       });
     }
 

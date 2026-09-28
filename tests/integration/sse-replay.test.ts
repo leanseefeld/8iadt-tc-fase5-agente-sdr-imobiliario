@@ -40,6 +40,14 @@ async function removeSession(): Promise<void> {
     `delete from events where lead_id in (select id from leads where external_id = $1)`,
     [sessionId],
   );
+  // Spec 006: a turn may leave a follow-up attempt or a proposal behind.
+  for (const table of ["followup_jobs", "appointments"]) {
+    await pool.query(
+      `delete from ${table} where conversation_id in
+         (select c.id from conversations c join leads l on l.id = c.lead_id where l.external_id = $1)`,
+      [sessionId],
+    );
+  }
   await pool.query(
     `delete from conversations where lead_id in (select id from leads where external_id = $1)`,
     [sessionId],
@@ -113,6 +121,8 @@ test("a reconnecting stream replays from Last-Event-ID out of the rows", {
       [other.conversationId],
     );
     await pool.query(`delete from events where conversation_id = $1`, [other.conversationId]);
+    await pool.query(`delete from followup_jobs where conversation_id = $1`, [other.conversationId]);
+    await pool.query(`delete from appointments where conversation_id = $1`, [other.conversationId]);
     await pool.query(`delete from conversations where id = $1`, [other.conversationId]);
     await pool.query(`delete from leads where external_id = $1`, [`${sessionId}-other`]);
   });

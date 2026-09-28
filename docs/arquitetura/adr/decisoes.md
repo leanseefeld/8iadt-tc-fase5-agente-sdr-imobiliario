@@ -334,10 +334,13 @@ against the Zod slot schema and a filled slot is never overwritten with null.
 robust on 4-bit models and costs a second round trip; a provider-dependent branch
 violates principle VI.
 
-**Consequences.** One model round trip per turn on a frontier model. On the local
-model, a tool call the model skips is recovered by code: if the lead's message
-answers the pending question and no `updateSlots` call arrived, a fallback
-extraction call runs. That fallback is the only concession to the local model.
+**Consequences.** What was actually built, through spec 004, was not this. Extraction
+became JSON asked for in text and parsed by hand, because schema-constrained
+output failed on the 4-bit model, and `searchProperties` was invoked from code.
+`conversationTools()` existed and was never called. Spec 007 (22/09) is the first
+time the turn offers a tool to the model: one tool, `searchProperties`, inside a
+bounded loop between extraction and phrasing. Scheduling tools stay declared and
+inert. The recovery call for a missed pending slot remains.
 
 ## 15. Follow-up constants and the demo trigger
 

@@ -135,6 +135,16 @@ nada.
 3. Gera a mensagem a partir do **resumo**, não da transcrição inteira
 4. Envia pelo adapter, registra a tentativa e emite evento
 
+**Degradação quando o modelo não responde** *(spec 007)*
+
+Uma chamada de extração que falha por completo — provedor fora, todas as
+tentativas em timeout — **não conta como não compreensão**. O agente responde que
+houve um problema técnico e pede para a pessoa repetir; o contador de fallback não
+anda. Sem essa regra, uma indisponibilidade do provedor vira dois fallbacks por
+conversa e **todas** as conversas ativas caem no colo dos corretores ao mesmo
+tempo, exatamente quando ninguém consegue atender. O lead continua no canal,
+continua com a conversa aberta, e volta a ser atendido quando o modelo volta.
+
 ## 6. Deploy e caminho de escala
 
 **Local** — um `docker compose up` sobe `app`, `worker` e `db`. É isso que torna a

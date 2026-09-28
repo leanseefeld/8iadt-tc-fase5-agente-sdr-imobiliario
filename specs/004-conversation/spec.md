@@ -179,7 +179,7 @@ latency, retries and errors — personal data masked.
 **Property search**
 
 - **FR-024**: Property search MUST call spec 002's catalog service, scoped by agency, and MUST return at most three properties, filtered by the filled slots. It MUST NOT run for the `investment` intent, whose script ends by calling `proposeMeeting` for a call with a specialist instead (FR-041).
-- **FR-025**: The agent MUST present the results briefly and ask which one interests the lead; when nothing matches it MUST say so and offer to relax exactly one filter.
+- **FR-025**: The agent MUST present the results briefly and ask which one interests the lead; when nothing matches it MUST say so and offer to relax exactly one filter. *(Second half superseded 27/09/2026 by [spec 007](../007-revisable-orchestration/spec.md) FR-035: until backlog item 010's lead-approved relaxation exists, a no-match asks the lead for a new value for one criterion instead of offering to widen the search — a "sim" to an offer nothing performs left the lead with a promise and no action.)*
 - **FR-026**: Every suggestion MUST be recorded against the conversation with the properties shown.
 
 **Handoff, consent and safety**

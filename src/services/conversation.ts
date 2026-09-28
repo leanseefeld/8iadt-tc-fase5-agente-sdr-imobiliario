@@ -95,6 +95,12 @@ export interface LoadedTurn {
   handovers: Handover[];
   /** Broker user id → first name, for labelling their messages in the prompt. */
   brokerNames: Record<string, string>;
+  /**
+   * An `appointment.proposed` row already exists. Until spec 006 writes that
+   * event, the stand-in is the offering message's metadata — see
+   * `offerOutstanding`.
+   */
+  appointmentProposed: boolean;
 }
 
 /** Either end of the turn: the route handler has a session, the worker has an id. */
@@ -157,7 +163,7 @@ export async function loadTurn(ref: TurnRef): Promise<LoadedTurn | null> {
   const conversationId = row.conversation.id;
   const windowStart = new Date(Date.now() - config.CHAT_BUDGET_WINDOW_MINUTES * 60_000);
 
-  const [recent, unanswered, budget, handoverRows] = await Promise.all([
+  const [recent, unanswered, budget, handoverRows, proposedRows] = await Promise.all([
     db
       .select()
       .from(messages)
@@ -201,6 +207,14 @@ export async function loadTurn(ref: TurnRef): Promise<LoadedTurn | null> {
         ),
       )
       .orderBy(asc(events_.createdAt)),
+    // One indexed lookup, not a second round trip from the caller. Spec 006
+    // starts writing this event; the flag is already here so that needs no
+    // change in the orchestrator.
+    db
+      .select({ id: events_.id })
+      .from(events_)
+      .where(and(eq(events_.conversationId, conversationId), eq(events_.type, "appointment.proposed")))
+      .limit(1),
   ]);
 
   return {
@@ -239,7 +253,51 @@ export async function loadTurn(ref: TurnRef): Promise<LoadedTurn | null> {
     brokerNames: Object.fromEntries(
       handoverRows.map((row) => [row.userId, firstName(row.name)]),
     ),
+    appointmentProposed: proposedRows.length > 0,
   };
+}
+
+/** FR-017 — an offer to meet is already outstanding. No query of its own. */
+export function offerOutstanding(turn: LoadedTurn): boolean {
+  if (turn.appointmentProposed) return true;
+  // The offer stays outstanding for the rest of the loaded history, not only
+  // for the single turn after it. The last agent message is often an unrelated
+  // reply; the offer is whichever earlier message recorded one.
+  return turn.history.some((message) => {
+    if (message.role !== "agent") return false;
+    return message.metadata.meeting === "viewing" || message.metadata.meeting === "call";
+  });
+}
+
+/** FR-009 — the previous agent turn was a reconfirmation. No query of its own. */
+/**
+ * FR-033 — how many properties the most recent search matched, or `null` when
+ * there was none. Read from the last agent message that recorded a
+ * `searchProperties` call, so a later turn can answer "nenhum imóvel?" without
+ * searching again. A search made under another intent does not describe this one,
+ * so an intent that never searches (`investment`, `undefined`) gets `null`.
+ */
+export function lastSearchOutcome(
+  turn: LoadedTurn,
+  intent: Intent = turn.lead.intent,
+): { count: number } | null {
+  if (intent !== "purchase" && intent !== "rental") return null;
+  const last = [...turn.history].reverse().find(
+    (message) =>
+      message.role === "agent" &&
+      Array.isArray(message.metadata.toolCalls) &&
+      (message.metadata.toolCalls as { name?: unknown }[]).some(
+        (call) => call.name === "searchProperties",
+      ),
+  );
+  if (last === undefined) return null;
+  const ids = last.metadata.propertyIds;
+  return { count: Array.isArray(ids) ? ids.length : 0 };
+}
+
+export function lastTurnWasReconfirmation(turn: LoadedTurn): boolean {
+  const lastAgent = [...turn.history].reverse().find((message) => message.role === "agent");
+  return lastAgent?.metadata.reconfirmation === true;
 }
 
 /** "Ana Ribeiro" → "Ana". The lead is being introduced to a person, not a record. */
@@ -573,6 +631,9 @@ export interface CommittedToolCall {
    * "what did the agent put on the screen?" should be answerable.
    */
   result?: unknown;
+  /** Set when the action loop already recorded this call's span. */
+  stepIndex?: number;
+  refused?: boolean;
 }
 
 export interface CommitTurnInput {
@@ -583,6 +644,8 @@ export interface CommitTurnInput {
   slots: Slots;
   /** Slots that went empty → filled this turn, in script order. */
   filled: SlotKey[];
+  /** Slots that went value → different value. Recorded with the same event as a fill. */
+  revised?: SlotKey[];
   score: number;
   qualified: boolean;
   fallbackStreak: number;
@@ -592,6 +655,10 @@ export interface CommitTurnInput {
   propertyIds?: string[];
   /** Which reply guard rewrote the reply, when one did. */
   guard?: string | null;
+  /** Set when this turn offered a meeting, so the next turn can see it. */
+  meeting?: "viewing" | "call" | null;
+  /** Set when this turn was a reconfirmation (FR-009). */
+  reconfirmation?: boolean;
   toolCalls?: CommittedToolCall[];
   traceId?: string | null;
   now?: Date;
@@ -648,11 +715,15 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
   // only place that knows the full set, because this agent invokes its tools
   // from code and the AI SDK never sees them execute. A no-op without Langfuse.
   recordToolSpans(
-    (input.toolCalls ?? []).map((call) => ({
-      name: call.name,
-      attributes: { arguments: call.arguments },
-      ...(call.result === undefined ? {} : { result: call.result }),
-    })),
+    (input.toolCalls ?? [])
+      // Loop steps are spanned inside `act()` with `step.index`. Spanning them
+      // again here would double the children under `model.act`.
+      .filter((call) => call.stepIndex === undefined)
+      .map((call) => ({
+        name: call.name,
+        attributes: { arguments: call.arguments },
+        ...(call.result === undefined ? {} : { result: call.result }),
+      })),
   );
 
   const leadStatus = nextLeadStatus(turn.lead.status, input.intent, input.qualified);
@@ -665,7 +736,8 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
   if (turn.lead.intent === "undefined" && input.intent !== "undefined") {
     events.push({ type: "intent.identified", payload: { intent: input.intent } });
   }
-  for (const slot of input.filled) {
+  // A revision writes the same `slot.filled` row a first fill does (FR-029).
+  for (const slot of [...input.filled, ...(input.revised ?? [])]) {
     const value = input.slots[slot];
     events.push({
       type: "slot.filled",
@@ -712,6 +784,8 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
             ? { propertyIds: input.propertyIds }
             : {}),
           ...(input.guard != null ? { guard: input.guard } : {}),
+          ...(input.meeting != null ? { meeting: input.meeting } : {}),
+          ...(input.reconfirmation === true ? { reconfirmation: true } : {}),
           // Masked one level down, not as a whole: `maskPII` is key-aware and a
           // tool's `name` is the tool's, not a person's — masking the object
           // would write `u***` where `updateSlots` belongs.

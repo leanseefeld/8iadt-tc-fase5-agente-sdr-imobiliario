@@ -92,8 +92,10 @@ test("mergeSlots rule 1: a filled slot IS replaced by a different non-empty valu
   const result = mergeSlots(current, { priceMax: 900_000 }, { consented: true });
   assert.equal(result.slots.priceMax, 900_000);
   assert.deepEqual(result.dropped, []);
-  // it was already filled before this merge, so this is not an empty -> filled transition
+  // it was already filled before this merge, so this is a revision, not a first fill
   assert.deepEqual(result.filled, []);
+  assert.deepEqual(result.revised, ["priceMax"]);
+  assert.equal(result.intentChanged, false);
 });
 
 test("mergeSlots rule 2: neighborhoods set to an empty array is a filled slot", () => {
@@ -107,13 +109,17 @@ test("mergeSlots rule 3: intent moves from undefined to the extracted value", ()
   const current = state("undefined");
   const result = mergeSlots(current, { intent: "purchase" }, { consented: true });
   assert.equal(result.intent, "purchase");
+  // a first identification is not a change between two defined values
+  assert.equal(result.intentChanged, false);
+  assert.equal(result.dropped.includes("intent"), false);
 });
 
-test("mergeSlots rule 3: intent never moves between two already-identified values", () => {
+test("mergeSlots: intent moves between two defined values and reports intentChanged", () => {
   const current = state("purchase");
   const result = mergeSlots(current, { intent: "rental" }, { consented: true });
-  assert.equal(result.intent, "purchase");
-  assert.ok(result.dropped.includes("intent"));
+  assert.equal(result.intent, "rental");
+  assert.equal(result.intentChanged, true);
+  assert.equal(result.dropped.includes("intent"), false);
 });
 
 test("mergeSlots rule 4: a value failing the schema is dropped, the rest of the extraction still applies", () => {
@@ -174,6 +180,12 @@ test("hasEvidence accepts a prazo the lead actually raised", () => {
   assert.equal(hasEvidence("urgency", "tenho pressa"), true);
 });
 
+test("the evidence gate still drops a closed-set value the lead's words never raised (FR-025)", () => {
+  assert.equal(hasEvidence("urgency", "quero comprar um apartamento de 2 quartos na zona sul"), false);
+  assert.equal(hasEvidence("investorProfile", "até 700 mil em Moema"), false);
+  assert.equal(hasEvidence("returnExpectation", "preciso de 2 quartos"), false);
+});
+
 test("hasEvidence rejects a prazo nobody mentioned", () => {
   // The message that made this necessary: three slots and not one word of prazo.
   assert.equal(
@@ -197,4 +209,64 @@ test("hasEvidence does NOT recognise the question's own vocabulary", () => {
   // we had not understood them and counted a fallback toward a handoff.
   assert.equal(QUESTIONS.urgency.includes("inicial"), true);
   assert.equal(hasEvidence("urgency", "inicial"), false);
+});
+
+// --- revisable merge invariants (FR-001, FR-004) -----------------------------
+
+function setsOf(result: ReturnType<typeof mergeSlots>): { filled: string[]; revised: string[]; dropped: string[] } {
+  return { filled: result.filled, revised: result.revised, dropped: result.dropped };
+}
+
+test("a slot key appears in at most one of filled, revised and dropped", () => {
+  const current = state("purchase", { priceMax: 700_000, bedrooms: 2 });
+  const result = mergeSlots(
+    current,
+    { priceMax: 900_000, bedrooms: null, neighborhoods: ["Moema"], contact: "11999999999" },
+    { consented: false },
+  );
+  const seen = new Set<string>();
+  for (const key of [...result.filled, ...result.revised, ...result.dropped]) {
+    assert.equal(seen.has(key), false, `${key} appears in more than one set: ${JSON.stringify(setsOf(result))}`);
+    seen.add(key);
+  }
+  assert.deepEqual(result.revised, ["priceMax"]);
+  assert.deepEqual(result.filled, ["neighborhoods"]);
+  assert.ok(result.dropped.includes("bedrooms"));
+  assert.ok(result.dropped.includes("contact"));
+});
+
+test("re-supplying an identical value puts the slot in none of filled, revised or dropped", () => {
+  const current = state("purchase", { priceMax: 700_000, neighborhoods: ["Moema", "Vila Mariana"] });
+  const result = mergeSlots(
+    current,
+    { priceMax: 700_000, neighborhoods: ["Moema", "Vila Mariana"], intent: "purchase" },
+    { consented: true },
+  );
+  assert.deepEqual(result.filled, []);
+  assert.deepEqual(result.revised, []);
+  assert.deepEqual(result.dropped, []);
+  assert.equal(result.intentChanged, false);
+  assert.equal(result.slots.priceMax, 700_000);
+});
+
+test("an empty value over a filled slot is still dropped", () => {
+  const current = state("purchase", { bedrooms: 3, neighborhoods: ["Moema"] });
+  const result = mergeSlots(current, { bedrooms: null, neighborhoods: [] }, { consented: true });
+  assert.equal(result.slots.bedrooms, 3);
+  assert.ok(result.dropped.includes("bedrooms"));
+  assert.equal(result.revised.includes("bedrooms"), false);
+  // [] is a different filled value ("aberto a sugestões"), not an emptying
+  assert.deepEqual(result.slots.neighborhoods, []);
+  assert.deepEqual(result.revised, ["neighborhoods"]);
+});
+
+test("an unconsented contact slot is still dropped", () => {
+  const current = state("purchase", { name: "Ana" });
+  const result = mergeSlots(current, { name: "Camila", contact: "camila@example.com" }, { consented: false });
+  assert.equal(result.slots.name, "Ana");
+  assert.equal(result.slots.contact, null);
+  assert.ok(result.dropped.includes("name"));
+  assert.ok(result.dropped.includes("contact"));
+  assert.deepEqual(result.revised, []);
+  assert.deepEqual(result.filled, []);
 });

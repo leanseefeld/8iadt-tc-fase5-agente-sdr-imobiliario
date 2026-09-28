@@ -588,17 +588,19 @@ export interface ToolSpan {
    * lead's screen?") has no answer anywhere in Langfuse.
    */
   result?: unknown;
+  /** Position in the action loop, from zero. Absent on code-invoked tools. */
+  stepIndex?: number;
+  /** The action declined because a precondition did not hold. */
+  refused?: boolean;
 }
 
 /**
  * Records the tool invocations of one turn, as `tool.<name>` spans.
  *
- * Contract §2 expected these from the AI SDK's tool instrumentation, but this
- * agent never lets the model *execute* a tool: `searchProperties`,
- * `proposeMeeting` and the rest are decided in code and invoked from
- * `agent/orchestrator.ts`, so the SDK has nothing to instrument. They are
- * written here instead, from the same list `commitTurn` persists — one place,
- * every commit path, and the span set the contract asks for.
+ * `searchProperties` spans that carry `stepIndex` are emitted from the action
+ * loop. Every other tool is still invoked from code, and `commitTurn` records
+ * those from the list it persists. Both paths use this function so the
+ * attribute set is the same.
  */
 export function recordToolSpans(calls: readonly ToolSpan[]): void {
   const active = state().registration;
@@ -612,6 +614,10 @@ export function recordToolSpans(calls: readonly ToolSpan[]): void {
           {
             input: call.attributes,
             ...(call.result === undefined ? {} : { output: call.result }),
+            metadata: {
+              ...(call.stepIndex === undefined ? {} : { "step.index": call.stepIndex }),
+              ...(call.refused === undefined ? {} : { "step.refused": call.refused }),
+            },
           },
           { asType: "tool" },
         )

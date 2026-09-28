@@ -10,6 +10,13 @@
 
 Backlog item 002 *(original items 2 + 12)*: Drizzle schema per `docs/arquitetura/modelo-de-dados.md`, migrations applied automatically, an idempotent seed (one agency, three users, 100 coherent São Paulo properties, three demo leads), and the read-only catalog screen. Covers *Integração com base simulada de imóveis* and *credibilidade da demonstração*. Second slice on the walking skeleton (001): the shared schema every later spec reads and writes, demo data credible on first boot, and the screen proving the catalog is real, not invented.
 
+> **Superseded in part by [spec 007](../007-revisable-orchestration/spec.md) FR-034** (27/09/2026). **FR-019**'s ranking by closeness to
+> the price ceiling and its relaxation ladder no longer hold: they placed properties **above** the lead's
+> budget among the results. A search now returns only properties satisfying every stated criterion, an
+> unknown neighbourhood matches nothing, and no near miss fills the list. **SC-005**, which assumed the
+> ladder, is superseded with it. Lead-approved widening returns as backlog item 010. `domain/property-ranking.ts`
+> no longer exists.
+
 ## Clarifications
 
 - Q: Seed `events` for the demo leads, though `events` is described as emitted by 004–006? → A: Yes, a static trail per lead's state so the timeline isn't empty on first boot; no runtime emission logic added here.

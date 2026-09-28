@@ -100,7 +100,7 @@ src/services/
 └── properties.ts                # listProperties, searchProperties, relaxation ladder
 
 src/domain/
-└── property-ranking.ts          # pure ranking/relaxation function — no I/O, unit-tested alone
+└── property-ranking.ts          # REMOVED 27/09/2026 — spec 007 FR-034
 
 src/app/(app)/catalogo/
 ├── page.tsx                     # Server Component: reads searchParams, calls services/properties.ts

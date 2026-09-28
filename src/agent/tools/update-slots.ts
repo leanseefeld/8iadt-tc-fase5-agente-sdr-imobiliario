@@ -103,6 +103,21 @@ export const EXTRACTION_FIELDS: readonly ExtractionField[] = [
       "true SÓ se a pessoa pediu para não receber mais mensagens, para sair ou para ser " +
       "removida do contato. Na dúvida, false.",
   },
+  {
+    key: "askedAboutCriteria",
+    description:
+      "true SÓ se a pessoa perguntou o que você está considerando, filtrando ou usando " +
+      "como critério, OU perguntou sobre o resultado da busca: se tem imóvel, se tem mais " +
+      "opções, se não achou nada. Na dúvida, false.",
+  },
+  {
+    key: "attemptedAnswer",
+    description:
+      "true se a pessoa tentou comunicar algo: uma resposta, uma correção, uma pergunta, " +
+      "um pedido ou uma informação. false se a mensagem não tenta informar nada — reação " +
+      '("nossa", "haha"), cumprimento, agradecimento ("valeu"), checagem ("tá aí?") ou ' +
+      "só um emoji. Na dúvida, false.",
+  },
 ];
 
 export interface Extracted {
@@ -118,6 +133,9 @@ export interface Extracted {
   contact: string | null;
   askedForHuman: boolean;
   optOut: boolean;
+  /** The lead tried to convey something, rather than reacting, greeting or checking in. */
+  attemptedAnswer: boolean;
+  askedAboutCriteria: boolean;
 }
 
 /** The model writes `true`, `"true"` or `"sim"`; all three mean the same thing. */

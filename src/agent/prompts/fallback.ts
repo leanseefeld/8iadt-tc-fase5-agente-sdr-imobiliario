@@ -40,10 +40,25 @@ export const TOO_LONG_REPLY =
   "Sua mensagem ficou grande demais para eu ler de uma vez. Consegue me contar o " +
   "principal em poucas linhas?";
 
-/** FR-014: the provider timed out, errored, or came back empty. */
+/**
+ * FR-023: the lead asked something this agent cannot do yet. It advances the
+ * streak — a person is the right outcome — and it does not claim the message
+ * was not understood.
+ */
+export const CANNOT_ACT_REPLY = "Ainda não consigo te ajudar com isso.";
+
+/** FR-014: the phrasing call timed out, errored, or came back empty. */
 export const MODEL_FAILURE_REPLY =
   "Desculpa, tive um probleminha aqui e não consegui responder agora. Pode me mandar de " +
   "novo em instantes?";
+
+/**
+ * FR-003c: the extraction failed outright — the provider was unreachable or
+ * every attempt timed out. Technical, and it asks for a repeat. It must not
+ * claim the message was not understood.
+ */
+export const EXTRACTION_FAILURE_REPLY =
+  "Tive um problema técnico aqui e não consegui ler sua mensagem. Pode repetir?";
 
 /**
  * FR-025: the cards are already on the screen, so the sentence that introduces
@@ -54,10 +69,11 @@ export const SUGGESTION_REPLY =
   "Separei algumas opções que combinam com o que você me contou. Qual delas te interessou mais?";
 
 /** FR-025: nothing matched, and exactly one filter is offered for relaxing. */
+/** FR-035 — ask for a new value; never offer a widening nothing performs yet. */
 const RELAX_QUESTIONS: Record<"neighborhoods" | "priceMax" | "bedrooms", string> = {
-  neighborhoods: "Posso procurar em bairros vizinhos também?",
-  priceMax: "Você toparia esticar um pouco o valor?",
-  bedrooms: "Você consideraria um imóvel com um quarto a menos?",
+  neighborhoods: "Tem outro bairro ou região que você consideraria?",
+  priceMax: "Até quanto você poderia chegar no valor?",
+  bedrooms: "Quantos quartos, no mínimo, ainda serviriam pra você?",
 };
 
 export function noMatchReply(relaxable: "neighborhoods" | "priceMax" | "bedrooms" | null): string {

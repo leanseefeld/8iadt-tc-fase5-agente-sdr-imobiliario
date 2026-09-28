@@ -8,7 +8,7 @@ import { getDefaultAgencyId, listProperties, searchProperties } from "../src/ser
 /**
  * INTEGRATION=1 — needs a live, migrated, seeded Postgres. US3/US4:
  * `listProperties` (filtered, zero-result, paging-stability) and
- * `searchProperties` (exact, relaxed, empty-agency, cross-agency isolation)
+ * `searchProperties` (exact filters, no silent widening, empty-agency, cross-agency isolation)
  * against the real seeded catalog.
  */
 const integration = process.env.INTEGRATION === "1";
@@ -57,7 +57,7 @@ test("properties service against the seeded catalog", { skip: !integration }, as
     assert.deepEqual(result.items, []);
   });
 
-  await t.test("searchProperties: exact match, ranked, at most 3", async () => {
+  await t.test("searchProperties: exact filters, at most 3, nothing above the price", async () => {
     const result = await searchProperties(agencyId!, {
       transaction: "sale",
       priceMax: 700_000,
@@ -67,20 +67,20 @@ test("properties service against the seeded catalog", { skip: !integration }, as
     assert.ok(result.length > 0 && result.length <= 3);
     for (const property of result) {
       assert.equal(property.transaction, "sale");
+      assert.equal(property.neighborhood, "Moema");
+      assert.ok(property.price <= 700_000);
       assert.ok(property.bedrooms >= 2);
       assert.equal(property.isActive, true);
     }
   });
 
-  await t.test("searchProperties: relaxes when nothing matches the exact neighborhood", async () => {
+  await t.test("searchProperties: an unknown neighborhood returns nothing", async () => {
     const result = await searchProperties(agencyId!, {
       transaction: "sale",
       priceMax: 700_000,
       neighborhoods: ["Neighborhood That Does Not Exist"],
     });
-    // Relaxes past neighborhood/region straight to "no location filter" —
-    // still finds candidates within/near the price ceiling.
-    assert.ok(result.length > 0);
+    assert.deepEqual(result, []);
   });
 
   await t.test("searchProperties: never throws for no match, returns []", async () => {

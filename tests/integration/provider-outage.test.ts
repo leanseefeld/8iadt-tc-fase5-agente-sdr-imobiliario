@@ -25,7 +25,7 @@ test("a dead provider still answers the lead (SC-009)", { skip: !integration }, 
   const { closePool, getPool } = await import("../../src/db/client.ts");
   const { collectingSink, runTurn } = await import("../../src/agent/orchestrator.ts");
   const { recordLeadMessage } = await import("../../src/services/conversation.ts");
-  const { MODEL_FAILURE_REPLY } = await import("../../src/agent/prompts/fallback.ts");
+  const { EXTRACTION_FAILURE_REPLY } = await import("../../src/agent/prompts/fallback.ts");
   const { getConfig } = await import("../../src/core/config.ts");
 
   assert.equal(getConfig().PROVIDER_BASE_URL, DEAD_PROVIDER, "the dead provider did not take");
@@ -54,9 +54,10 @@ test("a dead provider still answers the lead (SC-009)", { skip: !integration }, 
   });
   assert.ok(result.status === "committed");
 
-  await t.test("the lead gets the written apology, not silence", () => {
-    assert.equal(result.reply, MODEL_FAILURE_REPLY);
-    assert.equal(sink.text().trim(), MODEL_FAILURE_REPLY);
+  await t.test("the lead gets the written technical reply, not an apology", () => {
+    assert.equal(result.reply, EXTRACTION_FAILURE_REPLY);
+    assert.equal(sink.text().trim(), EXTRACTION_FAILURE_REPLY);
+    assert.equal(/não entendi/i.test(result.reply), false);
   });
 
   await t.test("it arrives inside the configured timeout and retries (FR-014)", () => {
@@ -65,18 +66,20 @@ test("a dead provider still answers the lead (SC-009)", { skip: !integration }, 
     assert.ok(elapsed < bound + 5_000, `${elapsed}ms exceeds the ${bound}ms bound`);
   });
 
-  await t.test("the apology is persisted, and no slot was invented on the way", async () => {
+  await t.test("the technical reply is persisted, the streak held, and no slot was invented", async () => {
     const rows = await query(
       "select role, content from messages where conversation_id = $1 order by created_at",
       [conversationId],
     );
     assert.equal(rows.length, 2, JSON.stringify(rows));
-    assert.equal(rows[1].content, MODEL_FAILURE_REPLY);
+    assert.equal(rows[1].content, EXTRACTION_FAILURE_REPLY);
 
-    const [conversation] = await query("select slots, status from conversations where id = $1", [
-      conversationId,
-    ]);
+    const [conversation] = await query(
+      "select slots, status, fallback_streak from conversations where id = $1",
+      [conversationId],
+    );
     assert.equal(conversation.status, "active", "an outage must not close a conversation");
+    assert.equal(conversation.fallback_streak, 0, "a failed extraction must not move the streak");
     for (const value of Object.values(conversation.slots as Record<string, unknown>)) {
       assert.equal(value, null, `a slot was filled with no model: ${JSON.stringify(conversation.slots)}`);
     }

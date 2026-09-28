@@ -44,7 +44,7 @@ function searchProperties(
 ```
 
 - Always scoped to `agencyId` and `isActive = true`.
-- Ranking and the relaxation ladder are the pure function in `domain/property-ranking.ts` — see `research.md` for the exact ordering and the named `PRICE_RELAX_FACTOR` constant. This service function's only responsibility is fetching the active/`transaction`-matching candidate set and handing it to that function; it must not duplicate ranking logic inline.
+- Ranking and the relaxation ladder are the pure function in `domain/property-ranking.ts` — see `research.md` for the exact ordering and the named `PRICE_RELAX_FACTOR` constant. This service function's only responsibility is fetching the active/`transaction`-matching candidate set and handing it to that function; it must not duplicate ranking logic inline. *(Superseded 27/09/2026 by [spec 007](../../007-revisable-orchestration/spec.md) FR-034 — the ranking and ladder were removed; `domain/property-ranking.ts` no longer exists.)*
 - `domain/property-ranking.ts` MUST NOT import the `Property` type above (constitution III: `domain/` imports nothing). It declares its own minimal candidate shape — `{ id, price, neighborhood, region }` — the only fields ranking needs. `services/properties.ts` maps its `Property[]` down to that shape before calling in, and back up after; the domain function never sees the full entity.
 - Never throws for "no match" — returns `[]` (US4 scenario 3, FR-019).
 - `bedrooms` is never relaxed (see research.md's honesty note on SC-005).

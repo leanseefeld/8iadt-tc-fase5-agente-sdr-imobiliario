@@ -53,9 +53,13 @@ which is where a reader looks for them.
 | `tool.optOut` | tool | Per invocation | — |
 
 Tool spans are written by `commitTurn` from the list it is about to persist, not
-by the AI SDK: this agent invokes its tools from code, so the SDK never sees them
-execute. Each carries the call's arguments as its input; only `searchProperties`
-has an output worth storing, and it stores ids rather than catalog rows.
+by the AI SDK, for every tool except `searchProperties`. That one runs inside
+the action loop (spec 007): the SDK executes it, and its span is emitted from
+the loop with `step.index`. Every other tool is still invoked from code or is
+inert, and `commitTurn` records it exactly as before. Both paths carry the same
+attribute set. Each carries the call's arguments as its input; only
+`searchProperties` has an output worth storing, and it stores ids rather than
+catalog rows.
 
 `usage` is reported because the provider is asked for it — a streaming
 OpenAI-compatible response carries none unless the request sets

@@ -172,20 +172,26 @@ Pontos registrados pelo desenvolvedor:
 
 ### Modelo
 
-`gemma-4-12B-it-OptiQ-4bit` passa a ser o modelo de trabalho: mais confiável em
-tool calling, o que é pré-requisito do desenho acima. Custos conhecidos: mais
-lento e mais memória por token.
+`gemma-4-12B-it-OptiQ-4bit` é o **plano de escalada**, não o ponto de partida.
+Refinado ainda em 22/09: o modelo de trabalho continua sendo o
+`gemma-4-e4b-it-OptiQ-4bit`, e a troca só acontece **depois** de o contrato das
+tools ter sido estreitado e o modelo pequeno ainda assim não sustentar o laço.
+Trocar antes esconderia justamente o que se quer descobrir — se o problema era o
+contrato ou o modelo. Custos conhecidos do 12B: mais lento e mais memória por
+token.
 
 **Correção de 22/09/2026.** Este parágrafo dizia que o modelo *"não aguenta 4
 requisições em paralelo"*. Isso nunca foi medido — não há benchmark no repositório
 que sustente a afirmação, e ela estava sendo herdada como fato. São duas coisas
-diferentes, e só a segunda é verdadeira sem verificação:
+diferentes, e só a segunda é verdadeira sem verificação. A medição abaixo é do
+**e4b**, não do 12B. A afirmação sobre o 12B continua **em aberto**, porque a
+escalada para `gemma-4-12B-it-OptiQ-4bit` não aconteceu.
 
-1. **"Não aguenta 4 em paralelo"** é uma afirmação sobre capacidade, e está
-   **em aberto**. Se aguentar, rode em paralelo. A medição é uma tarefa da spec
-   007: estender `scripts/tool-smoke.ts` para disparar N turnos concorrentes e
-   comparar a latência por requisição em N=1 e N=4. Se a latência em N=4 for ~4×
-   a de N=1, é fila; se for parecida, é paralelismo real.
+1. **"Não aguenta 4 em paralelo"**, para o **12B**, continua **em aberto**.
+   No e4b, medido em 22/09 com `scripts/tool-smoke.ts` rodando N=1 e depois N=4:
+   N=1 levou 3339 ms; N=4 teve média de 9855 ms por requisição e parede de
+   9973 ms (cerca de 3×, não 4× e não plano). Isso parece fila com alguma
+   sobreposição, e descreve o e4b, não o 12B.
 2. **"Um benchmark em paralelo mede a fila, não o modelo"** vale para qualquer
    servidor que enfileira, independentemente deste modelo. É uma ressalva sobre
    como ler o número, não uma proibição de rodar em paralelo.

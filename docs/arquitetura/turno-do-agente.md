@@ -28,7 +28,7 @@ flowchart TD
     classDef escrita fill:#dcfce7,stroke:#15803d,color:#0f172a
     classDef plano fill:#f8fafc,stroke:#64748b,stroke-dasharray:5 5,color:#334155
 
-    IN(["Mensagem do lead<br/>digitada, ou pelo botão de interesse do card (006)"]) --> GATE{"Portão<br/>conversa ativa · consentimento<br/>um turno por vez · debounce"}:::codigo
+    IN(["Mensagem do lead<br/>digitada, ou pelo botão Interessado do card (006)"]) --> GATE{"Portão<br/>conversa ativa · consentimento<br/>um turno por vez · debounce"}:::codigo
     GATE -- "não" --> QUIET(["Silêncio<br/>corretor assumiu ou falta consentimento"])
     GATE -- "sim" --> INJ{"looksLikeInjection?"}:::codigo
     INJ -- "sim" --> W_REF["refusalReply"]:::escrita
@@ -114,7 +114,7 @@ stateDiagram-v2
 
 | Verbo | Quem | Onde | Liga quando |
 |---|---|---|---|
-| botão de interesse no card *(006)* | 🟩 widget envia | `app/(public)/chat/…/PropertyCard.tsx` | clique ou toque no card: envia *"Tenho interesse no VMA-0005"* como mensagem do lead, e um turno normal começa |
+| botão **Interessado** no card *(006)* | 🟩 widget envia | `app/(public)/chat/…/PropertyCard.tsx` | clique ou toque: posta *"Interessado em VMA-0005"* em nome do lead, como mensagem dele, e um turno normal começa; a resposta depende de onde a conversa está (FR-004d) |
 | debounce · `claimTurn` | 🟦 código | `channels/web.ts` · `services/conversation.ts` | toda mensagem; um turno por conversa, depois de `CHAT_DEBOUNCE_MS` de silêncio |
 | `looksLikeInjection` | 🟦 código | `domain/injection.ts` | todo turno; três frases fixas de tentativa de manipulação |
 | `extract()` | 🟨 modelo lê | `agent/orchestrator.ts` | todo turno que passou do portão. Devolve slots e os fatos `askedForHuman`, `optOut`, `attemptedAnswer`, `askedAboutCriteria`; **006:** `declinedOffer`, `askedForTimes`, `pickedTime`, `timePreference`, `propertyRef` |

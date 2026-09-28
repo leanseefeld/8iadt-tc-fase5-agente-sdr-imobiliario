@@ -52,6 +52,9 @@ that miss the broker's confirmed appointments. Choose one and find it on the age
    and the proposal stays open, so *"pode ser aquela de quinta então"* two turns later still books it.
 8. **Given** a booked meeting, **When** the lead asks who will attend, **Then** the agent names no one and says
    the appointment is in the system — including after a broker took over and handed back.
+9. **Given** property cards on screen, **When** the lead presses **Interessado** on one, **Then** *"Interessado em
+   <code>"* appears as the lead's message and the reply follows FR-004d for where the conversation stands — for a
+   complete script with no offer yet, options for that property.
 
 ### User Story 2 - The agent reopens a conversation that went quiet (Priority: P1)
 
@@ -152,10 +155,18 @@ one appointment done and one cancelled.
   (*"VMA-0005"*) — and code MUST resolve it against the properties **already shown in this conversation**, never the
   catalog at large. The resolved property is recorded with the turn, proposing uses the most recent one, and the
   confirmation names it (FR-006). A reference that resolves to nothing is ignored, never guessed.
-- **FR-004c**: Each property card in the chat widget MUST offer an **interest** control that sends a lead message
-  naming the card's code (*"Tenho interesse no VMA-0005"*), starting a turn exactly as a typed message would. It
-  MUST be shown on hover or keyboard focus with a pointer, and **always** shown on touch screens, which have no
-  hover — tappable at 390 px (constitution principle X).
+- **FR-004c**: Each property card in the chat widget MUST offer a button labelled **"Interessado"**. Pressing it
+  posts the message *"Interessado em VMA-0005"* (the card's code) **on the lead's behalf**: it appears in the
+  transcript as the lead's own message and starts a turn exactly as a typed one would. The button MUST be shown on
+  hover or keyboard focus with a pointer, and **always** on touch screens, which have no hover — tappable at 390 px
+  (constitution principle X).
+- **FR-004d**: The reply to an interest in a property depends on where the conversation stands:
+  - **script incomplete** → acknowledge the property, and the script continues;
+  - **script complete, no offer made yet** → the options, for that property;
+  - **a proposal open** → a new proposal for that property, replacing the open one (FR-004);
+  - **declined earlier** → treated as the lead asking again (FR-005a), so options for that property;
+  - **already booked** → several bookings are spec 009; until then, spec 007 FR-023's honest *"ainda não consigo
+    te ajudar com isso"*.
 - **FR-004a**: Proposing MUST be triggered by code when the offer is due — spec 007's `shouldProposeMeeting`
   with its offer-outstanding fact — never by the model deciding on its own that it is time to offer. The reply
   MUST present the computed options, replacing today's instruction to ask which weekday suits the lead.
@@ -179,11 +190,13 @@ one appointment done and one cancelled.
 - **FR-005d**: The options MUST be written by code, like spec 007's reconfirmation, not phrased by the model:
   they are dates, times and figures, which the model must not invent and which the `unbackedFigure` guard
   would otherwise reject. The confirmation card (FR-006) is likewise rendered from the booked row.
-- **FR-005e**: The assigned broker's identity MUST NOT reach the model in any scheduling context — proposing,
-  booking, confirming, following up. Code-written sentences MUST refer to *"alguém da nossa equipe"* or *"um
+- **FR-005e**: No scheduling **data path** — proposing, booking, confirming, following up — may carry the assigned
+  broker's identity to the model. Code-written sentences MUST refer to *"alguém da nossa equipe"* or *"um
   corretor"*. Asked who will attend, the agent MUST say it can't say yet and that the appointment is in the system.
-  After a handback it MUST neither confirm nor deny that the broker who spoke in the conversation is the one who
-  will attend. Consistent with spec 007 FR-019, which already lists broker assignment as protected.
+  A broker's name can still reach the model for another reason: that broker spoke in the conversation and handed
+  it back. In that case the agent MUST neither confirm nor deny that this broker will attend. Everything else that
+  broker said still stands, and the handback instructions MUST be narrowed accordingly rather than contradicted.
+  Consistent with spec 007 FR-019, which already lists broker assignment as protected.
 - **FR-005f**: The booking tool MUST be offered only on a turn where the extraction reports that the lead **picked
   an offered option or named a time** while a proposal is open — so a proposal left open through a change of
   subject costs no extra model round trip on the turns that don't answer it (spec 007's promise that a turn taking
@@ -261,7 +274,7 @@ one appointment done and one cancelled.
 **Demonstration and configuration**
 
 - **FR-017**: The lead drawer MUST offer an action making the lead's pending attempt due immediately, unavailable
-  with an explanation when there is none. The seeded stale lead MUST carry an attempt already due, so the first
+  with an explanation when there is none **or when the agency's follow-up switch is off** (FR-019). The seeded stale lead MUST carry an attempt already due, so the first
   sweep after a fresh start sends a follow-up unaided.
 - **FR-018**: The first delay MUST be configured in minutes, replacing the hours key; `SCHEDULING_MIN_NOTICE_MINUTES`
   replaces the fixed 24-hour rule, `SCHEDULING_PREFERRED_TIMES` replaces the fixed preferred-hour list, and
@@ -272,7 +285,10 @@ one appointment done and one cancelled.
 - **FR-019**: A sales manager MUST be able to switch automatic follow-up **on or off for the whole agency**, from
   the leads dashboard, persisted on the agency and on by default. The switch MUST be checked **when an attempt is
   about to be sent**, as one more condition of FR-012's eligibility — not when attempts are scheduled. An attempt
-  that comes due while the switch is off MUST be cancelled without sending (FR-013). The demo trigger (FR-017)
+  that comes due while the switch is off MUST be cancelled without sending (FR-013).
+- **FR-013a**: An attempt cancelled because the conversation stopped being eligible — the switch, an opt-out, a
+  pause, a confirmed booking — MUST return `conversations.followupState` to `none` unless it is `exhausted`, so
+  the dashboard never shows a follow-up that no attempt is behind. The demo trigger (FR-017)
   obeys the switch too. A broker MUST see its state and MUST NOT be able to change it.
 
 ### Key Entities
@@ -314,8 +330,8 @@ one appointment done and one cancelled.
 - **SC-012**: Every proposal for an `investment` lead is a `call` with no property, from a specialist broker.
 - **SC-014**: With the agency's switch off, a due attempt is cancelled and nothing reaches the lead; switched back
   on, the next attempt to come due is sent. A broker sees the switch but cannot change it.
-- **SC-015**: No briefing sent to the model in a scheduling context contains an assigned broker's name, and asked
-  *"quem vai me atender?"* the agent names no one.
+- **SC-015**: No proposal, booking, confirmation or follow-up passes an assigned broker's name to the model; and
+  asked *"quem vai me atender?"*, the agent names no one — including after a broker took over and handed back.
 - **SC-017**: For each pair of reply kinds that can meet in one turn, the higher-ranked one decides the reply; and a
   decline arriving with a criterion change gets the acknowledgement followed by the search result.
 - **SC-016**: A viewing booked after the lead pointed at a card — by *"o segundo"*, by its code, or by the card's
@@ -340,7 +356,7 @@ one appointment done and one cancelled.
 - Q: How does *Visita marcada* stay true when a meeting is cancelled, given stages only move forward (ADR 19)? → A: The dashboard derives it from **appointments** — a confirmed future one — not from the stage.
 - Q: When several kinds of reply apply to one turn, which does the lead get? → A: One, ranked: confirmation › options › search result › criteria/results answer › reconfirmation › script question (FR-005g). The decline acknowledgement is a prefix, not a competitor — *"agora não — mas tem algo em Moema?"* gets the acknowledgement **and** the Moema results.
 - Q: Does "no options" still hand the lead to a human? → A: **No automatic handoff**, ever, from FR-001. The agent says no times are available and keeps any earlier proposal open; a lead who wants a person asks — the existing trigger.
-- Q: How does a viewing know which property it is about? → A: A new extraction fact resolved against the properties already shown in the conversation (FR-004b), fed also by an **interest button on each card** that sends the code as a lead message (FR-004c).
+- Q: How does a viewing know which property it is about? → A: A new extraction fact resolved against the properties already shown in the conversation (FR-004b), fed also by a button labelled **"Interessado"** on each card that posts *"Interessado em <code>"* on the lead's behalf (FR-004c).
 - Q: Can a lead hold several bookings? → A: **Spec 009**, together with reschedule and cancel, since all three need "which appointment do you mean?". 006 books one at a time and must not preclude more.
 - Q: Can an agency manager switch automatic follow-up off? → A: Yes, one agency-wide switch. It gates the **send**, not the enqueue: attempts keep being scheduled, and one that comes due while the switch is off is cancelled without sending, the same treatment as any other failed eligibility check.
 

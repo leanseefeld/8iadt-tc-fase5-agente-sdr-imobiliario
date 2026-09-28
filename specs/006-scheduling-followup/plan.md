@@ -75,6 +75,9 @@ worker consumer, one agenda screen, one Server Action file, one drawer action.
 | `commitTurn` in `services/conversation.ts` | 004 | Enqueue follow-up at the end of a turn; cancel it on an inbound lead message |
 | `jobs/consumers.ts` sweep registry | 005 | Registers the follow-up consumer |
 | Lead drawer `ActionsRow` | 005 | One button: send the follow-up now |
+| Extraction fact `propertyRef` + `resolvePropertyRef` | 007 / 006 | A card position or code, resolved in code against properties already shown in the conversation; recorded with the turn; proposing uses the latest (FR-004b, FR-004d) |
+| `PropertyCard.tsx` / `ChatWidget.tsx` | 004 | A button labelled **"Interessado"** posts *"Interessado em <code>"* on the lead's behalf, through the normal send path (FR-004c) |
+| `task()` precedence | 007 FR-032 | Extended: confirmation › options › search result › criteria answer › reconfirmation › script question; the decline acknowledgement is a prefix (FR-005g) |
 | `scheduling.stub.ts` | 004 | Deleted; its two stub tools replaced by `bookMeeting` and a code-side `proposeAppointment` |
 
 ## Constitution Check

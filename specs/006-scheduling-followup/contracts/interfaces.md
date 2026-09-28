@@ -93,6 +93,8 @@ recordProposal(ctx: { conversationId: string; leadId: string }, computed: { brok
   Promise<{ appointmentId: string; options: Option[] }>;   // cancels the open proposed row, inserts the new one
 proposeAppointment(ctx): Promise<{ appointmentId: string; options: Option[] } | { unavailable: true; reason: string }>;
 declineProposal(conversationId: string): Promise<void>;   // proposed → cancelled
+// services/conversation.ts
+resolvePropertyRef(turn: LoadedTurn, ref: PropertyRef): Promise<{ propertyId: string; code: string } | null>;  // only properties already shown here
 // No broker name is returned towards the agent (FR-005e); brokerId stays inside the service and the row.
 ```
 
@@ -116,7 +118,8 @@ The extraction gains two facts, beside `askedForHuman` and `optOut`:
 ```ts
 declinedOffer: boolean;                 // "agora não", "prefiro não marcar"
 askedForTimes: boolean;
-pickedTime: boolean;                    // the lead picked an offered option or named a time — gates bookMeeting (FR-005f)                 // "tem outro horário?", "só de manhã", and after a decline "quero marcar uma visita"
+pickedTime: boolean;
+propertyRef?: { position: number } | { code: string };   // "o segundo", "VMA-0005", or the Interessado button's message (FR-004b)                    // the lead picked an offered option or named a time — gates bookMeeting (FR-005f)                 // "tem outro horário?", "só de manhã", and after a decline "quero marcar uma visita"
 timePreference?: { weekday?: Weekday; period?: 'morning' | 'afternoon' };
 ```
 

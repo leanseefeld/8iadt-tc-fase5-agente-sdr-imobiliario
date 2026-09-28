@@ -132,7 +132,7 @@ stateDiagram-v2
 | `bookMeeting` *(006)* | 🟥 tool | `agent/tools/book-meeting.ts` | dentro do `act()`. Revalida pelo mesmo cálculo que gerou as opções |
 | reconfirmação | 🟦 código | `domain/revision.ts` | slot já preenchido foi revisado, tem dependentes, o turno anterior não foi reconfirmação, **e nenhuma busca apareceu neste turno** |
 | `lastSearchOutcome` | 🟦 código | `services/conversation.ts` | turnos sem busca; é a última busca lida das mensagens gravadas |
-| `task()` | 🟦 código | `agent/prompts/system.ts` | escolhe **uma** instrução: cards › sem resultado › pergunta sobre critérios ou resultados › reconfirmação › oferta › pergunta do roteiro |
+| `task()` | 🟦 código | `agent/prompts/system.ts` | escolhe **uma** instrução. **Hoje (007):** cards › sem resultado › pergunta sobre critérios ou resultados › reconfirmação › oferta › pergunta do roteiro. **006 (planejado):** confirmação › opções › resultado de busca › pergunta sobre critérios ou resultados › reconfirmação › pergunta do roteiro; a aceitação de uma recusa vem **antes** do vencedor e só suprime opções e reconfirmação |
 | `phrase()` | 🟪 modelo fala | `agent/orchestrator.ts` | sempre que o turno não terminou numa frase escrita |
 | guardas | 🟦 código | `domain/reply-guards.ts` | cada frase: sintaxe vazada, idioma, valor sem lastro, número de perguntas |
 | frases escritas | 🟩 código | `agent/prompts/fallback.ts` · `services/handoff.ts` | recusa, falha técnica, opt-out, handoff, *"ainda não consigo"*, reentrada; **006:** opções, confirmação, recusa aceita |

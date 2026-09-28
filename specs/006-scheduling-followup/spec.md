@@ -188,6 +188,12 @@ one appointment done and one cancelled.
   an offered option or named a time** while a proposal is open — so a proposal left open through a change of
   subject costs no extra model round trip on the turns that don't answer it (spec 007's promise that a turn taking
   no action costs what it costs today).
+- **FR-005g**: When more than one kind of reply applies to a turn, exactly one decides what the reply says, in
+  this order: **(1)** a booking confirmation, **(2)** the time options, **(3)** a search result — cards, or that
+  nothing matched, **(4)** the answer to a question about criteria or results, **(5)** a reconfirmation, **(6)** the
+  script's next question. What the lead most needs to know comes first. This extends spec 007 FR-032, which ranked
+  (3)–(6). A **decline acknowledgement** does not compete: it is a short code-written sentence placed **before**
+  whatever wins, and it suppresses only what a decline makes pointless — the options and the reconfirmation.
 - **FR-005c**: An open proposal MUST NOT take over the conversation. A message that does not answer it MUST be
   handled by the normal turn; the options MUST NOT be repeated on every following turn; and the proposal MUST
   stay open, so a later pick still books it, until it is booked, declined or replaced.
@@ -310,6 +316,8 @@ one appointment done and one cancelled.
   on, the next attempt to come due is sent. A broker sees the switch but cannot change it.
 - **SC-015**: No briefing sent to the model in a scheduling context contains an assigned broker's name, and asked
   *"quem vai me atender?"* the agent names no one.
+- **SC-017**: For each pair of reply kinds that can meet in one turn, the higher-ranked one decides the reply; and a
+  decline arriving with a criterion change gets the acknowledgement followed by the search result.
 - **SC-016**: A viewing booked after the lead pointed at a card — by *"o segundo"*, by its code, or by the card's
   interest button — carries that property, and its confirmation names the code. The button works by tap at 390 px.
 - **SC-013**: In scripted conversations: a decline is never followed by an unprompted offer; a request for other
@@ -330,6 +338,7 @@ one appointment done and one cancelled.
 - Q: May the lead learn which broker will attend? → A: **No.** The model never receives the assigned broker's name — not when proposing, not after booking. Code-written sentences say *"alguém da nossa equipe"*; asked for a name, the agent says it can't say yet and that the appointment is in the system. After a handback it neither confirms nor denies that the broker who spoke will attend: the team calendar is internal and assignments change last minute. A lead who insists is left to the existing frustration handling. Spec 007 FR-019 already protects broker assignment; this conforms to it rather than amending it.
 - Q: How is the booking call kept from costing a round trip on every turn while a proposal is open? → A: A new extraction fact — **the lead picked an offered option or named a time** — gates it.
 - Q: How does *Visita marcada* stay true when a meeting is cancelled, given stages only move forward (ADR 19)? → A: The dashboard derives it from **appointments** — a confirmed future one — not from the stage.
+- Q: When several kinds of reply apply to one turn, which does the lead get? → A: One, ranked: confirmation › options › search result › criteria/results answer › reconfirmation › script question (FR-005g). The decline acknowledgement is a prefix, not a competitor — *"agora não — mas tem algo em Moema?"* gets the acknowledgement **and** the Moema results.
 - Q: Does "no options" still hand the lead to a human? → A: **No automatic handoff**, ever, from FR-001. The agent says no times are available and keeps any earlier proposal open; a lead who wants a person asks — the existing trigger.
 - Q: How does a viewing know which property it is about? → A: A new extraction fact resolved against the properties already shown in the conversation (FR-004b), fed also by an **interest button on each card** that sends the code as a lead message (FR-004c).
 - Q: Can a lead hold several bookings? → A: **Spec 009**, together with reschedule and cancel, since all three need "which appointment do you mean?". 006 books one at a time and must not preclude more.

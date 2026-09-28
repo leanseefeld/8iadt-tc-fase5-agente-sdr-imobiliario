@@ -512,11 +512,19 @@ interface PhrasedReply {
  * after that terminator is the start of the next one and must wait, or the guard
  * would judge half a sentence.
  */
-function drain(buffer: string, final: boolean): { ready: string[]; rest: string } {
+export function drain(buffer: string, final: boolean): { ready: string[]; rest: string } {
   const sentences = splitSentences(buffer);
   if (sentences.length === 0) return { ready: [], rest: final ? "" : buffer };
   if (final || /[.!?]["')\]]?\s*$/.test(buffer)) return { ready: sentences, rest: "" };
-  return { ready: sentences.slice(0, -1), rest: sentences.at(-1) as string };
+  // The unfinished sentence is carried over verbatim, trailing space included.
+  // `splitSentences` trims, and a stream chunk that happened to end on "de "
+  // would otherwise have the next chunk's "2 quartos" glued straight onto it —
+  // "de2 quartos", which the lead saw. Where a chunk ends is the provider's
+  // choice and shifts under load, which is why four parallel conversations
+  // exposed it and single ones rarely did. The trimmed tail is the last
+  // occurrence in the buffer, so slicing from there keeps only its own suffix.
+  const last = sentences.at(-1) as string;
+  return { ready: sentences.slice(0, -1), rest: buffer.slice(buffer.lastIndexOf(last)) };
 }
 
 interface PhraseInput {

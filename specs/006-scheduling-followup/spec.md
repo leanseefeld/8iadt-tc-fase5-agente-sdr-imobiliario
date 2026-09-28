@@ -109,7 +109,7 @@ one appointment done and one cancelled.
 ### Edge Cases
 
 - **No free hour in the horizon**, **a broker with every weekday disabled**, or **an agency with no brokers**: the
-  agent does not invent a calendar — it asks the lead for a time and raises a handoff. **Two leads booking the
+  agent does not invent a calendar — it says no times are available right now and keeps any earlier proposal open; it never hands off on its own (FR-001, amended 2026-09-28). **Two leads booking the
   same hour at once**: the second fails the collision check. **An `investment` lead with no specialist broker**:
   assignment falls back to rotation across every broker.
 - **The lead replies while a follow-up is being composed**: a claimed attempt must not send into a conversation
@@ -127,7 +127,10 @@ one appointment done and one cancelled.
 
 - **FR-001**: The system MUST offer up to three concrete options — date, time, type — when proposing a meeting,
   and MUST NOT ask the lead to name a time as its first move. With fewer than three available it MUST offer those
-  it has; with none it MUST NOT propose, and MUST raise a handoff.
+  it has; with none it MUST NOT propose. It MUST NOT hand the conversation off on its own either (amended
+  2026-09-28): it says no times are available right now, any earlier proposal stays open, and a lead who wants a
+  person can ask for one — the existing handoff trigger. The same holds when nothing matches a constraint the lead
+  added (FR-005b).
 - **FR-002**: Options MUST be computed deterministically from the assigned broker's own weekday availability
   (`users.availability`, per weekday `{ enabled, start, end }`) and confirmed appointments: only enabled weekdays
   and hours inside that broker's own window, preferring the order in `SCHEDULING_PREFERRED_TIMES`, no collision
@@ -144,6 +147,15 @@ one appointment done and one cancelled.
   for the same conversation MUST replace the previous one rather than accumulate — by cancelling the open
   proposed row and inserting the new one, through the same transition function every status change uses.
   Proposed appointments MUST NOT block availability; confirmed ones do.
+- **FR-004b**: A viewing MUST be about the property the lead pointed at, when they pointed at one. The extraction
+  MUST read a reference to a shown property — its position among the latest cards (*"o segundo"*) or its code
+  (*"VMA-0005"*) — and code MUST resolve it against the properties **already shown in this conversation**, never the
+  catalog at large. The resolved property is recorded with the turn, proposing uses the most recent one, and the
+  confirmation names it (FR-006). A reference that resolves to nothing is ignored, never guessed.
+- **FR-004c**: Each property card in the chat widget MUST offer an **interest** control that sends a lead message
+  naming the card's code (*"Tenho interesse no VMA-0005"*), starting a turn exactly as a typed message would. It
+  MUST be shown on hover or keyboard focus with a pointer, and **always** shown on touch screens, which have no
+  hover — tappable at 390 px (constitution principle X).
 - **FR-004a**: Proposing MUST be triggered by code when the offer is due — spec 007's `shouldProposeMeeting`
   with its offer-outstanding fact — never by the model deciding on its own that it is time to offer. The reply
   MUST present the computed options, replacing today's instruction to ask which weekday suits the lead.
@@ -298,6 +310,8 @@ one appointment done and one cancelled.
   on, the next attempt to come due is sent. A broker sees the switch but cannot change it.
 - **SC-015**: No briefing sent to the model in a scheduling context contains an assigned broker's name, and asked
   *"quem vai me atender?"* the agent names no one.
+- **SC-016**: A viewing booked after the lead pointed at a card — by *"o segundo"*, by its code, or by the card's
+  interest button — carries that property, and its confirmation names the code. The button works by tap at 390 px.
 - **SC-013**: In scripted conversations: a decline is never followed by an unprompted offer; a request for other
   times yields a replacing proposal; a change of subject after an offer gets its own answer without the options
   repeated, and a pick two turns later still books.
@@ -316,6 +330,9 @@ one appointment done and one cancelled.
 - Q: May the lead learn which broker will attend? → A: **No.** The model never receives the assigned broker's name — not when proposing, not after booking. Code-written sentences say *"alguém da nossa equipe"*; asked for a name, the agent says it can't say yet and that the appointment is in the system. After a handback it neither confirms nor denies that the broker who spoke will attend: the team calendar is internal and assignments change last minute. A lead who insists is left to the existing frustration handling. Spec 007 FR-019 already protects broker assignment; this conforms to it rather than amending it.
 - Q: How is the booking call kept from costing a round trip on every turn while a proposal is open? → A: A new extraction fact — **the lead picked an offered option or named a time** — gates it.
 - Q: How does *Visita marcada* stay true when a meeting is cancelled, given stages only move forward (ADR 19)? → A: The dashboard derives it from **appointments** — a confirmed future one — not from the stage.
+- Q: Does "no options" still hand the lead to a human? → A: **No automatic handoff**, ever, from FR-001. The agent says no times are available and keeps any earlier proposal open; a lead who wants a person asks — the existing trigger.
+- Q: How does a viewing know which property it is about? → A: A new extraction fact resolved against the properties already shown in the conversation (FR-004b), fed also by an **interest button on each card** that sends the code as a lead message (FR-004c).
+- Q: Can a lead hold several bookings? → A: **Spec 009**, together with reschedule and cancel, since all three need "which appointment do you mean?". 006 books one at a time and must not preclude more.
 - Q: Can an agency manager switch automatic follow-up off? → A: Yes, one agency-wide switch. It gates the **send**, not the enqueue: attempts keep being scheduled, and one that comes due while the switch is off is cancelled without sending, the same treatment as any other failed eligibility check.
 
 ### Session 2026-09-05
@@ -326,7 +343,7 @@ Resolved by the author against `docs/` before planning; `docs/decisoes-pendentes
   point at? → **A**: One row per proposal, created *proposed* at the first option's time, the options carried in
   the message metadata; booking moves that same row to *confirmed*, so both events name one id.
 - **Q**: What if the broker has no free preferred hour? → **A**: Search forward ten business days; offer fewer
-  than three if that is all there is; with zero, do not propose — ask the lead for a time and raise a handoff.
+  than three if that is all there is; with zero, do not propose — ask the lead for a time and raise a handoff. *(Superseded 2026-09-28: no automatic handoff — see FR-001.)*
 - **Q**: Viewings run inside each broker's own availability while the follow-up window is 09:00–20:00 and
   configurable — which timezone governs viewings? → **A**: `FOLLOWUP_TIMEZONE`, applied to every broker's
   availability alike, one per agency. `SCHEDULING_MIN_NOTICE_MINUTES`/`SCHEDULING_PREFERRED_TIMES` are now
@@ -359,6 +376,9 @@ Resolved by the author against `docs/` before planning; `docs/decisoes-pendentes
 
 - Any calendar visualisation: the agenda is a list, deliberately. Rescheduling or cancelling from the
   conversation is **spec 009**, built right after this slice; here a broker changes status from the agenda.
+- **Several bookings per lead** — different properties, or a later call with an investment specialist — is also
+  **spec 009**. Nothing here may assume one appointment per conversation: only *open proposals* are one per
+  conversation.
 - External calendar integration, invitation e-mail, reminder notification; follow-up on any channel but the web
   widget. Broker capacity limits, holiday calendars, and reassigning a lead between brokers — that last one
   belongs to spec 005's manager view. The broker availability editor — backlog 34; availability stays seeded.

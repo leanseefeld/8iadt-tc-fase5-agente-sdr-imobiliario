@@ -53,6 +53,15 @@ instead of inventing an answer.
   build that, with a clear information hierarchy (summary before detail, one
   primary action) and a visual hierarchy that shows it. Processing, lost
   connections and empty states always give feedback. Constitution principle X.
+- **The turn map is updated in the same commit as the code it describes.**
+  [`docs/arquitetura/turno-do-agente.md`](docs/arquitetura/turno-do-agente.md)
+  maps what the model reads, what code decides, which tools the model may call
+  and what enables each of them per turn, plus the state kept between turns. Any
+  change to one of those — `run()` or `runTurn()` in `agent/orchestrator.ts`, an
+  extraction fact, a tool or its gating, `task()`'s precedence, a written reply,
+  an appointment or follow-up state — updates the diagrams and the table in that
+  same commit. A step marked *planejado* loses the mark when it's built. Re-render
+  the Mermaid before committing: a diagram that doesn't parse counts as not updated.
 
 ## Structure
 

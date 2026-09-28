@@ -28,7 +28,7 @@ flowchart TD
     classDef escrita fill:#dcfce7,stroke:#15803d,color:#0f172a
     classDef plano fill:#f8fafc,stroke:#64748b,stroke-dasharray:5 5,color:#334155
 
-    IN(["Mensagem do lead"]) --> GATE{"Portão<br/>conversa ativa · consentimento<br/>um turno por vez · debounce"}:::codigo
+    IN(["Mensagem do lead<br/>digitada, ou pelo botão de interesse do card (006)"]) --> GATE{"Portão<br/>conversa ativa · consentimento<br/>um turno por vez · debounce"}:::codigo
     GATE -- "não" --> QUIET(["Silêncio<br/>corretor assumiu ou falta consentimento"])
     GATE -- "sim" --> INJ{"looksLikeInjection?"}:::codigo
     INJ -- "sim" --> W_REF["refusalReply"]:::escrita
@@ -43,7 +43,7 @@ flowchart TD
     OPT -- "sim" --> W_OPT["OPT_OUT_REPLY"]:::escrita
     OPT -- "não" --> ACC["accountTurn<br/>streak: zera · mantém · avança"]:::codigo
     ACC --> DEC["Decidir<br/>handoffDecision · shouldProposeMeeting<br/>+ offerOutstanding · nextQuestion"]:::codigo
-    DEC -.-> PROP["proposeAppointment · declineProposal<br/>por askedForTimes · declinedOffer<br/>(006, planejado)"]:::plano
+    DEC -.-> PROP["proposeAppointment · declineProposal · resolvePropertyRef<br/>por askedForTimes · declinedOffer · propertyRef<br/>(006, planejado)"]:::plano
     DEC --> HO{"handoff?"}:::codigo
     HO -- "sim" --> W_HO["handoffReply"]:::escrita
     HO -- "não" --> ACTQ{"act() oferecido?<br/>busca devida<br/>006: proposta aberta + pickedTime"}:::codigo
@@ -102,6 +102,7 @@ stateDiagram-v2
 
 - **Uma oferta recusada não é oferecida de novo por conta própria** — `offerOutstanding` continua verdadeiro
   porque a mensagem da oferta está no histórico. O lead pode sempre pedir.
+- **Sem horário, sem handoff automático** (006): o agente diz que não há horário agora e mantém a proposta anterior aberta; quem quer uma pessoa pede.
 - **Uma proposta aberta não sequestra a conversa**: o lead pode mudar de assunto e voltar a ela depois.
 - **O streak de não compreensão** é um número em `conversations.fallbackStreak`: zera quando o turno aprende
   algo, **mantém** em conversa fiada ou falha técnica, **avança** quando o lead tentou algo inutilizável. Em 2,
@@ -113,15 +114,17 @@ stateDiagram-v2
 
 | Verbo | Quem | Onde | Liga quando |
 |---|---|---|---|
+| botão de interesse no card *(006)* | 🟩 widget envia | `app/(public)/chat/…/PropertyCard.tsx` | clique ou toque no card: envia *"Tenho interesse no VMA-0005"* como mensagem do lead, e um turno normal começa |
 | debounce · `claimTurn` | 🟦 código | `channels/web.ts` · `services/conversation.ts` | toda mensagem; um turno por conversa, depois de `CHAT_DEBOUNCE_MS` de silêncio |
 | `looksLikeInjection` | 🟦 código | `domain/injection.ts` | todo turno; três frases fixas de tentativa de manipulação |
-| `extract()` | 🟨 modelo lê | `agent/orchestrator.ts` | todo turno que passou do portão. Devolve slots e os fatos `askedForHuman`, `optOut`, `attemptedAnswer`, `askedAboutCriteria`; **006:** `declinedOffer`, `askedForTimes`, `pickedTime`, `timePreference` |
+| `extract()` | 🟨 modelo lê | `agent/orchestrator.ts` | todo turno que passou do portão. Devolve slots e os fatos `askedForHuman`, `optOut`, `attemptedAnswer`, `askedAboutCriteria`; **006:** `declinedOffer`, `askedForTimes`, `pickedTime`, `timePreference`, `propertyRef` |
 | `recoverSlot()` | 🟨 modelo lê | `agent/recovery.ts` | slot pendente ficou vazio, a extração não disse nada dele, **e** o lead tentou responder |
 | `mergeSlots` | 🟦 código | `domain/slots.ts` | todo turno; separa preenchido, revisado, intenção trocada e recusado |
 | `accountTurn` | 🟦 código | `agent/orchestrator.ts` | todo turno; decide o streak |
 | `handoffDecision` | 🟦 código | `domain/handoff.ts` | lead pediu humano, ou streak chegou a 2 |
 | `shouldProposeMeeting` | 🟦 código | `domain/handoff.ts` | roteiro completo (compra/aluguel: quente e com contato; investimento: sempre) **e** nenhuma oferta já feita (`offerOutstanding`) |
 | `proposeAppointment` *(006)* | 🟦 código | `services/scheduling.ts` | `shouldProposeMeeting`, **ou** `askedForTimes` com roteiro completo. Datas e horários são escritos pelo código |
+| `resolvePropertyRef` *(006)* | 🟦 código | `services/conversation.ts` | a extração trouxe `propertyRef` (*"o segundo"*, *"VMA-0005"*); resolve só contra imóveis **já mostrados nesta conversa**, nunca adivinha |
 | `declineProposal` *(006)* | 🟦 código | `services/scheduling.ts` | `declinedOffer` **com proposta aberta** |
 | `nextQuestion` | 🟦 código | `domain/slots.ts` | quando não há oferta nem handoff no turno — **quem escolhe a próxima pergunta é sempre o código** |
 | `act()` | 🟥 modelo age | `agent/act.ts` | critério de busca preenchido ou revisado com o roteiro qualificado; **006:** ou proposta aberta **e** `pickedTime` sem recusa |

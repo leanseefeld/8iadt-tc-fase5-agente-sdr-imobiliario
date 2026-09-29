@@ -42,3 +42,13 @@ something the page doesn't say, that choice is listed under *Decisions I made*.
 - Model, `INTEGRATION=1` on 12B: `tests/integration/changes.test.ts`, the page's seven examples. 7 of 7, twice
   in a row after the fixes above.
 - 006's FR-004g test now expects 009's behaviour: *"Quer mesmo cancelar…?"*, and nothing changes before a yes.
+
+## Full suite on 12B (29/09)
+
+429 of 434 on the first run. The two causes:
+- **T020.** *"pode ser domingo às 7?"* was read as a decline. The lead heard *"sem problema"*, and the model
+  invented *"vou registrar seu interesse"*. **Fixed:** a message that asks for or names a day or time is not a
+  decline. Booking and escapes pass 11 of 11 after it.
+- **Scenario 2** (investor) ended with intent *purchase*. It passed twice on rerun, so it's a 12B misread (1 in 3),
+  logged in [`docs/cenarios-de-falha.md`](../../docs/cenarios-de-falha.md), and the test now prints each turn's
+  intent when it fails.

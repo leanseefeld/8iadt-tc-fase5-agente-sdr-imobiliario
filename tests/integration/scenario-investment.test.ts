@@ -69,7 +69,9 @@ test("Cenário 2 runs end to end (SC-002, SC-003)", { skip: !integration }, asyn
   assert.ok(last !== undefined && last.status === "committed");
 
   await t.test("the investment script is filled and the lead is qualified (SC-002)", () => {
-    assert.equal(last.intent, "investment");
+    // On failure, show the intent each turn left, so a model misread is visible.
+    const trail = committed.map((turn, index) => `${SCRIPT[index]} → ${turn.status === "committed" ? turn.intent : "?"}`);
+    assert.equal(last.intent, "investment", trail.join("\n"));
     for (const slot of qualifyingSlots("investment")) {
       assert.notEqual(
         last.slots[slot],

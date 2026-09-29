@@ -1335,8 +1335,12 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   const facts = extraction.scheduling;
   // Open **now** — a row still `proposed` — not "an offer was ever made".
   const proposalOpen = turn.proposalOpen;
-  // FR-005a: a decline counts only while a proposal is open.
-  const declining = facts.declinedOffer && proposalOpen;
+  // FR-005a: a decline counts only while a proposal is open — and a message
+  // that asks for or names another day or time is not one: "pode ser domingo
+  // às 7?" was read as a decline and heard "sem problema".
+  const namesATime =
+    facts.askedForTimes || facts.pickedTime || facts.preference.weekday !== undefined || facts.preference.period !== undefined;
+  const declining = facts.declinedOffer && proposalOpen && !namesATime;
   // FR-005f: the booking tool is offered only for an actual pick.
   const picking = facts.pickedTime && proposalOpen && !declining;
   // Spec 009: the lead's meetings still to come, and what the last reply left

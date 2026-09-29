@@ -75,6 +75,9 @@ export const configSchema = z.object({
 
   // Runtime
   APP_PORT: port.default(3100),
+  // Read by next.config.ts only: extra hosts allowed to load dev resources,
+  // comma-separated (a LAN IP, to open the chat on a phone). Empty is fine.
+  DEV_ALLOWED_ORIGINS: z.string().optional(),
   WORKER_HEALTH_PORT: port.default(3101),
   // Read by docker-compose.yml to publish Postgres on the host, not by
   // application code — nothing inside the network uses it. Declared here

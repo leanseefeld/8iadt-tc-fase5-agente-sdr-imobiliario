@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
 import { appointments, events, leads, properties, users } from "../db/schema.ts";
 import { getConfig } from "../core/config.ts";
@@ -441,6 +441,8 @@ export async function listAppointments(
   scope: AgendaScope,
   range: { from: Date; to: Date },
   now: Date = new Date(),
+  /** `desc` for looking back — the most recent day and meeting first. */
+  order: "asc" | "desc" = "asc",
 ): Promise<AgendaGroup[]> {
   const timeZone = getConfig().FOLLOWUP_TIMEZONE;
   const conditions = [
@@ -468,10 +470,11 @@ export async function listAppointments(
     .innerJoin(users, eq(users.id, appointments.brokerId))
     .leftJoin(properties, eq(properties.id, appointments.propertyId))
     .where(and(...conditions))
-    .orderBy(asc(appointments.scheduledAt));
+    .orderBy(order === "asc" ? asc(appointments.scheduledAt) : desc(appointments.scheduledAt));
 
   const today = localDay(now, timeZone).key;
   const tomorrow = localDay(new Date(now.getTime() + 24 * 60 * 60_000), timeZone).key;
+  const yesterday = localDay(new Date(now.getTime() - 24 * 60 * 60_000), timeZone).key;
   const groups: AgendaGroup[] = [];
   for (const row of rows) {
     const day = localDay(row.scheduledAt, timeZone);
@@ -479,7 +482,7 @@ export async function listAppointments(
     if (group?.day !== day.key) {
       group = {
         day: day.key,
-        label: day.key === today ? "Hoje" : day.key === tomorrow ? "Amanhã" : day.label,
+        label: day.key === today ? "Hoje" : day.key === tomorrow ? "Amanhã" : day.key === yesterday ? "Ontem" : day.label,
         rows: [],
       };
       groups.push(group);

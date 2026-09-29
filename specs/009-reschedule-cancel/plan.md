@@ -33,6 +33,12 @@ something the page doesn't say, that choice is listed under *Decisions I made*.
 - **Cancelling offers to rebook** (the page says so); a yes to that offers times for the same property, or the
   phone.
 
+## Added on request (29/09)
+
+- **Agenda: Próximos · Passados.** A toggle on `/agenda`, kept in the URL (`?periodo=passados`), shows the last
+  thirty days, most recent first, with *Ontem* by name. It's for checking what happened, with the same scope
+  (a broker's own, a manager's whole agency). Tested in `tests/agenda-scope.test.ts`.
+
 ## Tests
 
 - Unit: `tests/meeting-change.test.ts` (which meeting, the answer to "qual delas?", the sentences), plus

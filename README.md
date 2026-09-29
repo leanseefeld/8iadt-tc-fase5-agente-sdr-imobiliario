@@ -112,6 +112,12 @@ aceite o termo e converse. `demo` é o *slug* da imobiliária semeada.
 
 Vêm de `src/db/seed/index.ts` (`npm run db:seed`, que é idempotente).
 
+**Testar no celular** (mesma rede Wi-Fi): abra `http://<nome-do-mac>.local:3100/chat/demo` — o nome aparece em
+Ajustes do Sistema › Geral › Compartilhamento, e funciona sem configurar nada. Pelo IP
+(`ipconfig getifaddr en0`), coloque o IP em `DEV_ALLOWED_ORIGINS` no `.env` e rode
+`docker compose up -d --force-recreate app`. Sem isso o `next dev` bloqueia o JavaScript para outros aparelhos
+e o chat fica em *"Carregando a conversa…"*.
+
 As portas evitam de propósito as mais disputadas (3000, 5432, 8000, 8001, 80) para
 o projeto conviver com outros na mesma máquina. Para movê-las, altere `APP_PORT`,
 `WORKER_HEALTH_PORT` ou `DB_PORT` no `.env` — nada mais precisa mudar.

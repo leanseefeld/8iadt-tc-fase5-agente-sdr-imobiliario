@@ -18,6 +18,7 @@ verdade é uma decisão de produto ainda não tomada.
 | O modelo promete o que nenhuma ação fez: *"vou registrar seu interesse no sistema"*, *"vou verificar as outras opções"* | Conversas de 28 e 29/09 | **012** (guarda de fatos) | Não é do fluxo de agenda: nenhuma ação sustenta a frase |
 | A resposta depois de uma busca numera cards que não são numerados (*"Os imóveis 1, 3 e 5…"*) | Replay de 28/09 | **012** | Mesma família: afirmar o que não está na tela |
 | No celular (390 px), o menu do topo do painel fica apertado e corta *Agenda* | 28/09 | **014** (UX) | Anterior à 006 |
+| Lead volta **depois** do horário da visita e pede *"podemos marcar uma nova visita pra quinta?"* → *"Não encontrei nenhuma visita ou conversa marcada para mudar."* Em seguida, *"podemos marcar uma nova?"* | Teste do desenvolvedor, 29/09 (e4b, celular) | **009** (código) · modelo | Extração: `changeRequest: reschedule` **e** `askedForTimes: true`, `meetingKind: visit`, `preferredWeekday: thu`. Como a visita já tinha passado, não há compromisso futuro para remarcar, e o código parou em *"não encontrei"* em vez de tratar como pedido de **nova** visita (mesmo imóvel, quinta). Duas partes: o modelo leu *"nova visita"* como remarcação; e o código não cai para "oferecer" quando não há o que remarcar mas o lead pediu horários. Registrado, **não corrigido** — o desenvolvedor ainda está testando |
 
 ## Resolvidos
 

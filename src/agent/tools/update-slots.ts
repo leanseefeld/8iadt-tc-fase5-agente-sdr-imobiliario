@@ -179,6 +179,13 @@ export const EXTRACTION_FIELDS: readonly ExtractionField[] = [
       "Perguntar quem vai atender NÃO é isso. Na dúvida, false.",
   },
   {
+    key: "wantsToChangeBooking",
+    description:
+      'true se a pessoa quer cancelar, desmarcar ou mudar o dia ou horário de uma visita ou conversa JÁ ' +
+      'confirmada ("não vou mais poder na sexta", "preciso cancelar a visita", "dá pra passar pra segunda?"). ' +
+      "Recusar horários que acabaram de ser oferecidos NÃO é isso. Na dúvida, false.",
+  },
+  {
     key: "askedWhoAttends",
     description:
       'true se a pessoa perguntou quem vai atendê-la na visita ou conversa ("quem vai me atender?", ' +
@@ -216,6 +223,7 @@ export interface Extracted {
   propertyPosition: number | null;
   propertyCode: string | null;
   askedWhoAttends: boolean;
+  wantsToChangeBooking: boolean;
   meetingKind: string | null;
   unsupportedMeeting: boolean;
   outOfScopeRequest: boolean;

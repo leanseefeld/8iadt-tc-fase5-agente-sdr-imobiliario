@@ -336,6 +336,8 @@ interface SchedulingFacts {
   preference: Preference;
   propertyRef: PropertyRef | null;
   askedWhoAttends: boolean;
+  /** FR-004g: cancel or move a meeting already confirmed (spec 009 acts on it; until then, "ainda não consigo"). */
+  wantsToChangeBooking: boolean;
   /** FR-004e/f: the lead asked for a visit or for a phone conversation. */
   meetingKind: "visit" | "call" | null;
   /** FR-005h: a meeting in a format the agency doesn't offer (office, video, …). */
@@ -351,6 +353,7 @@ const NO_SCHEDULING: SchedulingFacts = {
   preference: {},
   propertyRef: null,
   askedWhoAttends: false,
+  wantsToChangeBooking: false,
   meetingKind: null,
   unsupportedMeeting: false,
   outOfScopeRequest: false,
@@ -378,6 +381,7 @@ export function readSchedulingFacts(object: Record<string, unknown>): Scheduling
     preference,
     propertyRef,
     askedWhoAttends: isTrue(object.askedWhoAttends),
+    wantsToChangeBooking: isTrue(object.wantsToChangeBooking),
     meetingKind: object.meetingKind === "visit" || object.meetingKind === "call" ? object.meetingKind : null,
     unsupportedMeeting: isTrue(object.unsupportedMeeting),
     outOfScopeRequest: isTrue(object.outOfScopeRequest),
@@ -1194,7 +1198,8 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   // Spec 006: what the lead did about a meeting. Each fact is the model's
   // reading; what it does is decided here.
   const facts = extraction.scheduling;
-  const proposalOpen = turn.appointmentProposed;
+  // Open **now** — a row still `proposed` — not "an offer was ever made".
+  const proposalOpen = turn.proposalOpen;
   // FR-005a: a decline counts only while a proposal is open.
   const declining = facts.declinedOffer && proposalOpen;
   // FR-005f: the booking tool is offered only for an actual pick.
@@ -1207,7 +1212,17 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   // "Quem vai me atender?" is FR-005e's question, not a request to choose.
   const refusingRequest =
     facts.outOfScopeRequest && !facts.askedWhoAttends && !refusingFormat && !declining && !picking;
-  const refused = refusingFormat || refusingRequest;
+  // FR-004g: cancelling or moving a confirmed meeting is spec 009's. Until then,
+  // the honest "ainda não consigo" — never a "sem problema" that leaves the
+  // visit confirmed while the lead thinks it's off. A decline with nothing open
+  // to decline, from a lead who has a booking, is the same request.
+  const changingBooking =
+    (facts.wantsToChangeBooking || (facts.declinedOffer && !proposalOpen)) &&
+    !picking &&
+    !refusingFormat &&
+    !refusingRequest &&
+    (await hasConfirmedFutureAppointment(turn.lead.id));
+  const refused = refusingFormat || refusingRequest || changingBooking;
   // FR-004b: only a property already shown here; anything else is ignored.
   const interest = facts.propertyRef === null ? null : await resolvePropertyRef(turn, facts.propertyRef);
   // A pick outranks a request for times on the same message: the extraction

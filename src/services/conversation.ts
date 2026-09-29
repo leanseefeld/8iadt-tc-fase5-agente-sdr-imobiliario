@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
-import { agencies, conversations, events as events_, leads, messages, properties, users } from "../db/schema.ts";
+import { agencies, appointments, conversations, events as events_, leads, messages, properties, users } from "../db/schema.ts";
 import { getConfig } from "../core/config.ts";
 import { EMPTY_SLOTS, slotsSchema, type Intent, type SlotKey, type Slots } from "../domain/slots.ts";
 import type { HandoffReason } from "../domain/handoff.ts";
@@ -97,11 +97,19 @@ export interface LoadedTurn {
   /** Broker user id → first name, for labelling their messages in the prompt. */
   brokerNames: Record<string, string>;
   /**
-   * An `appointment.proposed` row already exists. Until spec 006 writes that
-   * event, the stand-in is the offering message's metadata — see
-   * `offerOutstanding`.
+   * An offer to meet was **ever** made here (an `appointment.proposed` event).
+   * Stays true after a booking or a decline: it is what keeps the agent from
+   * offering again on its own — see `offerOutstanding`.
    */
   appointmentProposed: boolean;
+  /**
+   * A proposal is open **right now**: an appointment row still `proposed`.
+   * What a decline or a pick can act on. False once it is booked, declined or
+   * replaced — reading the event instead took "não vou mais poder" after a
+   * booking for a decline, and told the lead "sem problema" with the visit
+   * still confirmed.
+   */
+  proposalOpen: boolean;
 }
 
 /** Either end of the turn: the route handler has a session, the worker has an id. */
@@ -164,7 +172,7 @@ export async function loadTurn(ref: TurnRef): Promise<LoadedTurn | null> {
   const conversationId = row.conversation.id;
   const windowStart = new Date(Date.now() - config.CHAT_BUDGET_WINDOW_MINUTES * 60_000);
 
-  const [recent, unanswered, budget, handoverRows, proposedRows] = await Promise.all([
+  const [recent, unanswered, budget, handoverRows, proposedRows, openRows] = await Promise.all([
     db
       .select()
       .from(messages)
@@ -216,6 +224,11 @@ export async function loadTurn(ref: TurnRef): Promise<LoadedTurn | null> {
       .from(events_)
       .where(and(eq(events_.conversationId, conversationId), eq(events_.type, "appointment.proposed")))
       .limit(1),
+    db
+      .select({ id: appointments.id })
+      .from(appointments)
+      .where(and(eq(appointments.conversationId, conversationId), eq(appointments.status, "proposed")))
+      .limit(1),
   ]);
 
   return {
@@ -255,6 +268,7 @@ export async function loadTurn(ref: TurnRef): Promise<LoadedTurn | null> {
       handoverRows.map((row) => [row.userId, firstName(row.name)]),
     ),
     appointmentProposed: proposedRows.length > 0,
+    proposalOpen: openRows.length > 0,
   };
 }
 

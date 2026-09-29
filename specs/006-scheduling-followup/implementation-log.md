@@ -327,3 +327,21 @@ after the first build"):
 - HTTP tests: `app-test` serves `sdr_test` on port 3200. The runner **requires** it, which is verified: pointed
   at a dead URL, it prints the start command and runs nothing. A turn sent to it was filed in Langfuse under
   environment `test`.
+
+**Last fix before merge (T051, FR-004g), from the developer's own test (`88096d06…`).**
+- What happened: after booking Friday at 14h, *"não vou mais poder na sexta"* got *"Sem problema — se quiser
+  marcar depois, é só pedir"*, and the model added "vou verificar as outras opções". The visit **stayed
+  confirmed**.
+- Cause: "a proposal is open" read the `appointment.proposed` **event**, which is true forever once an offer was
+  made. The decline path ran, found no row to cancel, and still acknowledged.
+- Fix: two flags now.
+  - `appointmentProposed` (ever offered) only keeps offers from repeating.
+  - `proposalOpen` (a row still `proposed`) is what a decline or a pick acts on.
+- A request to cancel or move a confirmed meeting (new fact `wantsToChangeBooking`, or a "no" with nothing open
+  to decline) gets *"ainda não consigo te ajudar com isso"* and advances the streak, so insisting reaches a
+  person. Spec 009 replaces this with the real cancel and reschedule.
+- The conversation is now a test, green in both runs.
+
+**Known flake.** The change-of-subject escape (`meeting-escapes.test.ts`) failed twice in about ten runs: e4b
+misreads one of its messages. Every other run passed. It's left for 009's work on the same flows, and test
+failures print the extracted facts to diagnose it.

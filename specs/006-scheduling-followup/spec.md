@@ -177,6 +177,11 @@ one appointment done and one cancelled.
 - **FR-004f** *(28/09, developer)*: The only other meeting is a **conversation by phone** (`call`), bookable on its
   own, with or without a property in play: a lead who asks for one gets phone times. Every code-written sentence and
   the widget card call it *"conversa por telefone"*.
+- **FR-004g** *(28/09, developer, from a live conversation)*: A request to **cancel or move a meeting already
+  confirmed** (*"não vou mais poder na sexta"*) is spec 009's to act on. Until then it MUST get spec 007 FR-023's
+  *"ainda não consigo te ajudar com isso"* and advance the handoff streak, so a lead who insists reaches a person who
+  can. It MUST NOT be read as a decline (FR-005a applies only to a proposal open **now**, a row still *proposed*),
+  and nothing may tell the lead the meeting is off while it stays confirmed.
 - **FR-004a**: Proposing MUST be triggered by code when the offer is due — spec 007's `shouldProposeMeeting`
   with its offer-outstanding fact — never by the model deciding on its own that it is time to offer. The reply
   MUST present the computed options, replacing today's instruction to ask which weekday suits the lead.
@@ -384,6 +389,7 @@ one appointment done and one cancelled.
 - Q: What about a meeting at the agency, or by Meet, Zoom, FaceTime — or anything else we don't offer? → A: *"Ainda não consigo te ajudar com isso"*, then the phone path if none is booked; the handoff streak advances (FR-005h).
 - Q: And a ride, transit reimbursement, a broker chosen for looks, colour, gender or ideology? → A: *"Ainda não consigo te ajudar com isso"*, streak advances (FR-005i).
 - Q: Should chat search match regions (*"zona norte"*) again? → A: **Yes** (FR-020).
+- Q: A lead booked, then wrote *"não vou mais poder na sexta"* and heard *"sem problema"* while the visit stayed confirmed. Fix now or in 009? → A: **Both**: now, the decline reads only a proposal open *now*, and a change to a confirmed meeting gets the honest *"ainda não consigo"* (FR-004g); 009 then cancels and reschedules for real, starting from this conversation.
 - Q: The integration tests share the demo database with the running worker and leave data behind. → A: They run in **their own database**, created, migrated and seeded fresh at the start of each suite run — not per test, which would make the run explode.
 
 ### Session 2026-09-28 (after /speckit-analyze)

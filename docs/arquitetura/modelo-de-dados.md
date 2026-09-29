@@ -19,6 +19,7 @@ Chaves primárias são `uuid` geradas no banco. Toda tabela de negócio carrega
 | id | uuid | |
 | name | text | "Imobiliária Demo" na seed |
 | slug | text, único | usado na rota pública do widget: `/chat/[agencySlug]` |
+| followupEnabled | boolean, padrão `true` | chave do follow-up automático da agência (006 FR-019); só a gerência muda; lida **na hora de enviar**, nunca ao agendar |
 
 ### users
 
@@ -221,7 +222,8 @@ Teto 100. Faixas: **frio < 40**, **morno 40–69**, **quente ≥ 70**.
 | `conversation.assumed` / `conversation.returned` | `{ userId }` | 005 |
 | `summary.updated` | `{}` | 005 |
 | `appointment.proposed` / `appointment.confirmed` | `{ appointmentId }` | 006 |
-| `followup.scheduled` / `followup.sent` | `{ attempt }` | 006 |
+| `followup.scheduled` / `followup.sent` | `{ attempt }` — `sent` com `actorType: worker` e o `traceId` do `followup.send` | 006 |
+| `followup.enabled` / `followup.disabled` | `{}` — a gerência mudou a chave da agência | 006 |
 | `followup.recovered` | `{ attempt }` — lead respondeu após follow-up | 006 |
 | `lead.opted_out` | `{}` | 004 |
 | `lead.status_changed` | `{ from, to }` | 004 (agente até `scheduled`) · 005 (corretor) · 006 (visita) |
@@ -282,7 +284,7 @@ Leituras derivadas para o painel:
 | Encerrada | `closed` |
 | Ao vivo | `lastLeadMessageAt` há menos de `DASHBOARD_LIVE_WINDOW_MINUTES` |
 | Sem resposta | `followupState = exhausted` |
-| Visita *dia hora* | `status = scheduled` com appointment confirmado futuro |
+| Visita marcada | appointment `confirmed` com `scheduledAt` futuro — **derivado do appointment, não da etapa** (006 FR-008b): como as etapas só avançam, uma visita cancelada deixa o lead em `scheduled` sem nada marcado. O rótulo da etapa `scheduled` é *Agendamento feito* |
 
 O caminho feliz fica com o agente: qualifica, busca, propõe horários, confirma. O
 corretor assume quando quer, de qualquer etapa. `handoff` e `unresponsive`
@@ -303,6 +305,13 @@ enviar:
 Qualquer mensagem do lead cancela a tentativa pendente e zera a contagem. Devolver
 a conversa ao agente reinicia o relógio. Visita concluída ou cancelada **não**
 reativa follow-up automático: é decisão do corretor, pela agenda.
+
+Na hora de enviar, somam-se duas condições: a chave `agencies.followupEnabled`
+ligada e o instante dentro da janela (`FOLLOWUP_WINDOW_START`–`_END`, no fuso
+`FOLLOWUP_TIMEZONE`). Fora da janela, a tentativa é **movida** para a próxima
+abertura, sem consumir contagem; qualquer outra condição falhando **cancela** a
+tentativa e devolve `followupState` a `none` (a não ser `exhausted`), para o
+painel nunca mostrar um follow-up sem tentativa por trás (006 FR-013a).
 
 ### Turnos coalescidos
 

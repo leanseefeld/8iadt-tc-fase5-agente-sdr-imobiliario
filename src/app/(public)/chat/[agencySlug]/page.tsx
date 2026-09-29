@@ -53,6 +53,7 @@ export default async function ChatPage({
       consentNotice={CONSENT_NOTICE}
       openingQuestion={QUESTIONS.intent}
       pulseIntervalMs={getConfig().SSE_PULSE_INTERVAL_MS}
+      timeZone={getConfig().FOLLOWUP_TIMEZONE}
     />
   );
 }

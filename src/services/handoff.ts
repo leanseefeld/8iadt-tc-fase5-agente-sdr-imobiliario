@@ -1,3 +1,4 @@
+import { restartAfterHandback } from "./followup.ts";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
 import { conversations, events, leads, users } from "../db/schema.ts";
@@ -179,6 +180,8 @@ export async function returnToAgent(
     role: "agent",
     content: `Sofia de volta! ${brokerName} saiu da conversa, mas se precisar de alguma coisa, é só chamar!`,
   });
+  // Spec 006 FR-009a: back with the agent and still owing the lead something.
+  await restartAfterHandback(found.conversationId, userId);
 
   announce(found, "active");
   return ok;

@@ -1,0 +1,3 @@
+ALTER TABLE "agencies" ADD COLUMN "followup_enabled" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+CREATE INDEX "appointments_broker_busy_idx" ON "appointments" USING btree ("broker_id","scheduled_at") WHERE "appointments"."status" = 'confirmed';--> statement-breakpoint
+CREATE INDEX "followup_jobs_claim_idx" ON "followup_jobs" USING btree ("status","scheduled_for") WHERE "followup_jobs"."status" = 'pending';

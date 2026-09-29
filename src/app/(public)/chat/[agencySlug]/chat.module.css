@@ -359,6 +359,7 @@
 }
 
 .propertyCard {
+  position: relative;
   display: flex;
   gap: 0.6rem;
   padding: 0.5rem;
@@ -434,4 +435,86 @@
     width: 5rem;
     height: 5rem;
   }
+}
+
+/* --- "Interessado" (spec 006 FR-004c) --------------------------------------
+ * One action per card. On a pointer device it waits for hover or focus, so a
+ * list of cards stays a list of properties; on touch there is no hover to wait
+ * for, so it is always there. 2.75rem tall: a thumb's target at 390 px. */
+
+.interested {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0 0.9rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.propertyCard:hover .interested,
+.propertyCard:focus-within .interested {
+  opacity: 1;
+}
+
+.interested:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (hover: none) {
+  /* Its own row under the details, so the price and the area are never
+     squeezed out to make room for it on a phone. */
+  .propertyCard {
+    flex-wrap: wrap;
+  }
+  .propertyBody {
+    flex-basis: 10rem;
+  }
+  .interested {
+    position: static;
+    flex: none;
+    margin-left: auto;
+    opacity: 1;
+  }
+}
+
+/* --- the booked meeting (spec 006 FR-006) --------------------------------- */
+
+.meetingCard {
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 0.75rem;
+  background: var(--bg);
+}
+
+.meetingLabel {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.meetingWhen {
+  margin: 0.15rem 0 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.meetingWhat {
+  margin: 0.1rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
 }

@@ -1,5 +1,6 @@
 import type { Logger } from "pino";
 import type { getDb } from "../db/client.ts";
+import { followup } from "./followup.ts";
 import { summarize } from "./summarize.ts";
 import { unansweredTurns } from "./unanswered-turns.ts";
 
@@ -30,4 +31,4 @@ export interface SweepConsumer {
 }
 
 /** Runs in order, once per sweep. Spec 005 and 006 append; nothing reorders. */
-export const consumers: SweepConsumer[] = [unansweredTurns, summarize];
+export const consumers: SweepConsumer[] = [unansweredTurns, summarize, followup];

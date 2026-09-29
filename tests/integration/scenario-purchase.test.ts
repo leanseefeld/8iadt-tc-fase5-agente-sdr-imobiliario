@@ -140,7 +140,9 @@ test("Cenário 1 runs end to end (SC-001, SC-003, SC-004)", { skip: !integration
     }
   });
 
-  await t.test("the last turn proposes a viewing and keeps the conversation active (FR-040)", async () => {
+  await t.test("the last turn offers a visit and keeps the conversation active (FR-040)", async () => {
+    // Spec 006 FR-004e: cards are on screen and none was pointed at, so the offer
+    // is a visit that first asks which property (or the phone instead).
     assert.equal(last.meeting, "viewing", `meeting was ${String(last.meeting)}`);
     assert.equal(last.handoffReason, null, "a hot lead with contact is not a handoff (ADR 19)");
 
@@ -164,7 +166,10 @@ test("Cenário 1 runs end to end (SC-001, SC-003, SC-004)", { skip: !integration
 
   t.after(async () => {
     await query("delete from events where conversation_id = $1", [conversationId]);
+    // Spec 006: the offer is now a proposed appointment row.
+    await query("delete from appointments where conversation_id = $1", [conversationId]);
     await query("delete from messages where conversation_id = $1", [conversationId]);
+    await query("delete from followup_jobs where conversation_id = $1", [conversationId]);
     await query("delete from conversations where id = $1", [conversationId]);
     await query("delete from leads where id = $1", [leadId]);
     await closePool();

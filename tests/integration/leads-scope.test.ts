@@ -151,11 +151,19 @@ test("the leads queue is scoped by agency and filtered by Meus leads", {
       userId: ana,
       page: 1,
     });
-    assert.ok(scheduled.rows.some((row) => row.name === "Camila Andrade"));
-    assert.ok(
-      scheduled.rows.every((row) => row.stage === "scheduled"),
-      "the filter returns nothing that is not at that stage",
+    // Spec 006 FR-008b: derived from a confirmed meeting still to come, not the
+    // stage. (The seeded meeting is relative to the seed run, so whether Camila
+    // is listed depends on when the database was seeded; the rule does not.)
+    const { rows: booked } = await getPool().query<{ lead_id: string }>(
+      "select distinct lead_id from appointments where agency_id = $1 and status = 'confirmed' and scheduled_at >= now()",
+      [agencyId],
     );
+    const withMeeting = new Set(booked.map((row) => row.lead_id));
+    assert.ok(
+      scheduled.rows.every((row) => withMeeting.has(row.id)),
+      "every row of this filter has a confirmed meeting still to come",
+    );
+    assert.equal(scheduled.total, withMeeting.size);
   });
 });
 

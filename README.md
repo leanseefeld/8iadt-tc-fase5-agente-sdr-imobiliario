@@ -101,6 +101,17 @@ docker compose up
 O chat é a demonstração: abra `/chat/demo` no celular ou numa janela estreita,
 aceite o termo e converse. `demo` é o *slug* da imobiliária semeada.
 
+**Usuários semeados** — entre em http://localhost:3100/login. Todos com a senha
+`demo1234`, só para desenvolvimento local:
+
+| E-mail | Papel | O que vê |
+|---|---|---|
+| `carla@demo.com.br` | gerente comercial (Carla Nunes) | todos os leads e a agenda da imobiliária; liga e desliga o follow-up automático |
+| `ana@demo.com.br` | corretora (Ana Ribeiro) | começa em *Meus leads*; a agenda mostra só as visitas dela |
+| `bruno@demo.com.br` | corretor (Bruno Castro) | idem, com os leads e as visitas dele |
+
+Vêm de `src/db/seed/index.ts` (`npm run db:seed`, que é idempotente).
+
 As portas evitam de propósito as mais disputadas (3000, 5432, 8000, 8001, 80) para
 o projeto conviver com outros na mesma máquina. Para movê-las, altere `APP_PORT`,
 `WORKER_HEALTH_PORT` ou `DB_PORT` no `.env` — nada mais precisa mudar.
@@ -124,11 +135,38 @@ docker compose exec app npm test
 docker compose exec app npm run lint
 ```
 
-A suíte de integração fala com o banco e com o modelo local, e por isso é lenta e
-fica atrás de uma variável:
+#### Testes de integração
+
+A suíte de integração fala com o banco, com o modelo local e com um app rodando de
+verdade. Ela nunca toca a demo: usa um **banco só dela** (`sdr_test`), recriado,
+migrado e populado a cada execução, e um **app só dela** (`app-test`, porta 3200),
+o mesmo código apontado para esse banco. Traces que esse app manda ao Langfuse
+ficam no ambiente `test`.
+
+Uma vez, suba o app de teste (ele fica rodando, como o resto do stack):
+
+```bash
+docker compose --profile test up -d app-test
+```
+
+Depois, sempre que quiser rodar a suíte:
 
 ```bash
 docker compose exec app npm run test:integration
+```
+
+Um arquivo só, no mesmo banco novo:
+
+```bash
+docker compose exec app npm run test:integration -- tests/integration/booking.test.ts
+```
+
+Se o `app-test` não estiver respondendo, a execução **falha** e mostra o comando
+para subi-lo — os testes HTTP não somem por esquecimento. Para rodar sem eles, de
+propósito:
+
+```bash
+docker compose exec -e SKIP_HTTP_TESTS=1 app npm run test:integration
 ```
 
 Quanto o agente acerta ao **ler** uma mensagem é medido à parte, com rótulos

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { WireProperty } from "@/app/api/chat/wire";
+import type { WireBooking, WireProperty } from "@/app/api/chat/wire";
+import MeetingCard from "./MeetingCard";
 import PropertyCard from "./PropertyCard";
 import styles from "./chat.module.css";
 
@@ -38,6 +39,8 @@ export interface ChatWidgetProps {
   openingQuestion: string;
   /** Two missed pulses is the "Conexão perdida" threshold (FR-048). */
   pulseIntervalMs: number;
+  /** The agency's IANA zone: a booked time reads the same here as in the reply above it. */
+  timeZone: string;
 }
 
 type Role = "lead" | "agent" | "broker";
@@ -51,6 +54,8 @@ interface Bubble {
   repliesToMessageId?: string;
   /** The catalog rows this reply put on the screen (FR-021). */
   propertyIds?: string[];
+  /** The meeting this reply confirmed (spec 006 FR-006). */
+  booking?: WireBooking;
   /** A lead bubble the server has not confirmed yet — "enviando" (FR-049). */
   pending?: boolean;
   /** Never persisted: the consent notice, the opening question, a template reply. */
@@ -64,6 +69,7 @@ interface WireMessage {
   role: Role;
   content: string;
   propertyIds?: string[];
+  booking?: WireBooking;
   repliesToMessageId?: string;
   createdAt: string;
 }
@@ -108,6 +114,7 @@ function toBubble(message: WireMessage): Bubble {
     content: message.content,
     repliesToMessageId: message.repliesToMessageId,
     propertyIds: message.propertyIds,
+    booking: message.booking,
   };
 }
 
@@ -123,6 +130,7 @@ export default function ChatWidget({
   consentNotice,
   openingQuestion,
   pulseIntervalMs,
+  timeZone,
 }: ChatWidgetProps) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -403,6 +411,17 @@ export default function ChatWidget({
     [draft, post],
   );
 
+  /**
+   * FR-004c: "Interessado" on a card says what the lead would have typed, and
+   * says it as the lead — the same send path, the same bubble, the same turn.
+   */
+  const interested = useCallback(
+    (code: string) => {
+      void post(`Interessado em ${code}`);
+    },
+    [post],
+  );
+
   // 4 · rendering ------------------------------------------------------------
 
   /**
@@ -519,9 +538,16 @@ export default function ChatWidget({
               {cards.length === 0 ? null : (
                 <div className={styles.cards}>
                   {cards.map((property) => (
-                    <PropertyCard key={property.id} property={property} />
+                    <PropertyCard
+                      key={property.id}
+                      property={property}
+                      onInterested={sendingDisabled ? undefined : interested}
+                    />
                   ))}
                 </div>
+              )}
+              {bubble.booking === undefined ? null : (
+                <MeetingCard booking={bubble.booking} timeZone={timeZone} />
               )}
               {bubble.role === "lead" && bubble.local !== true ? (
                 <span className={styles.state}>

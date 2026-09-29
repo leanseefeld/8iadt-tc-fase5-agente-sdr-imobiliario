@@ -134,6 +134,7 @@ export const webChannel: ChannelAdapter = {
       content: message.text,
       propertyIds: message.propertyIds,
       paused: message.paused,
+      isFollowUp: message.isFollowUp,
     });
 
     if (written === null) {

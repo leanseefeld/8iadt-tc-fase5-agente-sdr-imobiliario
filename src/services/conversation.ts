@@ -1,10 +1,11 @@
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
-import { agencies, conversations, events as events_, leads, messages, users } from "../db/schema.ts";
+import { agencies, appointments, conversations, events as events_, leads, messages, properties, users } from "../db/schema.ts";
 import { getConfig } from "../core/config.ts";
 import { EMPTY_SLOTS, slotsSchema, type Intent, type SlotKey, type Slots } from "../domain/slots.ts";
 import type { HandoffReason } from "../domain/handoff.ts";
 import { recordToolSpans } from "../core/langfuse.ts";
+import { cancelFollowup, scheduleFollowup } from "./followup.ts";
 import { maskPII, maskText } from "../core/security.ts";
 import { MESSAGE_CHANNEL } from "../core/notifier.ts";
 
@@ -96,11 +97,19 @@ export interface LoadedTurn {
   /** Broker user id → first name, for labelling their messages in the prompt. */
   brokerNames: Record<string, string>;
   /**
-   * An `appointment.proposed` row already exists. Until spec 006 writes that
-   * event, the stand-in is the offering message's metadata — see
-   * `offerOutstanding`.
+   * An offer to meet was **ever** made here (an `appointment.proposed` event).
+   * Stays true after a booking or a decline: it is what keeps the agent from
+   * offering again on its own — see `offerOutstanding`.
    */
   appointmentProposed: boolean;
+  /**
+   * A proposal is open **right now**: an appointment row still `proposed`.
+   * What a decline or a pick can act on. False once it is booked, declined or
+   * replaced — reading the event instead took "não vou mais poder" after a
+   * booking for a decline, and told the lead "sem problema" with the visit
+   * still confirmed.
+   */
+  proposalOpen: boolean;
 }
 
 /** Either end of the turn: the route handler has a session, the worker has an id. */
@@ -163,7 +172,7 @@ export async function loadTurn(ref: TurnRef): Promise<LoadedTurn | null> {
   const conversationId = row.conversation.id;
   const windowStart = new Date(Date.now() - config.CHAT_BUDGET_WINDOW_MINUTES * 60_000);
 
-  const [recent, unanswered, budget, handoverRows, proposedRows] = await Promise.all([
+  const [recent, unanswered, budget, handoverRows, proposedRows, openRows] = await Promise.all([
     db
       .select()
       .from(messages)
@@ -215,6 +224,11 @@ export async function loadTurn(ref: TurnRef): Promise<LoadedTurn | null> {
       .from(events_)
       .where(and(eq(events_.conversationId, conversationId), eq(events_.type, "appointment.proposed")))
       .limit(1),
+    db
+      .select({ id: appointments.id })
+      .from(appointments)
+      .where(and(eq(appointments.conversationId, conversationId), eq(appointments.status, "proposed")))
+      .limit(1),
   ]);
 
   return {
@@ -254,6 +268,7 @@ export async function loadTurn(ref: TurnRef): Promise<LoadedTurn | null> {
       handoverRows.map((row) => [row.userId, firstName(row.name)]),
     ),
     appointmentProposed: proposedRows.length > 0,
+    proposalOpen: openRows.length > 0,
   };
 }
 
@@ -293,6 +308,74 @@ export function lastSearchOutcome(
   if (last === undefined) return null;
   const ids = last.metadata.propertyIds;
   return { count: Array.isArray(ids) ? ids.length : 0 };
+}
+
+/** FR-005: the times the latest options message offered, in the order the lead saw them. */
+export function lastOfferedOptions(turn: LoadedTurn): Date[] {
+  const carrier = [...turn.history]
+    .reverse()
+    .find((message) => message.role === "agent" && Array.isArray(message.metadata.meetingOptions));
+  if (carrier === undefined) return [];
+  return (carrier.metadata.meetingOptions as unknown[])
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => new Date(value));
+}
+
+/** The kind of meeting the latest options message offered, if one did. */
+export function lastOfferedType(turn: LoadedTurn): "viewing" | "call" | null {
+  const carrier = [...turn.history]
+    .reverse()
+    .find((message) => message.role === "agent" && Array.isArray(message.metadata.meetingOptions));
+  const kind = carrier?.metadata.meeting;
+  return kind === "viewing" || kind === "call" ? kind : null;
+}
+
+/** FR-004b: the most recent property the lead pointed at, if any. */
+export function latestInterestedProperty(turn: LoadedTurn): { id: string; code: string } | null {
+  const carrier = [...turn.history]
+    .reverse()
+    .find((message) => message.role === "agent" && typeof message.metadata.interestedProperty === "object");
+  const value = carrier?.metadata.interestedProperty as { id?: unknown; code?: unknown } | undefined;
+  return typeof value?.id === "string" && typeof value.code === "string" ? { id: value.id, code: value.code } : null;
+}
+
+export type PropertyRef = { position: number } | { code: string };
+
+/**
+ * FR-004b: resolve "o segundo" or "VMA-0005" to a property — **only** among the
+ * properties already shown in this conversation, never the catalog at large.
+ * A position counts in the latest set of cards; a code may be any card shown so
+ * far. Anything else is `null`: ignored, never guessed.
+ */
+export async function resolvePropertyRef(
+  turn: LoadedTurn,
+  ref: PropertyRef,
+): Promise<{ id: string; code: string } | null> {
+  const withCards = turn.history.filter(
+    (message) => message.role === "agent" && Array.isArray(message.metadata.propertyIds),
+  );
+  const shown = withCards.flatMap((message) => message.metadata.propertyIds as string[]);
+  if (shown.length === 0) return null;
+
+  const db = getDb();
+  if ("position" in ref) {
+    const latest = withCards.at(-1)?.metadata.propertyIds as string[];
+    const id = latest[ref.position - 1];
+    if (id === undefined) return null;
+    const [row] = await db.select({ id: properties.id, code: properties.code }).from(properties).where(eq(properties.id, id));
+    return row ?? null;
+  }
+  const [row] = await db
+    .select({ id: properties.id, code: properties.code })
+    .from(properties)
+    .where(
+      and(
+        eq(properties.agencyId, turn.agency.id),
+        sql`upper(${properties.code}) = ${ref.code.toUpperCase()}`,
+        inArray(properties.id, shown),
+      ),
+    );
+  return row ?? null;
 }
 
 export function lastTurnWasReconfirmation(turn: LoadedTurn): boolean {
@@ -574,6 +657,8 @@ export async function recordLeadMessage(inbound: InboundLeadMessage): Promise<In
         .update(conversations)
         .set({ lastLeadMessageAt: now, updatedAt: now })
         .where(and(eq(conversations.id, conversationId), eq(conversations.agencyId, agency.id)));
+      // Spec 006 FR-010: the lead wrote, so nothing is owed to them any more.
+      await cancelFollowup(tx, conversationId, now);
     }
 
     if (newEvents.length > 0) {
@@ -659,9 +744,33 @@ export interface CommitTurnInput {
   meeting?: "viewing" | "call" | null;
   /** Set when this turn was a reconfirmation (FR-009). */
   reconfirmation?: boolean;
+  /** Spec 006: what this turn did about a meeting, for later turns and the widget. */
+  scheduling?: SchedulingRecord;
+  /**
+   * Spec 006 FR-009: the reply leaves the lead something to answer — the
+   * script's next question, or options awaiting a pick. The follow-up clock
+   * starts when this is true; its guards decide whether it may.
+   */
+  awaitingLead?: boolean;
   toolCalls?: CommittedToolCall[];
   traceId?: string | null;
   now?: Date;
+}
+
+/**
+ * Spec 006's facts about a meeting, stored on the agent message that carried
+ * them. Later turns derive everything from these — never from memory held
+ * between turns (ADR 22).
+ */
+export interface SchedulingRecord {
+  /** The times this reply offered, ISO, in the order numbered (FR-005 reads them back). */
+  options?: string[];
+  /** The lead declined the open proposal this turn (FR-005a). */
+  declined?: boolean;
+  /** The property the lead pointed at this turn (FR-004b). */
+  interestedProperty?: { id: string; code: string };
+  /** The meeting booked this turn; the widget renders it as a card (FR-006). */
+  booking?: { appointmentId: string; scheduledAt: string; type: "viewing" | "call"; propertyCode: string | null };
 }
 
 export interface CommitTurnResult {
@@ -726,7 +835,16 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
       })),
   );
 
-  const leadStatus = nextLeadStatus(turn.lead.status, input.intent, input.qualified);
+  // Spec 006: a booking moved the lead to `scheduled` during this turn, in its
+  // own transaction, with its own event. The stage loaded at the start of the
+  // turn is stale by then; writing it back would undo the booking's.
+  const stageNow =
+    input.scheduling?.booking === undefined
+      ? turn.lead.status
+      : ((
+          await getDb().select({ status: leads.status }).from(leads).where(eq(leads.id, turn.lead.id))
+        )[0]?.status as LeadStatus | undefined) ?? turn.lead.status;
+  const leadStatus = nextLeadStatus(stageNow, input.intent, input.qualified);
   const conversationStatus: ConversationStatus =
     input.optedOut === true ? "closed" : input.handoffReason != null ? "paused" : turn.conversation.status;
 
@@ -762,10 +880,10 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
   if (input.optedOut === true) {
     events.push({ type: "lead.opted_out", payload: {} });
   }
-  if (leadStatus !== turn.lead.status) {
+  if (leadStatus !== stageNow) {
     events.push({
       type: "lead.status_changed",
-      payload: { from: turn.lead.status, to: leadStatus },
+      payload: { from: stageNow, to: leadStatus },
     });
   }
 
@@ -786,6 +904,12 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
           ...(input.guard != null ? { guard: input.guard } : {}),
           ...(input.meeting != null ? { meeting: input.meeting } : {}),
           ...(input.reconfirmation === true ? { reconfirmation: true } : {}),
+          ...(input.scheduling?.options !== undefined ? { meetingOptions: input.scheduling.options } : {}),
+          ...(input.scheduling?.declined === true ? { offerDeclined: true } : {}),
+          ...(input.scheduling?.interestedProperty !== undefined
+            ? { interestedProperty: input.scheduling.interestedProperty }
+            : {}),
+          ...(input.scheduling?.booking !== undefined ? { booking: input.scheduling.booking } : {}),
           // Masked one level down, not as a whole: `maskPII` is key-aware and a
           // tool's `name` is the tool's, not a person's — masking the object
           // would write `u***` where `updateSlots` belongs.
@@ -819,6 +943,10 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
       .where(
         and(eq(conversations.id, turn.conversation.id), eq(conversations.agencyId, turn.agency.id)),
       );
+
+    if (input.awaitingLead === true) {
+      await scheduleFollowup(tx, turn.conversation.id, now);
+    }
 
     await tx
       .update(leads)
@@ -883,6 +1011,8 @@ export interface OutboundRecord {
   propertyIds?: string[];
   /** Hand the conversation to a person as part of this write (FR-028). */
   paused?: boolean;
+  /** Spec 006 FR-015: a follow-up, marked so the dashboard and the metrics can tell. */
+  isFollowUp?: boolean;
   now?: Date;
 }
 
@@ -936,6 +1066,7 @@ export async function recordOutboundMessage(
             ? { propertyIds: input.propertyIds }
             : {}),
           ...(input.userId !== undefined ? { userId: input.userId } : {}),
+          ...(input.isFollowUp === true ? { isFollowUp: true } : {}),
         },
         createdAt: now,
       })

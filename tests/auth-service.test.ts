@@ -100,9 +100,14 @@ test("auth service against the seeded agency", { skip: !integration }, async (t)
   });
 
   const [firstLead] = await db
-    .select({ id: leads.id })
+    .select({ id: leads.id, assignedBrokerId: leads.assignedBrokerId })
     .from(leads)
     .where(eq(leads.agencyId, ana.agencyId));
+  // The reassignment below is real; the seeded owner goes back afterwards, so
+  // no later test in the same database finds the lead with someone else.
+  t.after(async () => {
+    await db.update(leads).set({ assignedBrokerId: firstLead.assignedBrokerId }).where(eq(leads.id, firstLead.id));
+  });
 
   const eventsFor = (leadId: string) =>
     db
@@ -157,5 +162,5 @@ test("auth service against the seeded agency", { skip: !integration }, async (t)
     await assert.rejects(reassignLead(foreign, firstLead.id, bruno.id), /broker of this agency/);
   });
 
-  await closePool();
+  t.after(closePool);
 });

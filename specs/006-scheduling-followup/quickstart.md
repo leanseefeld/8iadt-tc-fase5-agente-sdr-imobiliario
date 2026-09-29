@@ -34,6 +34,24 @@ Restart the worker after changing `.env`: `docker compose restart worker`.
    no property, and the assigned broker's `specializations` include
    `investment` — falling back to any broker if none does.
 
+### 1a · Getting out of an offer (FR-005a–c, SC-013) *(added 2026-09-28)*
+
+In one conversation, after options were offered:
+
+1. *"e em Vila Mariana, tem algo?"* — handled as a revision (cards or a no-match);
+   the options are **not** repeated.
+2. *"pode ser aquela de quinta então"* — books the Thursday option that is still
+   open from two turns ago.
+
+In a second conversation, after options were offered:
+
+3. *"tem outro horário? só de manhã"* — a new proposal replaces the old one, all
+   morning slots.
+4. *"agora não, obrigado"* — acknowledged without insisting. Three more unrelated
+   messages bring **no** new offer.
+5. *"na verdade quero marcar uma visita"* — the lead's own request still reaches
+   proposing.
+
 ## 2 · The follow-up sweep (US2 — the graded scenario)
 
 1. Answer two qualification questions in the widget, then stop replying; confirm
@@ -74,8 +92,7 @@ Restart the worker after changing `.env`: `docker compose restart worker`.
    `actorUserId`.
 4. Clear all appointments for a broker (or view an empty day range); confirm
    the explanatory empty-state copy renders, not a blank list.
-5. On "Minha disponibilidade", disable one weekday and narrow another's hours;
-   save; confirm the next proposal computed for that broker skips them.
+5. *Cut 2026-09-28 — the availability editor is backlog 34.*
 
 ## 5 · Eligibility and window rules (SC-007)
 
@@ -110,3 +127,19 @@ npm test -- env-example               # SCHEDULING_MIN_NOTICE_MINUTES, SCHEDULIN
                                        # FOLLOWUP_FIRST_DELAY_HOURS gone
 INTEGRATION=1 npm test -- followup-writer   # SC-006, against local oMLX
 ```
+
+## 8 · Added 2026-09-28
+
+**Interessado button (FR-004c/d, SC-016).** On a phone-width window (390 px), tap **Interessado** on a card.
+*"Interessado em <code>"* appears as your message. With a complete script you get options for that property;
+book one, and the confirmation names the code. With a mouse, the button shows on hover and on keyboard focus.
+
+**Who will attend (FR-005e, SC-015).** After booking, ask *"quem vai me atender?"* — no name, and the
+appointment is confirmed as being in the system. Repeat after a broker assumes and returns the conversation.
+
+**One reply per turn (FR-005g, SC-017).** With an offer open, send *"agora não — mas tem algo em Moema?"*: the
+acknowledgement first, then the Moema results; no times, no reconfirmation.
+
+**Agency switch (FR-019, SC-014).** As the sales manager, switch *Follow-up automático* off on the leads
+dashboard, let the stale lead's attempt come due: nothing is sent and its follow-up state returns to *none*.
+Switch it on; the next attempt to come due is sent. As a broker, the switch is visible but not editable.

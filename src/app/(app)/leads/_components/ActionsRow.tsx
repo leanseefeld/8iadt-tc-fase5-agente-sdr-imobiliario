@@ -9,6 +9,7 @@ import {
   returnToAgentAction,
   setLeadStatusAction,
   reassignLeadAction,
+  triggerFollowupAction,
 } from "../actions";
 import { STAGE_LABEL } from "./labels";
 import styles from "../leads.module.css";
@@ -22,6 +23,8 @@ interface Props {
   role: UserRole;
   /** The agency's brokers; empty for anyone who cannot reassign. */
   brokers: Array<{ id: string; name: string }>;
+  /** Spec 006 FR-017: why the follow-up can't be sent now, or null when it can. */
+  followupBlocker: string | null;
 }
 
 type Feedback = { text: string; error: boolean } | null;
@@ -41,12 +44,14 @@ export function ActionsRow({
   stage,
   role,
   brokers,
+  followupBlocker,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [primaryMessage, setPrimaryMessage] = useState<Feedback>(null);
   const [stageMessage, setStageMessage] = useState<Feedback>(null);
   const [reassignMessage, setReassignMessage] = useState<Feedback>(null);
+  const [followupMessage, setFollowupMessage] = useState<Feedback>(null);
   const [nextStage, setNextStage] = useState<LeadStage | "">("");
   const [brokerId, setBrokerId] = useState("");
 
@@ -73,6 +78,18 @@ export function ActionsRow({
         setNextStage("");
         router.refresh();
       }
+    });
+  }
+
+  function runFollowupNow(): void {
+    startTransition(async () => {
+      const result = await triggerFollowupAction(leadId);
+      setFollowupMessage(
+        result.ok
+          ? { text: "Na fila: sai na próxima varredura do worker, dentro do horário de envio.", error: false }
+          : { text: result.message, error: true },
+      );
+      if (result.ok) router.refresh();
     });
   }
 
@@ -140,6 +157,28 @@ export function ActionsRow({
         {stageMessage && (
           <p className={`${styles.actionMessage} ${stageMessage.error ? styles.actionMessageError : ""}`}>
             {stageMessage.text}
+          </p>
+        )}
+      </div>
+
+      <div className={styles.actionsSecondary}>
+        <button
+          type="button"
+          className={styles.secondaryButton}
+          onClick={runFollowupNow}
+          disabled={pending || followupBlocker !== null}
+          aria-describedby={followupBlocker !== null ? `followup-blocker-${leadId}` : undefined}
+        >
+          Enviar follow-up agora
+        </button>
+        {followupBlocker !== null && !followupMessage && (
+          <p id={`followup-blocker-${leadId}`} className={styles.helperText}>
+            {followupBlocker}
+          </p>
+        )}
+        {followupMessage && (
+          <p className={`${styles.actionMessage} ${followupMessage.error ? styles.actionMessageError : ""}`}>
+            {followupMessage.text}
           </p>
         )}
       </div>

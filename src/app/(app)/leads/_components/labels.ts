@@ -25,7 +25,10 @@ export const STAGE_LABEL: Record<LeadStage, string> = {
   new: "Novo",
   qualifying: "Qualificando",
   qualified: "Qualificado",
-  scheduled: "Visita marcada",
+  // The stage, not the meeting: *Visita marcada* is the filter derived from a
+  // confirmed future appointment (spec 006 FR-008b). A lead whose meeting was
+  // cancelled stays at this stage, and must not read as having one booked.
+  scheduled: "Agendamento feito",
   visited: "Visitado",
   won: "Ganho",
   lost: "Perdido",

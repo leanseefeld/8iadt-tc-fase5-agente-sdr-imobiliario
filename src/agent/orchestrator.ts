@@ -27,8 +27,14 @@ import {
   claimTurn,
   commitTurn,
   lastSearchOutcome,
+  lastOfferedOptions,
+  lastOfferedType,
   lastTurnWasReconfirmation,
+  latestInterestedProperty,
   loadTurn,
+  resolvePropertyRef,
+  type PropertyRef,
+  type SchedulingRecord,
   offerOutstanding,
   releaseTurn,
   type CommittedToolCall,
@@ -52,7 +58,29 @@ import { REPLY_SYSTEM_PROMPT, extractionSystemPrompt, turnBriefing } from "./pro
 import { getJsonModel, modelCall } from "./provider.ts";
 import { plausiblyAnswers, recoverSlot } from "./recovery.ts";
 import { act } from "./act.ts";
-import { actionTools, runProposeMeeting, type SearchOutcome } from "./tools/index.ts";
+import { actionTools, type SearchOutcome } from "./tools/index.ts";
+import {
+  NO_PROPERTY_YET_SENTENCE,
+  PHONE_OFFER_SENTENCE,
+  VISIT_NEEDS_PROPERTY_SENTENCE,
+  ATTENDEE_UNKNOWN_SENTENCE,
+  BOOKING_REFUSED,
+  DECLINE_ACKNOWLEDGEMENT,
+  DETAILS_FIRST_SENTENCE,
+  NO_OPTIONS_FOR_CONSTRAINT_SENTENCE,
+  NO_OPTIONS_SENTENCE,
+  bookingBriefing,
+  confirmationSentence,
+  optionsSentence,
+  stillValidSentence,
+} from "./prompts/meeting.ts";
+import {
+  declineProposal,
+  hasConfirmedFutureAppointment,
+  proposeAppointment,
+  type BookResult,
+} from "../services/scheduling.ts";
+import type { MeetingType, Preference, Weekday } from "../domain/scheduling.ts";
 import { isTrue, normalizeExtraction } from "./tools/update-slots.ts";
 
 /**
@@ -294,9 +322,70 @@ interface Extraction {
   attemptedAnswer: boolean;
   /** The lead asked what the agent is filtering by. */
   askedAboutCriteria: boolean;
+  /** Spec 006: what the message says about a meeting. Code decides what each fact does. */
+  scheduling: SchedulingFacts;
   /** Closed-set slots the evidence gate refused — understood, but not trusted. */
   dropped: SlotKey[];
   failed: boolean;
+}
+
+interface SchedulingFacts {
+  declinedOffer: boolean;
+  askedForTimes: boolean;
+  pickedTime: boolean;
+  preference: Preference;
+  propertyRef: PropertyRef | null;
+  askedWhoAttends: boolean;
+  /** FR-004g: cancel or move a meeting already confirmed (spec 009 acts on it; until then, "ainda não consigo"). */
+  wantsToChangeBooking: boolean;
+  /** FR-004e/f: the lead asked for a visit or for a phone conversation. */
+  meetingKind: "visit" | "call" | null;
+  /** FR-005h: a meeting in a format the agency doesn't offer (office, video, …). */
+  unsupportedMeeting: boolean;
+  /** FR-005i: something about a visit the agency doesn't do (a ride, choosing the broker by a trait, …). */
+  outOfScopeRequest: boolean;
+}
+
+const NO_SCHEDULING: SchedulingFacts = {
+  declinedOffer: false,
+  askedForTimes: false,
+  pickedTime: false,
+  preference: {},
+  propertyRef: null,
+  askedWhoAttends: false,
+  wantsToChangeBooking: false,
+  meetingKind: null,
+  unsupportedMeeting: false,
+  outOfScopeRequest: false,
+};
+
+const WEEKDAYS: readonly Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+
+/** Read spec 006's facts off the extraction's JSON. Anything malformed is simply absent. */
+export function readSchedulingFacts(object: Record<string, unknown>): SchedulingFacts {
+  const preference: Preference = {};
+  if (typeof object.preferredWeekday === "string" && (WEEKDAYS as readonly string[]).includes(object.preferredWeekday)) {
+    preference.weekday = object.preferredWeekday as Weekday;
+  }
+  if (object.preferredPeriod === "morning" || object.preferredPeriod === "afternoon") {
+    preference.period = object.preferredPeriod;
+  }
+  const code = typeof object.propertyCode === "string" ? object.propertyCode.trim() : "";
+  const position = Number(object.propertyPosition);
+  const propertyRef: PropertyRef | null =
+    code !== "" ? { code } : Number.isInteger(position) && position > 0 ? { position } : null;
+  return {
+    declinedOffer: isTrue(object.declinedOffer),
+    askedForTimes: isTrue(object.askedForTimes),
+    pickedTime: isTrue(object.pickedTime),
+    preference,
+    propertyRef,
+    askedWhoAttends: isTrue(object.askedWhoAttends),
+    wantsToChangeBooking: isTrue(object.wantsToChangeBooking),
+    meetingKind: object.meetingKind === "visit" || object.meetingKind === "call" ? object.meetingKind : null,
+    unsupportedMeeting: isTrue(object.unsupportedMeeting),
+    outOfScopeRequest: isTrue(object.outOfScopeRequest),
+  };
 }
 
 const NOTHING: Extraction = {
@@ -306,6 +395,7 @@ const NOTHING: Extraction = {
   saidSomething: false,
   attemptedAnswer: false,
   askedAboutCriteria: false,
+  scheduling: NO_SCHEDULING,
   dropped: [],
   failed: true,
 };
@@ -315,6 +405,29 @@ const NOTHING: Extraction = {
  * turn and a failed extraction hold it. An attempt the system could not use
  * advances it. A dropped slot also holds, because it was understood.
  */
+export type ReplyKind = "confirmation" | "options" | "search" | "criteria" | "reconfirmation" | "question";
+
+/**
+ * FR-005g: when several kinds of reply apply to one turn, exactly one decides
+ * what the reply says — what the lead most needs to know first. `options` also
+ * covers an answer that there are no times, which answers the same request. A
+ * decline acknowledgement is not here: it is a prefix, not a competitor.
+ */
+export function replyKind(turn: {
+  booked: boolean;
+  options: boolean;
+  searched: boolean;
+  askedAboutCriteria: boolean;
+  reconfirmation: boolean;
+}): ReplyKind {
+  if (turn.booked) return "confirmation";
+  if (turn.options) return "options";
+  if (turn.searched) return "search";
+  if (turn.askedAboutCriteria) return "criteria";
+  if (turn.reconfirmation) return "reconfirmation";
+  return "question";
+}
+
 /** When a second, narrow extraction call is worth making for the pending slot. */
 export function shouldRecover(input: {
   stillPending: boolean;
@@ -343,6 +456,18 @@ export function accountTurn(
     /** Asked what the current criteria are. Not a misunderstanding (FR-018). */
     askedAboutCriteria?: boolean;
     /**
+     * Spec 006: the lead acted on a meeting — declined it, asked for times,
+     * picked one, or pointed at a property. Understood and acted on, so it resets
+     * the count like learning a slot does.
+     */
+    acted?: boolean;
+    /**
+     * Spec 006 FR-005h/i: the lead asked for something the agency doesn't do.
+     * Understood, and still a request the agent can't act on — the streak
+     * advances, so a second one in a row hands off.
+     */
+    refused?: boolean;
+    /**
      * Ignored. It used to keep a steering attempt off the streak. That shield
      * is gone (FR-026); the call site still records the attempt as a guard.
      */
@@ -352,7 +477,8 @@ export function accountTurn(
   // The steering shield is gone. Callers still pass the flag so the call site
   // shows the attempt was recognised; the count does not read it.
   void turn.steering;
-  if (turn.learnedSomething) return { notUnderstood: false, fallbackStreak: 0 };
+  if (turn.refused === true) return { notUnderstood: true, fallbackStreak: currentStreak + 1 };
+  if (turn.learnedSomething || turn.acted === true) return { notUnderstood: false, fallbackStreak: 0 };
   // A failed extraction is not consulted for `attemptedAnswer` (FR-003c).
   // A confirmation, or a question about the current criteria, holds the count.
   if (
@@ -467,6 +593,7 @@ async function extract(turn: LoadedTurn, pending: Askable | null): Promise<Extra
       const optedOut = isTrue(object.optOut);
       const attemptedAnswer = isTrue(object.attemptedAnswer);
       const askedAboutCriteria = isTrue(object.askedAboutCriteria);
+      const scheduling = readSchedulingFacts(object);
 
       // The transcript and the spans keep the vocabulary they had when this was
       // a tool call: `commitTurn` writes these, not the AI SDK, and
@@ -483,6 +610,7 @@ async function extract(turn: LoadedTurn, pending: Askable | null): Promise<Extra
         saidSomething: Object.keys(extracted).length > 0,
         attemptedAnswer,
         askedAboutCriteria,
+        scheduling,
         dropped: gated.dropped,
         failed: false,
       };
@@ -543,6 +671,12 @@ interface PhraseInput {
    * three property cards.
    */
   fallbackText?: string;
+  /**
+   * Spec 006 FR-005g: a code-written sentence sent before the phrased reply —
+   * the decline acknowledgement, or "complete your details first". It does not
+   * compete with the reply; it precedes whatever wins.
+   */
+  prefix?: string;
   sink: ReplySink;
   startedAt: number;
 }
@@ -572,6 +706,7 @@ async function phrase(input: PhraseInput): Promise<PhrasedReply> {
   };
 
   try {
+    if (input.prefix !== undefined) await emit(input.prefix);
     const stream = streamText({
       ...modelCall(),
       ...modelTelemetry("model.reply"),
@@ -660,6 +795,8 @@ interface FinishInput {
   meeting?: "viewing" | "call" | null;
   /** This turn restated dependants and asked the lead to confirm them. */
   reconfirmation?: boolean;
+  /** Spec 006: what this turn did about a meeting. */
+  scheduling?: SchedulingRecord;
   optedOut?: boolean;
   toolCalls?: CommittedToolCall[];
   propertyIds?: string[];
@@ -702,6 +839,10 @@ async function finish(input: FinishInput): Promise<TurnResult> {
     guard: input.guard ?? null,
     meeting: input.meeting ?? null,
     reconfirmation: input.reconfirmation === true,
+    ...(input.scheduling === undefined ? {} : { scheduling: input.scheduling }),
+    // FR-009: a question left for the lead, or times awaiting a pick. Handoff
+    // and opt-out never reach here with either set; the guards catch the rest.
+    awaitingLead: input.question !== null || (input.scheduling?.options?.length ?? 0) > 0 || input.meeting != null,
     toolCalls: input.toolCalls ?? [],
     // Absent rather than empty: `commitTurn` writes the key only when there are
     // cards, and no search is not the same thing as a search that found nothing.
@@ -826,6 +967,70 @@ interface RunContext extends RunTurnOptions {
   sink: ReplySink;
   now: Date;
   startedAt: number;
+}
+
+/**
+ * Spec 006 FR-004e/f: what a meeting offer is for. An investor always gets a
+ * call (FR-003a). Otherwise a visit needs a property: with one in play, it is a
+ * visit; asked for the phone — or re-offering phone times already on the table
+ * — it is a call; with cards on screen and none pointed at, the lead is asked
+ * which one; with nothing ever shown, the phone is what there is.
+ */
+export function meetingTarget(input: {
+  intent: Intent;
+  kind: "visit" | "call" | null;
+  property: { id: string; code: string } | null;
+  reofferingCall: boolean;
+  cardsShown: boolean;
+}): "viewing" | "call" | "ask_property" {
+  if (input.intent === "investment") return "call";
+  if (input.kind === "call") return "call";
+  if (input.property !== null) return "viewing";
+  if (input.kind !== "visit" && input.reofferingCall) return "call";
+  return input.cardsShown ? "ask_property" : "call";
+}
+
+/**
+ * Spec 006: propose times and write the sentence that presents them — or the
+ * sentence that says there are none. Code throughout (FR-004a, FR-005d); the
+ * model never proposes. The broker chosen stays inside the service (FR-005e).
+ */
+async function offerTimes(input: {
+  turn: LoadedTurn;
+  intent: Intent;
+  property: { id: string; code: string } | null;
+  constraint: Preference;
+  proposalOpen: boolean;
+  timezone: string;
+}): Promise<{ reply: string; options: Date[]; type: MeetingType | null; call: CommittedToolCall }> {
+  const result = await proposeAppointment({
+    agencyId: input.turn.agency.id,
+    leadId: input.turn.lead.id,
+    conversationId: input.turn.conversation.id,
+    intent: input.intent,
+    propertyId: input.property?.id ?? null,
+    constraint: input.constraint,
+  });
+  if (result.ok) {
+    const type = result.options[0].type;
+    const times = result.options.map((option) => option.scheduledAt);
+    const code = type === "viewing" ? (input.property?.code ?? null) : null;
+    return {
+      reply: optionsSentence(times, type, code, input.timezone),
+      options: times,
+      type,
+      call: { name: "proposeMeeting", arguments: { kind: type, options: times.length } },
+    };
+  }
+  const call: CommittedToolCall = { name: "proposeMeeting", arguments: { status: result.reason } };
+  // FR-005b and FR-001 as amended: nothing matches the constraint — say so and
+  // keep the earlier proposal standing. Never an automatic handoff.
+  if (result.reason === "no_slots_for_constraint") {
+    const earlier = input.proposalOpen ? lastOfferedOptions(input.turn) : [];
+    const rest = earlier.length > 0 ? stillValidSentence(earlier, input.timezone) : "Quer tentar outro dia ou horário?";
+    return { reply: `${NO_OPTIONS_FOR_CONSTRAINT_SENTENCE} ${rest}`, options: [], type: null, call };
+  }
+  return { reply: NO_OPTIONS_SENTENCE, options: [], type: null, call };
 }
 
 async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
@@ -990,6 +1195,65 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       (message) => message.role === "agent" && message.createdAt > lastHandoverEarly.at,
     );
 
+  // Spec 006: what the lead did about a meeting. Each fact is the model's
+  // reading; what it does is decided here.
+  const facts = extraction.scheduling;
+  // Open **now** — a row still `proposed` — not "an offer was ever made".
+  const proposalOpen = turn.proposalOpen;
+  // FR-005a: a decline counts only while a proposal is open.
+  const declining = facts.declinedOffer && proposalOpen;
+  // FR-005f: the booking tool is offered only for an actual pick.
+  const picking = facts.pickedTime && proposalOpen && !declining;
+  // FR-005h/i: a request the agency cannot meet — a meeting at the office or by
+  // video, a ride, a broker chosen by a personal trait. It never proposes or
+  // books, and it counts against the handoff streak like any other request the
+  // agent can't act on.
+  const refusingFormat = facts.unsupportedMeeting && !declining && !picking;
+  // "Quem vai me atender?" is FR-005e's question, not a request to choose.
+  const refusingRequest =
+    facts.outOfScopeRequest && !facts.askedWhoAttends && !refusingFormat && !declining && !picking;
+  // FR-004g: cancelling or moving a confirmed meeting is spec 009's. Until then,
+  // the honest "ainda não consigo" — never a "sem problema" that leaves the
+  // visit confirmed while the lead thinks it's off. A decline with nothing open
+  // to decline, from a lead who has a booking, is the same request.
+  const changingBooking =
+    (facts.wantsToChangeBooking || (facts.declinedOffer && !proposalOpen)) &&
+    !picking &&
+    !refusingFormat &&
+    !refusingRequest &&
+    (await hasConfirmedFutureAppointment(turn.lead.id));
+  const refused = refusingFormat || refusingRequest || changingBooking;
+  // FR-004b: only a property already shown here; anything else is ignored.
+  const interest = facts.propertyRef === null ? null : await resolvePropertyRef(turn, facts.propertyRef);
+  // A pick outranks a request for times on the same message: the extraction
+  // often marks both for "a segunda", and only the pick moves the lead forward.
+  // If the booking step then books nothing, the options are shown again anyway.
+  // FR-005e: "quem vai me atender?" about a meeting that exists gets the
+  // code-written answer, and outranks a meeting kind the extraction echoed from
+  // the confirmation above it. With nothing proposed or booked, the phrased
+  // reply and its system rule answer instead.
+  const askingWhoAttends =
+    facts.askedWhoAttends &&
+    !refused &&
+    !declining &&
+    !picking &&
+    interest === null &&
+    (proposalOpen || (await hasConfirmedFutureAppointment(turn.lead.id)));
+  const wantsOffer =
+    !declining &&
+    !picking &&
+    !refused &&
+    !askingWhoAttends &&
+    (facts.askedForTimes || facts.meetingKind !== null || interest !== null);
+  // FR-005b: "complete" is shouldProposeMeeting's own check, without its
+  // offer-outstanding clause.
+  const scriptComplete = shouldProposeMeeting(intent, slots, score, false) !== null;
+  // FR-004d: several bookings are spec 009. Until then, an honest "can't yet".
+  const alreadyBooked = wantsOffer && scriptComplete && (await hasConfirmedFutureAppointment(turn.lead.id));
+  // A "no" with nothing open to decline was still understood: it is not a
+  // misunderstanding to count towards a handoff, only nothing to act on.
+  const acted = !refused && (facts.declinedOffer || picking || askingWhoAttends || (wantsOffer && !alreadyBooked));
+
   // A misunderstanding is an attempt the system could not use (FR-003a). A
   // reaction, a greeting or a failed extraction holds the streak instead of
   // resetting it (FR-003d). A slot the evidence gate refused is not one of
@@ -1002,25 +1266,106 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     steering,
     confirming: (lastTurnWasReconfirmation(turn) && !learnedSomething) || justReturned,
     askedAboutCriteria: extraction.askedAboutCriteria,
+    acted,
+    refused,
   });
   const notUnderstood = accounted.notUnderstood;
   const fallbackStreak = accounted.fallbackStreak;
+  // A message that picks, asks for or declines a meeting is about the meeting,
+  // not a request to leave the agent: the extraction reads "a segunda" or
+  // "quero agendar" as asking for a person, because the meeting is with one.
+  // The explicit ask still wins on any other message (spec 004 FR-027).
+  // A request refused as outside the domain ("uma corretora LGBT pra me
+  // atender") names a person too; it is still not a request to leave the agent.
+  const aboutTheMeeting = declining || picking || wantsOffer || askingWhoAttends || refused;
   const handoffReason = handoffDecision({
-    leadAskedForHuman: extraction.leadAskedForHuman,
+    leadAskedForHuman: extraction.leadAskedForHuman && !aboutTheMeeting,
     fallbackStreak,
   });
 
-  // FR-040/041: the offer is a decision of the slot machine, not of the model.
-  const meeting =
-    handoffReason === null
-      ? shouldProposeMeeting(intent, slots, score, offerOutstanding(turn))
-      : null;
-  if (meeting !== null) {
-    const offered = runProposeMeeting();
-    toolCalls.push({ name: "proposeMeeting", arguments: { kind: meeting, status: offered.status } });
+  // Spec 006 — the meeting, all decided in code. A code-written reply (options,
+  // no options, a confirmation) wins the turn outright: FR-005g ranks 1 and 2.
+  // A decline or "details first" only prefixes whatever else wins.
+  const timezone = getConfig().FOLLOWUP_TIMEZONE;
+  let scheduling: SchedulingRecord = interest === null ? {} : { interestedProperty: interest };
+  let written: string | null = null;
+  let offeredType: MeetingType | null = null;
+  let prefix: string | undefined;
+  const property = interest ?? latestInterestedProperty(turn);
+  // Re-proposing after a refused booking keeps the kind the lead was offered.
+  const offer = async (constraint: Preference) =>
+    offerTimes({
+      turn,
+      intent,
+      property: lastOfferedType(turn) === "call" ? null : property,
+      constraint,
+      proposalOpen,
+      timezone,
+    });
+
+  if (handoffReason === null) {
+    if (refused) {
+      // FR-005h: after a format we don't offer, the phone — unless a call is booked.
+      const callBooked = refusingFormat && (await hasConfirmedFutureAppointment(turn.lead.id, new Date(), undefined, "call"));
+      written = refusingFormat && !callBooked ? `${CANNOT_ACT_REPLY} ${PHONE_OFFER_SENTENCE}` : CANNOT_ACT_REPLY;
+    } else if (askingWhoAttends) {
+      written = ATTENDEE_UNKNOWN_SENTENCE;
+    } else if (declining) {
+      await declineProposal(turn.conversation.id);
+      scheduling = { ...scheduling, declined: true };
+      prefix = DECLINE_ACKNOWLEDGEMENT;
+    } else if (wantsOffer && !scriptComplete) {
+      // Said once. The extraction keeps reading the earlier request into the
+      // next answers ("até 800 mil" after "quero marcar"), and a repeated
+      // promise reads as not listening.
+      // FR-004d: an interest alone asked for no times, so it gets no promise of
+      // them — the phrased reply acknowledges the property and the script goes on.
+      const lastAgent = [...turn.history].reverse().find((message) => message.role === "agent");
+      if ((facts.askedForTimes || facts.meetingKind !== null) && lastAgent?.content.startsWith(DETAILS_FIRST_SENTENCE) !== true) {
+        prefix = DETAILS_FIRST_SENTENCE;
+      }
+    } else if (wantsOffer && alreadyBooked) {
+      written = CANNOT_ACT_REPLY;
+    } else if (wantsOffer || (!proposalOpen && shouldProposeMeeting(intent, slots, score, offerOutstanding(turn)) !== null)) {
+      // FR-004e/f: a visit is about a property; the only other meeting is by phone.
+      const target = meetingTarget({
+        intent,
+        kind: facts.meetingKind,
+        property,
+        reofferingCall: proposalOpen && lastOfferedType(turn) === "call",
+        cardsShown: turn.history.some(
+          (message) =>
+            message.role === "agent" && Array.isArray(message.metadata.propertyIds) && message.metadata.propertyIds.length > 0,
+        ),
+      });
+      if (target === "ask_property") {
+        written = VISIT_NEEDS_PROPERTY_SENTENCE;
+        // Counts as the offer (FR-004a's offer-outstanding fact), so it is not repeated.
+        offeredType = "viewing";
+      } else {
+        const offered = await offerTimes({
+          turn,
+          intent,
+          property: target === "call" ? null : property,
+          constraint: wantsOffer ? facts.preference : {},
+          proposalOpen,
+          timezone,
+        });
+        toolCalls.push(offered.call);
+        // A visit asked for before any property was shown: the phone is what there is.
+        written =
+          target === "call" && facts.meetingKind === "visit" && offered.type === "call"
+            ? `${NO_PROPERTY_YET_SENTENCE} ${offered.reply}`
+            : offered.reply;
+        offeredType = offered.type;
+        if (offered.options.length > 0) {
+          scheduling = { ...scheduling, options: offered.options.map((at) => at.toISOString()) };
+        }
+      }
+    }
   }
 
-  const question = meeting !== null || handoffReason !== null ? null : nextQuestion({ intent, slots }, consented);
+  const question = written !== null || handoffReason !== null ? null : nextQuestion({ intent, slots }, consented);
   const upcoming = upcomingSlots({ intent, slots }, consented);
 
   // A search-relevant criterion was filled or revised, and the script is far
@@ -1031,25 +1376,50 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   const searchDue =
     qualified &&
     handoffReason === null &&
-    meeting === null &&
+    written === null &&
     searchRelevant.some((slot) => qualifyingSlots(intent).includes(slot));
+  // FR-005f: booking is offered only on an actual pick of an open proposal.
+  const bookingDue = picking && handoffReason === null && written === null;
 
   // `searchDue` only decides whether the action call is offered. The search
   // itself runs inside the loop, as a model tool call, and may run again
   // before any reply exists (FR-013).
   const searches: SearchOutcome[] = [];
-  if (searchDue) {
+  const bookings: BookResult[] = [];
+  const offeredTimes = bookingDue ? lastOfferedOptions(turn) : [];
+  if (searchDue || bookingDue) {
+    const briefing = [
+      ...(searchDue ? ["Há uma busca a considerar com os critérios já registrados. Chame searchProperties."] : []),
+      ...(bookingDue ? [bookingBriefing(offeredTimes, leadText, new Date(), timezone)] : []),
+    ].join("\n\n");
     const acted = await act({
       turn,
-      briefing:
-        "Há uma busca a considerar com os critérios já registrados. Chame searchProperties.",
+      briefing,
       tools: actionTools({
-        agencyId: turn.agency.id,
-        intent,
-        slots,
-        onOutcome: (outcome) => {
-          searches.push(outcome);
-        },
+        ...(searchDue
+          ? {
+              search: {
+                agencyId: turn.agency.id,
+                intent,
+                slots,
+                onOutcome: (outcome) => {
+                  searches.push(outcome);
+                },
+              },
+            }
+          : {}),
+        ...(bookingDue
+          ? {
+              booking: {
+                conversationId: turn.conversation.id,
+                offered: offeredTimes,
+                timezone,
+                onBooked: (result) => {
+                  bookings.push(result);
+                },
+              },
+            }
+          : {}),
       }),
     });
     for (const step of acted.steps) {
@@ -1076,7 +1446,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     // A question the agent cannot act on must not be handed off as if it had
     // not been understood (FR-023). The asked-for-a-person path is unchanged.
     const reply =
-      handoffReason === "fallback" && leadText.includes("?")
+      handoffReason === "fallback" && (refused || leadText.includes("?"))
         ? `${CANNOT_ACT_REPLY} Vou chamar um corretor para assumir daqui.`
         : handoffReply(handoffReason);
     return finish({
@@ -1095,6 +1465,58 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       handoffReason,
       toolCalls,
       outcome: "handoff",
+    });
+  }
+
+  // FR-005, FR-006: the booking's outcome. Confirmed → the confirmation wins the
+  // turn. Refused → say why and re-propose, replacing the open proposal. Picked
+  // but not booked (the model called nothing) → the same options again, rather
+  // than a phrased reply that might claim a booking that never happened.
+  const booking = bookings.at(-1);
+  if (booking?.ok) {
+    written = confirmationSentence(booking.scheduledAt, booking.type, booking.propertyCode, timezone);
+    scheduling = {
+      ...scheduling,
+      booking: {
+        appointmentId: booking.appointmentId,
+        scheduledAt: booking.scheduledAt.toISOString(),
+        type: booking.type,
+        propertyCode: booking.propertyCode,
+      },
+    };
+  } else if (booking !== undefined && booking.reason !== "no_proposal") {
+    const offered = await offer({});
+    toolCalls.push(offered.call);
+    written = `${BOOKING_REFUSED[booking.reason]} ${offered.reply}`;
+    offeredType = offered.type;
+    if (offered.options.length > 0) scheduling = { ...scheduling, options: offered.options.map((at) => at.toISOString()) };
+  } else if (bookingDue && offeredTimes.length > 0) {
+    const type = lastOfferedType(turn) ?? "call";
+    written = optionsSentence(offeredTimes, type, type === "viewing" ? (property?.code ?? null) : null, timezone);
+    offeredType = type;
+    scheduling = { ...scheduling, options: offeredTimes.map((at) => at.toISOString()) };
+  }
+
+  if (written !== null) {
+    return finish({
+      turn,
+      context,
+      reply: prefix === undefined ? written : `${prefix} ${written}`,
+      speak: true,
+      intent,
+      slots,
+      filled: filledThisTurn,
+      revised: revisedThisTurn,
+      score,
+      qualified,
+      fallbackStreak,
+      question: null,
+      meeting: offeredType,
+      scheduling,
+      toolCalls,
+      propertyIds,
+      propertyCodes: search.properties.map((property) => property.code),
+      outcome: offeredType !== null ? "meeting_proposed" : notUnderstood ? "fallback" : "replied",
     });
   }
 
@@ -1127,7 +1549,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   // keeps the turn from being recorded as a reconfirmation it never made, which
   // FR-009's derived fact depends on.
   const reconfirmKeys =
-    meeting !== null || search.searched
+    search.searched || declining
       ? []
       : reconfirmationKeys(
           { revised: revisedThisTurn, intentChanged },
@@ -1152,7 +1574,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
 
   // A question this agent cannot act on yet still counts toward a handoff,
   // and the reply says so instead of claiming the message was not understood.
-  if (notUnderstood && leadText.includes("?") && meeting === null && reconfirmText === null) {
+  if (notUnderstood && leadText.includes("?") && reconfirmText === null) {
     return finish({
       turn,
       context,
@@ -1167,7 +1589,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       fallbackStreak,
       question: null,
       handoffReason,
-      meeting,
+      meeting: null,
       toolCalls,
       propertyIds,
       propertyCodes: search.properties.map((property) => property.code),
@@ -1183,8 +1605,10 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       filled: [...filledThisTurn, ...revisedThisTurn],
       question,
       consented,
-      meeting,
+      meeting: null,
       notUnderstood,
+      ...(declining ? { declinedOffer: true } : {}),
+      ...(prefix === DETAILS_FIRST_SENTENCE ? { detailsFirst: true } : {}),
       ...(extraction.askedAboutCriteria ? { askedAboutCriteria: true } : {}),
       ...(reconfirmText === null ? {} : { reconfirmation: reconfirmText }),
       ...(brokerContext === undefined ? {} : { broker: brokerContext }),
@@ -1217,6 +1641,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       : reconfirmText !== null
         ? { fallbackText: reconfirmText }
         : {}),
+    ...(prefix === undefined ? {} : { prefix }),
     sink: context.sink,
     startedAt: context.startedAt,
   });
@@ -1242,11 +1667,12 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     question,
     guard,
     handoffReason,
-    meeting,
+    meeting: null,
     reconfirmation: reconfirmText !== null,
+    scheduling,
     toolCalls,
     propertyIds,
     propertyCodes: search.properties.map((property) => property.code),
-    outcome: meeting !== null ? "meeting_proposed" : notUnderstood ? "fallback" : "replied",
+    outcome: notUnderstood ? "fallback" : "replied",
   });
 }

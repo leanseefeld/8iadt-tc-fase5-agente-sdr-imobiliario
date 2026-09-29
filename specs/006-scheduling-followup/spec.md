@@ -8,6 +8,13 @@ intervals and demo trigger. It closes **scenario 3 of the challenge statement** 
 system acts without a lead having just spoken — where the *memória conversacional* claim becomes visible, the
 reopening message being written from the stored summary days after the conversation stalled.
 
+> **Amended 2026-09-28**, after [spec 007](../007-revisable-orchestration/spec.md) merged. Written 05/09 against spec 004's turn; the turn is now
+> 007's: a revision is learning, actions run as model tool calls in a bounded loop, and the meeting offer is made
+> once, from a fact read from Postgres. What changes here: **code proposes, the model books**; the lead can
+> **decline**, ask for **other times**, or **change the subject** without the offer taking over; the broker
+> availability editor is cut (backlog 34); and **spec 009** (reschedule, cancel) follows immediately, so booking
+> is built to make it small. See the 2026-09-28 clarifications.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - The agent offers real times, not a preference question (Priority: P1)
@@ -34,6 +41,20 @@ that miss the broker's confirmed appointments. Choose one and find it on the age
    booked; **when** it does not, the agent says why and offers options again.
 4. **Given** the lead's intent is `investment`, **When** options are proposed, **Then** every option is a `call`
    with no property attached, from a broker whose `specializations` include `investment`.
+5. **Given** options were offered, **When** the lead declines (*"agora não"*, *"prefiro não marcar"*), **Then**
+   the proposal is closed, the agent acknowledges without insisting, and it makes no new offer on its own for
+   the rest of the conversation — the lead can still ask for a visit later.
+6. **Given** options were offered, **When** the lead asks for other times — with or without a constraint such as
+   *"só de manhã"* or *"quinta"* — **Then** a new proposal replaces the previous one, honouring the constraint
+   where one was given; with nothing that fits, FR-001's no-options path applies.
+7. **Given** options were offered, **When** the lead changes the subject (*"e em Vila Mariana, tem algo?"*),
+   **Then** the turn is handled like any other — revision, search, a question — the options are not repeated,
+   and the proposal stays open, so *"pode ser aquela de quinta então"* two turns later still books it.
+8. **Given** a booked meeting, **When** the lead asks who will attend, **Then** the agent names no one and says
+   the appointment is in the system — including after a broker took over and handed back.
+9. **Given** property cards on screen, **When** the lead presses **Interessado** on one, **Then** *"Interessado em
+   <code>"* appears as the lead's message and the reply follows FR-004d for where the conversation stands — for a
+   complete script with no offer yet, options for that property.
 
 ### User Story 2 - The agent reopens a conversation that went quiet (Priority: P1)
 
@@ -86,14 +107,12 @@ one appointment done and one cancelled.
    reload, *done* also moves the lead's pipeline stage to *visited*, and both emit their event
    (`appointment.done`/`appointment.cancelled`) with `actorType: user` and `actorUserId`; **given** nothing to
    list, explanatory copy shows.
-3. **Given** a broker opens "Minha disponibilidade", **When** they toggle a weekday, change a start or end time,
-   and save, **Then** it persists to their `users.availability` via Server Action, reflected in their next
-   proposal.
+3. *Cut 2026-09-28 — the availability editor moved to backlog 34.*
 
 ### Edge Cases
 
 - **No free hour in the horizon**, **a broker with every weekday disabled**, or **an agency with no brokers**: the
-  agent does not invent a calendar — it asks the lead for a time and raises a handoff. **Two leads booking the
+  agent does not invent a calendar — it says no times are available right now and keeps any earlier proposal open; it never hands off on its own (FR-001, amended 2026-09-28). **Two leads booking the
   same hour at once**: the second fails the collision check. **An `investment` lead with no specialist broker**:
   assignment falls back to rotation across every broker.
 - **The lead replies while a follow-up is being composed**: a claimed attempt must not send into a conversation
@@ -111,7 +130,10 @@ one appointment done and one cancelled.
 
 - **FR-001**: The system MUST offer up to three concrete options — date, time, type — when proposing a meeting,
   and MUST NOT ask the lead to name a time as its first move. With fewer than three available it MUST offer those
-  it has; with none it MUST NOT propose, and MUST raise a handoff.
+  it has; with none it MUST NOT propose. It MUST NOT hand the conversation off on its own either (amended
+  2026-09-28): it says no times are available right now, any earlier proposal stays open, and a lead who wants a
+  person can ask for one — the existing handoff trigger. The same holds when nothing matches a constraint the lead
+  added (FR-005b).
 - **FR-002**: Options MUST be computed deterministically from the assigned broker's own weekday availability
   (`users.availability`, per weekday `{ enabled, start, end }`) and confirmed appointments: only enabled weekdays
   and hours inside that broker's own window, preferring the order in `SCHEDULING_PREFERRED_TIMES`, no collision
@@ -125,15 +147,103 @@ one appointment done and one cancelled.
 - **FR-003a**: When the lead's `intent` is `investment`, every option MUST be `call`, carry no `propertyId`, and
   come from FR-003's rotation restricted to `investment` specialists.
 - **FR-004**: Proposing MUST record a proposed appointment and emit `appointment.proposed`; a further proposal
-  for the same conversation MUST replace the previous one rather than accumulate. Proposed appointments MUST NOT
-  block availability; confirmed ones do.
+  for the same conversation MUST replace the previous one rather than accumulate — by cancelling the open
+  proposed row and inserting the new one, through the same transition function every status change uses.
+  Proposed appointments MUST NOT block availability; confirmed ones do.
+- **FR-004b**: A viewing MUST be about the property the lead pointed at, when they pointed at one. The extraction
+  MUST read a reference to a shown property — its position among the latest cards (*"o segundo"*) or its code
+  (*"VMA-0005"*) — and code MUST resolve it against the properties **already shown in this conversation**, never the
+  catalog at large. The resolved property is recorded with the turn, proposing uses the most recent one, and the
+  confirmation names it (FR-006). A reference that resolves to nothing is ignored, never guessed.
+- **FR-004c**: Each property card in the chat widget MUST offer a button labelled **"Interessado"**. Pressing it
+  posts the message *"Interessado em VMA-0005"* (the card's code) **on the lead's behalf**: it appears in the
+  transcript as the lead's own message and starts a turn exactly as a typed one would. The button MUST be shown on
+  hover or keyboard focus with a pointer, and **always** on touch screens, which have no hover — tappable at 390 px
+  (constitution principle X).
+- **FR-004d**: The reply to an interest in a property depends on where the conversation stands:
+  - **script incomplete** → acknowledge the property, and the script continues;
+  - **script complete, no offer made yet** → the options, for that property;
+  - **a proposal open** → a new proposal for that property, replacing the open one (FR-004);
+  - **declined earlier** → treated as the lead asking again (FR-005a), so options for that property;
+  - **already booked** → several bookings are spec 009; until then, spec 007 FR-023's honest *"ainda não consigo
+    te ajudar com isso"*.
+- **FR-004e** *(28/09, developer)*: A **visit MUST be about a property**. When a visit would be offered or was asked
+  for and no property is in play (FR-004b), the agent MUST NOT offer visit times: a code-written sentence asks the lead
+  which of the properties already shown interests them — the card's **Interessado** button or its code — and offers a
+  phone conversation instead, if they prefer. When nothing was ever shown (no search yet, or nothing matched), the
+  offer is the phone conversation. This applies both to the offer code makes on its own (FR-004a) and to a lead's
+  explicit *"quero marcar uma visita"*. The prompt counts as the offer for FR-004a's offer-outstanding fact, so it is
+  not repeated turn after turn.
+- **FR-004f** *(28/09, developer)*: The only other meeting is a **conversation by phone** (`call`), bookable on its
+  own, with or without a property in play: a lead who asks for one gets phone times. Every code-written sentence and
+  the widget card call it *"conversa por telefone"*.
+- **FR-004g** *(28/09, developer, from a live conversation)*: A request to **cancel or move a meeting already
+  confirmed** (*"não vou mais poder na sexta"*) is spec 009's to act on. Until then it MUST get spec 007 FR-023's
+  *"ainda não consigo te ajudar com isso"* and advance the handoff streak, so a lead who insists reaches a person who
+  can. It MUST NOT be read as a decline (FR-005a applies only to a proposal open **now**, a row still *proposed*),
+  and nothing may tell the lead the meeting is off while it stays confirmed.
+- **FR-004a**: Proposing MUST be triggered by code when the offer is due — spec 007's `shouldProposeMeeting`
+  with its offer-outstanding fact — never by the model deciding on its own that it is time to offer. The reply
+  MUST present the computed options, replacing today's instruction to ask which weekday suits the lead.
 - **FR-005**: Booking MUST accept the index of an offered option or an explicit date and time, MUST validate both
   against FR-002 before confirming, and on failure MUST return the reason to the agent so it can explain and
-  re-propose, creating no appointment.
+  re-propose, creating no appointment. Booking MUST be a **tool the model calls** on spec 007's action loop, with
+  the contract discipline of 007 FR-013a/b: when to call and when not to, and a readable refusal.
+- **FR-005a**: A lead MUST be able to **decline** an offer. The decline MUST be read by the extraction and acted on
+  by code, and only while a proposal is open — a "não" to anything else is not a decline. It MUST close the open
+  proposal, MUST NOT count as a misunderstanding, and MUST stop the agent from offering again on its own for the
+  rest of the conversation; a later request from the lead to visit or talk to someone MUST still reach proposing.
+  The acknowledgement MUST say so (*"sem problema — se quiser marcar depois, é só pedir"*), so a decline the
+  model misread costs the lead one sentence, not the booking. A decline turn MUST NOT offer the booking tool.
+- **FR-005b**: A lead MUST be able to ask for **other times**, optionally with a weekday or period constraint. The
+  request MUST be read by the extraction, alongside the facts it already reports, and code MUST re-propose — the
+  model does not propose, even here. The new proposal MUST replace the previous one (FR-004). Where nothing
+  satisfies FR-002 and the constraint, FR-001's no-options path applies. A request that arrives **before the
+  script is complete** — before the name and contact that consent makes available — MUST NOT propose: the agent
+  acknowledges it and the script continues, and the offer comes once the script is complete. Completeness is the
+  same check `shouldProposeMeeting` makes, without its offer-outstanding clause.
+- **FR-005d**: The options MUST be written by code, like spec 007's reconfirmation, not phrased by the model:
+  they are dates, times and figures, which the model must not invent and which the `unbackedFigure` guard
+  would otherwise reject. The confirmation card (FR-006) is likewise rendered from the booked row.
+- **FR-005e**: No scheduling **data path** — proposing, booking, confirming, following up — may carry the assigned
+  broker's identity to the model. Code-written sentences MUST refer to *"alguém da nossa equipe"* or *"um
+  corretor"*. Asked who will attend, the agent MUST say it can't say yet and that the appointment is in the system.
+  A broker's name can still reach the model for another reason: that broker spoke in the conversation and handed
+  it back. In that case the agent MUST neither confirm nor deny that this broker will attend. Everything else that
+  broker said still stands, and the handback instructions MUST be narrowed accordingly rather than contradicted.
+  Consistent with spec 007 FR-019, which already lists broker assignment as protected.
+- **FR-005f**: The booking tool MUST be offered only on a turn where the extraction reports that the lead **picked
+  an offered option or named a time** while a proposal is open — so a proposal left open through a change of
+  subject costs no extra model round trip on the turns that don't answer it (spec 007's promise that a turn taking
+  no action costs what it costs today).
+- **FR-005g**: When more than one kind of reply applies to a turn, exactly one decides what the reply says, in
+  this order: **(1)** a booking confirmation, **(2)** the time options, **(3)** a search result — cards, or that
+  nothing matched, **(4)** the answer to a question about criteria or results, **(5)** a reconfirmation, **(6)** the
+  script's next question. What the lead most needs to know comes first. This extends spec 007 FR-032, which ranked
+  (3)–(6). A **decline acknowledgement** does not compete: it is a short code-written sentence placed **before**
+  whatever wins, and it suppresses only what a decline makes pointless — the options and the reconfirmation.
+- **FR-005h** *(28/09, developer)*: A meeting in a **format the agency doesn't offer** — at the agency's office, by
+  video (Google Meet, Zoom, FaceTime, …) or anything else outside visit-to-a-property and phone conversation — MUST
+  get spec 007 FR-023's *"ainda não consigo te ajudar com isso"*, followed by the offer of a phone conversation
+  unless one is already booked. It MUST NOT propose times for the unsupported format, and it MUST **advance the
+  handoff streak** (spec 004 FR-027), like any request the agent cannot act on.
+- **FR-005i** *(28/09, developer)*: A request about a visit that is **outside the agency's domain** — a ride, transit
+  reimbursement, choosing the broker by looks, colour, gender, ideology or any other personal trait, and anything
+  else the agency doesn't do — MUST get the same *"ainda não consigo te ajudar com isso"*, with no lecture and no
+  offer, and MUST advance the handoff streak.
+- **FR-005c**: An open proposal MUST NOT take over the conversation. A message that does not answer it MUST be
+  handled by the normal turn; the options MUST NOT be repeated on every following turn; and the proposal MUST
+  stay open, so a later pick still books it, until it is booked, declined or replaced.
 - **FR-006**: Booking MUST confirm the appointment, emit `appointment.confirmed`, and set the lead's pipeline
   stage to *scheduled* regardless of conversation state — a `paused` conversation may still hold a booking made
   earlier — producing a confirmation naming weekday, date, time, type and — for a viewing — the property code,
   rendered in the widget as a compact card.
+
+**Search**
+
+- **FR-020** *(28/09, developer; amends spec 007 FR-034)*: A requested area MUST match a property's **neighbourhood
+  or its region** — *"zona norte"* finds Santana. Matching a region is not widening: the lead named that area.
+  Everything else in FR-034 stands — no criterion is relaxed to fill the list.
 
 **Agenda**
 
@@ -144,9 +254,10 @@ one appointment done and one cancelled.
   every query MUST be scoped by agency. A signed-in user MUST be able to mark an appointment *done* or
   *cancelled*, persisted; marking *done* also sets the lead's pipeline stage to *visited*, and both emit their
   event (`appointment.done` / `appointment.cancelled`) with `actorType: user` and the acting `actorUserId`.
-- **FR-008a**: The agenda MUST offer a "Minha disponibilidade" editor — seven rows, one per weekday, each with an
-  enabled toggle, a start and an end time — saved via Server Action to that broker's `users.availability`,
-  immediately reflected in their next computed options.
+- **FR-008a**: *Cut 2026-09-28 — the availability editor moved to backlog 34. Availability stays seeded.*
+- **FR-008b**: The dashboard's *Visita marcada* filter and label MUST be derived from the lead having a
+  **confirmed future appointment**, not from the pipeline stage. Stages move forward only (ADR 19), so a meeting
+  cancelled from the agenda would otherwise leave the lead marked *Visita marcada* with no meeting at all.
 
 **Scheduling a follow-up**
 
@@ -179,7 +290,9 @@ one appointment done and one cancelled.
   the lead.
 - **FR-014**: The message MUST be generated from the stored summary and slot state — never the full transcript —
   MUST reopen with explicit context naming a concrete detail of what the lead is looking for, and MUST end with
-  the pending question.
+  the pending question. It MUST NOT quote proposed times: options go stale while a lead is quiet, and booking
+  re-validates any pick anyway, so a follow-up about an open proposal invites the lead back rather than
+  restating times that may have passed.
 - **FR-015**: It MUST be delivered through the same channel abstraction as any other agent message and through
   the Notifier/SSE path — never a polling read — stored as an agent message marked as a follow-up, visible in the
   widget whether open at the time or reopened later.
@@ -191,13 +304,22 @@ one appointment done and one cancelled.
 **Demonstration and configuration**
 
 - **FR-017**: The lead drawer MUST offer an action making the lead's pending attempt due immediately, unavailable
-  with an explanation when there is none. The seeded stale lead MUST carry an attempt already due, so the first
+  with an explanation when there is none **or when the agency's follow-up switch is off** (FR-019). The seeded stale lead MUST carry an attempt already due, so the first
   sweep after a fresh start sends a follow-up unaided.
 - **FR-018**: The first delay MUST be configured in minutes, replacing the hours key; `SCHEDULING_MIN_NOTICE_MINUTES`
   replaces the fixed 24-hour rule, `SCHEDULING_PREFERRED_TIMES` replaces the fixed preferred-hour list, and
   `FOLLOWUP_BACKOFF_FACTOR` replaces the hard-coded ×3. Schema, example file and its test MUST stay in step in the
   same change, and the demonstration values — `FOLLOWUP_FIRST_DELAY_MINUTES=5`, `WORKER_SWEEP_INTERVAL_MS=15000`
   — MUST be documented apart from the production-shaped defaults.
+
+- **FR-019**: A sales manager MUST be able to switch automatic follow-up **on or off for the whole agency**, from
+  the leads dashboard, persisted on the agency and on by default. The switch MUST be checked **when an attempt is
+  about to be sent**, as one more condition of FR-012's eligibility — not when attempts are scheduled. An attempt
+  that comes due while the switch is off MUST be cancelled without sending (FR-013).
+- **FR-013a**: An attempt cancelled because the conversation stopped being eligible — the switch, an opt-out, a
+  pause, a confirmed booking — MUST return `conversations.followupState` to `none` unless it is `exhausted`, so
+  the dashboard never shows a follow-up that no attempt is behind. The demo trigger (FR-017)
+  obeys the switch too. A broker MUST see its state and MUST NOT be able to change it.
 
 ### Key Entities
 
@@ -207,7 +329,7 @@ one appointment done and one cancelled.
   pending per conversation, mirrored by `conversations.followupState` (`none | pending | exhausted`). **Broker
   assignment** — set at the first proposal by specialization-filtered rotation, falling back to any broker.
   **Broker availability** — per-weekday `{ enabled, start, end }` on `users.availability`, seeded Mon–Fri
-  09:00–18:00, editable on the agenda. No new tables: each is defined by
+  09:00–18:00; its editor is deferred to backlog 34. No new tables: each is defined by
   [`modelo-de-dados.md`](../../docs/arquitetura/modelo-de-dados.md), materialised by spec 002.
 
 ## Success Criteria *(mandatory)*
@@ -234,11 +356,54 @@ one appointment done and one cancelled.
   30 seconds; a fresh start produces one to the seeded stale lead within one sweep of boot.
 - **SC-010**: The environment contract test passes with every new key present and the replaced key gone —
   nothing read but undocumented, nothing documented but unread.
-- **SC-011**: Saving the availability editor persists all seven rows, reflected in that broker's very next
-  proposal.
+- **SC-011**: *Withdrawn 2026-09-28 with the availability editor (backlog 34).*
 - **SC-012**: Every proposal for an `investment` lead is a `call` with no property, from a specialist broker.
+- **SC-014**: With the agency's switch off, a due attempt is cancelled and nothing reaches the lead; switched back
+  on, the next attempt to come due is sent. A broker sees the switch but cannot change it.
+- **SC-015**: No proposal, booking, confirmation or follow-up passes an assigned broker's name to the model; and
+  asked *"quem vai me atender?"*, the agent names no one — including after a broker took over and handed back.
+- **SC-017**: For each pair of reply kinds that can meet in one turn, the higher-ranked one decides the reply; and a
+  decline arriving with a criterion change gets the acknowledgement followed by the search result.
+- **SC-016**: A viewing booked after the lead pointed at a card — by *"o segundo"*, by its code, or by the card's
+  interest button — carries that property, and its confirmation names the code. The button works by tap at 390 px.
+- **SC-018**: A visit is never proposed without a property: with cards shown and none pointed at, the lead is asked
+  which one (or offered a phone conversation); a request for a meeting at the office or by video gets *"ainda não
+  consigo"* plus the phone offer, and an out-of-domain request about a visit gets *"ainda não consigo"* alone — both
+  advancing the handoff streak, so a second one in a row hands off.
+- **SC-013**: In scripted conversations: a decline is never followed by an unprompted offer; a request for other
+  times yields a replacing proposal; a change of subject after an offer gets its own answer without the options
+  repeated, and a pick two turns later still books.
 
 ## Clarifications
+
+### Session 2026-09-28 (after spec 007)
+
+- Q: Who triggers proposing times and booking one? → A: **Code proposes, the model books.** Refined the same day: booking is the *only* new tool. A decline and a request for other times are read by the extraction, like `askedForHuman`, and code acts on them — one tool added to the loop rather than three, which is the Gemma playbook's bring-up order; and the options are code-written, since they are dates and figures. When the offer is due — already decided in code by `shouldProposeMeeting` and `offerOutstanding` (spec 007 FR-017) — code computes the options and the reply presents them. When the lead picks (*"a segunda"*, *"quinta às 10"*), the model calls a booking tool on 007's action loop, and the tool re-validates. The same split as search in 007: deterministic where the decision is, the model only where it must understand the lead.
+- Q: Can the lead get out of an offer? → A: Yes, three ways, none of which the offer may block: **decline** it; ask for **other times** (optionally *"só de manhã"*, *"quinta"*); or **change the subject** — other neighbourhoods, and later the investment specialist or general questions — which the normal turn handles while the offer stays open to pick later.
+- Q: Keep the per-broker availability editor? → A: No. Cut to protect the 08/10 deadline; recorded as backlog 34, a low-priority extra. Seeded availability drives the slot computation unchanged.
+- Q: How does this slice prepare for spec 009? → A: 009 (reschedule, cancel from the conversation) follows immediately. Booking is built as transitions of **one appointment row**, so a reschedule re-runs this spec's own validation (FR-002) on that row rather than opening a second path.
+
+### Session 2026-09-28 (developer, after the first build)
+
+- Q: A purchase lead who never points at a card was offered *"uma conversa"*, even after *"quero marcar uma visita"*. Keep it? → A: **Visits require a property**; the agent asks for one (Interessado or the code) and offers a phone conversation as the alternative (FR-004e). A conversation is by **phone** only (FR-004f).
+- Q: What about a meeting at the agency, or by Meet, Zoom, FaceTime — or anything else we don't offer? → A: *"Ainda não consigo te ajudar com isso"*, then the phone path if none is booked; the handoff streak advances (FR-005h).
+- Q: And a ride, transit reimbursement, a broker chosen for looks, colour, gender or ideology? → A: *"Ainda não consigo te ajudar com isso"*, streak advances (FR-005i).
+- Q: Should chat search match regions (*"zona norte"*) again? → A: **Yes** (FR-020).
+- Q: A lead booked, then wrote *"não vou mais poder na sexta"* and heard *"sem problema"* while the visit stayed confirmed. Fix now or in 009? → A: **Both**: now, the decline reads only a proposal open *now*, and a change to a confirmed meeting gets the honest *"ainda não consigo"* (FR-004g); 009 then cancels and reschedules for real, starting from this conversation.
+- Q: The integration tests share the demo database with the running worker and leave data behind. → A: They run in **their own database**, created, migrated and seeded fresh at the start of each suite run — not per test, which would make the run explode.
+
+### Session 2026-09-28 (after /speckit-analyze)
+
+- Q: May the lead learn which broker will attend? → A: **No.** The model never receives the assigned broker's name — not when proposing, not after booking. Code-written sentences say *"alguém da nossa equipe"*; asked for a name, the agent says it can't say yet and that the appointment is in the system. After a handback it neither confirms nor denies that the broker who spoke will attend: the team calendar is internal and assignments change last minute. A lead who insists is left to the existing frustration handling. Spec 007 FR-019 already protects broker assignment; this conforms to it rather than amending it.
+- Q: How is the booking call kept from costing a round trip on every turn while a proposal is open? → A: A new extraction fact — **the lead picked an offered option or named a time** — gates it.
+- Q: How does *Visita marcada* stay true when a meeting is cancelled, given stages only move forward (ADR 19)? → A: The dashboard derives it from **appointments** — a confirmed future one — not from the stage.
+- Q: When several kinds of reply apply to one turn, which does the lead get? → A: One, ranked: confirmation › options › search result › criteria/results answer › reconfirmation › script question (FR-005g). The decline acknowledgement is a prefix, not a competitor — *"agora não — mas tem algo em Moema?"* gets the acknowledgement **and** the Moema results.
+- Q: Does "no options" still hand the lead to a human? → A: **No automatic handoff**, ever, from FR-001. The agent says no times are available and keeps any earlier proposal open; a lead who wants a person asks — the existing trigger.
+- Q: How does a viewing know which property it is about? → A: A new extraction fact resolved against the properties already shown in the conversation (FR-004b), fed also by a button labelled **"Interessado"** on each card that posts *"Interessado em <code>"* on the lead's behalf (FR-004c).
+- Q: Can a lead hold several bookings? → A: **Spec 009**, together with reschedule and cancel, since all three need "which appointment do you mean?". 006 books one at a time and must not preclude more.
+- Q: Can an agency manager switch automatic follow-up off? → A: Yes, one agency-wide switch. It gates the **send**, not the enqueue: attempts keep being scheduled, and one that comes due while the switch is off is cancelled without sending, the same treatment as any other failed eligibility check.
+
+### Session 2026-09-05
 
 Resolved by the author against `docs/` before planning; `docs/decisoes-pendentes.md` has nothing open here.
 
@@ -246,7 +411,7 @@ Resolved by the author against `docs/` before planning; `docs/decisoes-pendentes
   point at? → **A**: One row per proposal, created *proposed* at the first option's time, the options carried in
   the message metadata; booking moves that same row to *confirmed*, so both events name one id.
 - **Q**: What if the broker has no free preferred hour? → **A**: Search forward ten business days; offer fewer
-  than three if that is all there is; with zero, do not propose — ask the lead for a time and raise a handoff.
+  than three if that is all there is; with zero, do not propose — ask the lead for a time and raise a handoff. *(Superseded 2026-09-28: no automatic handoff — see FR-001.)*
 - **Q**: Viewings run inside each broker's own availability while the follow-up window is 09:00–20:00 and
   configurable — which timezone governs viewings? → **A**: `FOLLOWUP_TIMEZONE`, applied to every broker's
   availability alike, one per agency. `SCHEDULING_MIN_NOTICE_MINUTES`/`SCHEDULING_PREFERRED_TIMES` are now
@@ -260,8 +425,12 @@ Resolved by the author against `docs/` before planning; `docs/decisoes-pendentes
 
 ## Assumptions
 
-- **Spec 004 owns the turn.** This slice implements the two tools its registry declares, the enqueue at the end
-  of a turn and the cancellation on an inbound message; it does not change how a turn is orchestrated. **Spec 005
+- **Spec 007 owns the turn** ([spec 007](../007-revisable-orchestration/spec.md), superseding 004's orchestration). This slice gives its action
+  loop **one** tool — booking — and has code invoke proposing when 007 says the offer is due, when the lead asks
+  for other times, and close the proposal when the lead declines, all read by the extraction; and adds the enqueue at the end of a turn and the cancellation on an inbound message. It does not change
+  how a turn is orchestrated.
+- **Spec 009 follows immediately.** Booking is built as transitions of one appointment row, so 009's reschedule
+  re-runs FR-002 on that row and its cancel is one more transition — two tools, no second path. **Spec 005
   owns the worker's consumer registry and the lead drawer**: this slice registers a consumer through
   `register(consumer: { name, run(ctx) })` and adds one action to the drawer's actions row.
 - **Spec 002 owns the seed**, to which this slice adds the due pending attempt for the stale demonstration lead;
@@ -273,8 +442,11 @@ Resolved by the author against `docs/` before planning; `docs/decisoes-pendentes
 
 ## Out of Scope
 
-- Any calendar visualisation: the agenda is a list, deliberately. Rescheduling or cancelling from the widget — a
-  broker changes status from the agenda instead.
+- Any calendar visualisation: the agenda is a list, deliberately. Rescheduling or cancelling from the
+  conversation is **spec 009**, built right after this slice; here a broker changes status from the agenda.
+- **Several bookings per lead** — different properties, or a later call with an investment specialist — is also
+  **spec 009**. Nothing here may assume one appointment per conversation: only *open proposals* are one per
+  conversation.
 - External calendar integration, invitation e-mail, reminder notification; follow-up on any channel but the web
   widget. Broker capacity limits, holiday calendars, and reassigning a lead between brokers — that last one
-  belongs to spec 005's manager view. Per-broker working hours are now in scope, via `users.availability`.
+  belongs to spec 005's manager view. The broker availability editor — backlog 34; availability stays seeded.

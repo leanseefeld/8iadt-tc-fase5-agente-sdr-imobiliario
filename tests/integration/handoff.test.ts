@@ -67,6 +67,8 @@ async function cleanup(leadId: string, conversationId: string): Promise<void> {
   const pool = getPool();
   await pool.query("delete from events where lead_id = $1", [leadId]);
   await pool.query("delete from messages where conversation_id = $1", [conversationId]);
+  await pool.query("delete from appointments where conversation_id = $1", [conversationId]);
+  await pool.query("delete from followup_jobs where conversation_id = $1", [conversationId]);
   await pool.query("delete from conversations where id = $1", [conversationId]);
   await pool.query("delete from leads where id = $1", [leadId]);
 }

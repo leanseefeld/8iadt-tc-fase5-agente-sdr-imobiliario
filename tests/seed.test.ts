@@ -16,13 +16,19 @@ async function seedOnce(): Promise<void> {
   await run("node", ["src/db/seed/index.ts"], { cwd: process.cwd() });
 }
 
+/**
+ * What the seed owns, and nothing else: the demo agency, its users and
+ * catalog, and the three `seed-*` leads. Any lead a person or another test
+ * added to the agency is not the seed's to count.
+ */
 async function counts() {
   const pool = getPool();
+  const demo = "(select id from agencies where slug = 'demo')";
   const [agencies, users, properties, leads] = await Promise.all([
-    pool.query("select count(*)::int as n from agencies"),
-    pool.query("select count(*)::int as n from users"),
-    pool.query("select count(*)::int as n from properties"),
-    pool.query("select count(*)::int as n from leads"),
+    pool.query("select count(*)::int as n from agencies where slug = 'demo'"),
+    pool.query(`select count(*)::int as n from users where agency_id = ${demo}`),
+    pool.query(`select count(*)::int as n from properties where agency_id = ${demo}`),
+    pool.query(`select count(*)::int as n from leads where agency_id = ${demo} and external_id like 'seed-%'`),
   ]);
   return {
     agencies: agencies.rows[0].n,
@@ -44,7 +50,9 @@ test("seeding twice is idempotent (SC-002)", { skip: !integration }, async (t) =
 
   await t.test("every password is a bcrypt hash only", async () => {
     const pool = getPool();
-    const { rows } = await pool.query<{ password_hash: string }>("select password_hash from users");
+    const { rows } = await pool.query<{ password_hash: string }>(
+      "select password_hash from users where agency_id = (select id from agencies where slug = 'demo')",
+    );
     assert.equal(rows.length, 3);
     for (const row of rows) {
       assert.match(row.password_hash, /^\$2[aby]\$\d{2}\$/);
@@ -59,6 +67,7 @@ test("seeding twice is idempotent (SC-002)", { skip: !integration }, async (t) =
              (select count(*) from events e where e.conversation_id = c.id) as events
       from leads l
       join conversations c on c.lead_id = l.id
+      where l.external_id like 'seed-%'
       order by l.external_id
     `);
     assert.equal(rows.length, 3);

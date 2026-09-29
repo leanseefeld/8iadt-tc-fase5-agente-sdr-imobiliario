@@ -40,6 +40,14 @@ async function removeSession(): Promise<void> {
     `delete from events where lead_id in (select id from leads where external_id = $1)`,
     [sessionId],
   );
+  // Spec 006: a turn may leave a follow-up attempt or a proposal behind.
+  for (const table of ["followup_jobs", "appointments"]) {
+    await pool.query(
+      `delete from ${table} where conversation_id in
+         (select c.id from conversations c join leads l on l.id = c.lead_id where l.external_id = $1)`,
+      [sessionId],
+    );
+  }
   await pool.query(
     `delete from conversations where lead_id in (select id from leads where external_id = $1)`,
     [sessionId],
@@ -113,6 +121,8 @@ test("a reconnecting stream replays from Last-Event-ID out of the rows", {
       [other.conversationId],
     );
     await pool.query(`delete from events where conversation_id = $1`, [other.conversationId]);
+    await pool.query(`delete from followup_jobs where conversation_id = $1`, [other.conversationId]);
+    await pool.query(`delete from appointments where conversation_id = $1`, [other.conversationId]);
     await pool.query(`delete from conversations where id = $1`, [other.conversationId]);
     await pool.query(`delete from leads where external_id = $1`, [`${sessionId}-other`]);
   });
@@ -130,7 +140,14 @@ test("a reconnecting stream replays from Last-Event-ID out of the rows", {
   // The HTTP half. It needs the dev server, so it says so and skips rather than
   // failing when the suite is run against a database alone.
   await t.test("the SSE route replays those rows to a reconnecting client", async () => {
-    const base = `http://localhost:${getConfig().APP_PORT}`;
+    // Under `npm run test:integration` the server is `app-test`, on this same
+    // database; the runner fails the run when it isn't up, unless told
+    // SKIP_HTTP_TESTS=1. Run on its own, the file falls back to the dev app.
+    if (process.env.SKIP_HTTP_TESTS === "1") {
+      t.diagnostic("SKIP_HTTP_TESTS=1: skipping the HTTP half on purpose");
+      return;
+    }
+    const base = process.env.TEST_APP_URL ?? `http://localhost:${getConfig().APP_PORT}`;
     const reachable = await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(2_000) })
       .then((response) => response.ok)
       .catch(() => false);

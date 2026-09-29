@@ -11,10 +11,17 @@ const currency = new Intl.NumberFormat("pt-BR", {
  * One property inline under an agent bubble (FR-021, `contracts/chat-api.md`
  * §5). The payload is already the projection the wire trusts — no formatting
  * happens upstream, so this is the one place `680000` becomes `R$ 680.000`
- * and a rent listing gets its `/mês`. Purely presentational: no state, no
- * `"use client"`, same as the search result it renders.
+ * and a rent listing gets its `/mês`. No state of its own: the one action,
+ * "Interessado" (spec 006 FR-004c), is the widget's send path handed down, and
+ * a card rendered without it (a closed conversation) simply has no button.
  */
-export default function PropertyCard({ property }: { property: WireProperty }) {
+export default function PropertyCard({
+  property,
+  onInterested,
+}: {
+  property: WireProperty;
+  onInterested?: (code: string) => void;
+}) {
   const priceLabel =
     property.transaction === "rent" ? `${currency.format(property.price)}/mês` : currency.format(property.price);
 
@@ -43,6 +50,16 @@ export default function PropertyCard({ property }: { property: WireProperty }) {
         </p>
         <p className={styles.propertyCode}>Cód. {property.code}</p>
       </div>
+      {onInterested === undefined ? null : (
+        <button
+          type="button"
+          className={styles.interested}
+          onClick={() => onInterested(property.code)}
+          aria-label={`Tenho interesse no imóvel ${property.code}`}
+        >
+          Interessado
+        </button>
+      )}
     </article>
   );
 }

@@ -70,8 +70,8 @@ export async function act(input: ActInput): Promise<ActResult> {
       tools: input.tools,
       // The lead never reads this call. The sentence is phrased afterwards.
       system:
-        "Você pode chamar a ferramenta de busca. Não escreva uma resposta para a pessoa. " +
-        "Quando a busca não for necessária, não chame nada.",
+        "Você pode chamar as ferramentas oferecidas, conforme a descrição de cada uma. " +
+        "Não escreva uma resposta para a pessoa. Quando nenhuma for necessária, não chame nada.",
       prompt: input.briefing,
     });
 

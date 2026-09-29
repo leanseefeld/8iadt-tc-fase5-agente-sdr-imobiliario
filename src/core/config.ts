@@ -12,6 +12,11 @@ import { z } from "zod";
 const port = z.coerce.number().int().min(1).max(65535);
 const positiveInt = z.coerce.number().int().positive();
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "expected HH:MM");
+/** A comma-separated list of HH:MM, kept in the order written — the order is the preference. */
+const timeList = z
+  .string()
+  .transform((value) => value.split(",").map((part) => part.trim()).filter((part) => part !== ""))
+  .pipe(z.array(time).min(1));
 const flag = z
   .enum(["true", "false"])
   .default("false")
@@ -90,6 +95,13 @@ export const configSchema = z.object({
   LANGFUSE_PUBLIC_KEY: z.string().min(1).optional(),
   LANGFUSE_SECRET_KEY: z.string().min(1).optional(),
   LANGFUSE_BASE_URL: z.url().optional(),
+  // Langfuse's environment for every trace; empty falls back to NODE_ENV. The
+  // integration runner sets `test`, so a test run's traces filter apart.
+  LANGFUSE_TRACING_ENVIRONMENT: z
+    .string()
+    .regex(/^[a-z0-9_-]*$/, "lowercase letters, digits, - and _")
+    .optional()
+    .transform((value) => (value === "" ? undefined : value)),
   // Read by docker-compose.yml, like DB_PORT — declared here because the
   // schema is the authoritative key set.
   LANGFUSE_UI_PORT: port.default(3102),
@@ -103,8 +115,18 @@ export const configSchema = z.object({
   FOLLOWUP_WINDOW_START: time.default("09:00"),
   FOLLOWUP_WINDOW_END: time.default("20:00"),
   FOLLOWUP_TIMEZONE: z.string().min(1).default("America/Sao_Paulo"),
-  FOLLOWUP_FIRST_DELAY_HOURS: positiveInt.default(4),
+  // Spec 006. Minutes, not hours, so a demonstration shows the sweep working
+  // in a few minutes (ADR 15); the production-shaped default is four hours.
+  FOLLOWUP_FIRST_DELAY_MINUTES: positiveInt.default(240),
   FOLLOWUP_MAX_ATTEMPTS: positiveInt.default(3),
+  // Each unanswered attempt waits this many times longer than the one before.
+  FOLLOWUP_BACKOFF_FACTOR: positiveInt.default(3),
+  // Due attempts one sweep claims at most.
+  FOLLOWUP_BATCH_SIZE: positiveInt.default(20),
+  // No meeting is offered sooner than this from now.
+  SCHEDULING_MIN_NOTICE_MINUTES: positiveInt.default(120),
+  // The hours a proposal tries, in this order, inside each broker's own availability.
+  SCHEDULING_PREFERRED_TIMES: timeList.default(["10:00", "14:00", "16:30"]),
 });
 
 /**

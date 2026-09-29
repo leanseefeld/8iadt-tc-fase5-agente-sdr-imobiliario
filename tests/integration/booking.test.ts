@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { closePool } from "../../src/db/client.ts";
-import { CANNOT_ACT_REPLY } from "../../src/agent/prompts/fallback.ts";
 import { ATTENDEE_UNKNOWN_SENTENCE, BOOKING_REFUSED, NO_OPTIONS_FOR_CONSTRAINT_SENTENCE } from "../../src/agent/prompts/meeting.ts";
 import { OPTIONS, qualifiedLead, query, toolNames, type Lead } from "./support/meeting.ts";
 
@@ -50,7 +49,7 @@ test("booking a meeting", { skip: !integration }, async (t) => {
     assert.equal(who.handoffReason, null);
   });
 
-  await t.test("FR-004g: after a booking, 'não vou mais poder' is not a decline — honest, and the visit stays", async () => {
+  await t.test("FR-004g, then spec 009: after a booking, 'não vou mais poder' asks to confirm — never a false 'sem problema'", async () => {
     // The conversation that found it (28/09): the lead heard "sem problema" and
     // believed the visit was off while it stayed confirmed.
     const rogerio = await lead();
@@ -58,10 +57,8 @@ test("booking a meeting", { skip: !integration }, async (t) => {
     const booked = await rogerio.say("pode ser a primeira opção");
     assert.match(booked.reply, /^Pronto!/);
     const change = await rogerio.say("oi! não vou mais poder nesse dia");
-    assert.equal(change.reply, CANNOT_ACT_REPLY, JSON.stringify((await rogerio.lastMetadata()).toolCalls));
-    assert.deepEqual((await rogerio.appointments()).map((row) => row.status), ["confirmed"]);
-    const [row] = await query("select fallback_streak from conversations where id = $1", [rogerio.conversationId]);
-    assert.equal(row.fallback_streak, 1, "a second attempt reaches a person who can");
+    assert.match(change.reply, /^Quer mesmo cancelar /, JSON.stringify((await rogerio.lastMetadata()).toolCalls));
+    assert.deepEqual((await rogerio.appointments()).map((row) => row.status), ["confirmed"], "nothing changes before a yes");
   });
 
   await t.test("T020 a time outside the broker's week: a readable refusal, fresh options, nothing confirmed", async () => {

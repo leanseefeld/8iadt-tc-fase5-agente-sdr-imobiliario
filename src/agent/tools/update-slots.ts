@@ -135,7 +135,9 @@ export const EXTRACTION_FIELDS: readonly ExtractionField[] = [
   },
   {
     key: "preferredWeekday",
-    description: "O dia da semana que a pessoa pediu para o horário, se pediu um. Senão, null.",
+    description:
+      "O dia da semana que a pessoa citou — para um horário, ou para dizer de qual visita ou conversa fala " +
+      '("a de terça"). Senão, null.',
     values: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
   },
   {
@@ -179,11 +181,19 @@ export const EXTRACTION_FIELDS: readonly ExtractionField[] = [
       "Perguntar quem vai atender NÃO é isso. Na dúvida, false.",
   },
   {
-    key: "wantsToChangeBooking",
+    key: "changeRequest",
     description:
-      'true se a pessoa quer cancelar, desmarcar ou mudar o dia ou horário de uma visita ou conversa JÁ ' +
-      'confirmada ("não vou mais poder na sexta", "preciso cancelar a visita", "dá pra passar pra segunda?"). ' +
-      "Recusar horários que acabaram de ser oferecidos NÃO é isso. Na dúvida, false.",
+      'cancel se a pessoa quer cancelar ou desmarcar uma visita ou conversa JÁ confirmada ("não vou mais poder ' +
+      'na sexta", "preciso cancelar a visita"); reschedule se quer mudar o dia ou horário dela ("dá pra passar ' +
+      'pra segunda?", "quero remarcar"). Recusar horários que acabaram de ser oferecidos NÃO é isso. Senão, null.',
+    values: ["cancel", "reschedule"],
+  },
+  {
+    key: "answer",
+    description:
+      'yes se a pessoa respondeu que sim a uma pergunta de confirmação da sua mensagem anterior ("sim", "pode", ' +
+      '"isso", "quero"); no se respondeu que não ("não", "deixa", "melhor não"). Senão, null.',
+    values: ["yes", "no"],
   },
   {
     key: "askedWhoAttends",
@@ -223,7 +233,8 @@ export interface Extracted {
   propertyPosition: number | null;
   propertyCode: string | null;
   askedWhoAttends: boolean;
-  wantsToChangeBooking: boolean;
+  changeRequest: string | null;
+  answer: string | null;
   meetingKind: string | null;
   unsupportedMeeting: boolean;
   outOfScopeRequest: boolean;

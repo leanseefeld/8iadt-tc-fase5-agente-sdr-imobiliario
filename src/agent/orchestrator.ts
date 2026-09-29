@@ -24,6 +24,8 @@ import {
   type Slots,
 } from "../domain/slots.ts";
 import {
+  lastReschedulingId,
+  pendingChange,
   claimTurn,
   commitTurn,
   lastSearchOutcome,
@@ -58,8 +60,18 @@ import { REPLY_SYSTEM_PROMPT, extractionSystemPrompt, turnBriefing } from "./pro
 import { getJsonModel, modelCall } from "./provider.ts";
 import { plausiblyAnswers, recoverSlot } from "./recovery.ts";
 import { act } from "./act.ts";
+import { chooseMeeting, matchAnswer } from "./meeting-change.ts";
 import { actionTools, type SearchOutcome } from "./tools/index.ts";
 import {
+  MEETING_LIMIT_SENTENCE,
+  NO_MEETING_TO_CHANGE_SENTENCE,
+  cancelQuestion,
+  cancelledSentence,
+  keptSentence,
+  rescheduleOptionsSentence,
+  rescheduledSentence,
+  whichOneSentence,
+  type MeetingRef,
   NO_PROPERTY_YET_SENTENCE,
   PHONE_OFFER_SENTENCE,
   VISIT_NEEDS_PROPERTY_SENTENCE,
@@ -75,6 +87,12 @@ import {
   stillValidSentence,
 } from "./prompts/meeting.ts";
 import {
+  MAX_UPCOMING_MEETINGS,
+  cancelAppointment,
+  computeRescheduleOptions,
+  listUpcomingMeetings,
+  type RescheduleResult,
+  type UpcomingMeeting,
   declineProposal,
   hasConfirmedFutureAppointment,
   proposeAppointment,
@@ -336,8 +354,10 @@ interface SchedulingFacts {
   preference: Preference;
   propertyRef: PropertyRef | null;
   askedWhoAttends: boolean;
-  /** FR-004g: cancel or move a meeting already confirmed (spec 009 acts on it; until then, "ainda não consigo"). */
-  wantsToChangeBooking: boolean;
+  /** Spec 009: cancel or move a meeting already confirmed. */
+  changeRequest: "cancel" | "reschedule" | null;
+  /** Spec 009: a yes or a no to the confirmation question just asked. */
+  answer: "yes" | "no" | null;
   /** FR-004e/f: the lead asked for a visit or for a phone conversation. */
   meetingKind: "visit" | "call" | null;
   /** FR-005h: a meeting in a format the agency doesn't offer (office, video, …). */
@@ -353,7 +373,8 @@ const NO_SCHEDULING: SchedulingFacts = {
   preference: {},
   propertyRef: null,
   askedWhoAttends: false,
-  wantsToChangeBooking: false,
+  changeRequest: null,
+  answer: null,
   meetingKind: null,
   unsupportedMeeting: false,
   outOfScopeRequest: false,
@@ -381,7 +402,9 @@ export function readSchedulingFacts(object: Record<string, unknown>): Scheduling
     preference,
     propertyRef,
     askedWhoAttends: isTrue(object.askedWhoAttends),
-    wantsToChangeBooking: isTrue(object.wantsToChangeBooking),
+    changeRequest:
+      object.changeRequest === "cancel" || object.changeRequest === "reschedule" ? object.changeRequest : null,
+    answer: object.answer === "yes" || object.answer === "no" ? object.answer : null,
     meetingKind: object.meetingKind === "visit" || object.meetingKind === "call" ? object.meetingKind : null,
     unsupportedMeeting: isTrue(object.unsupportedMeeting),
     outOfScopeRequest: isTrue(object.outOfScopeRequest),
@@ -991,6 +1014,118 @@ export function meetingTarget(input: {
 }
 
 /**
+ * Spec 009 — the lead changes what was booked. All decided here, in code:
+ *
+ * - a yes to "quer mesmo cancelar?" cancels; a no keeps it (asked first, 29/09);
+ * - a yes to "quer marcar outro dia?" after a cancel offers times again;
+ * - a cancel or reschedule request picks the meeting — asking "qual delas?"
+ *   when it could be more than one — then asks to confirm the cancel, or offers
+ *   times to move it; a time already named goes to the action loop instead.
+ *
+ * Nothing here names a broker (FR-005e); every sentence is code-written.
+ */
+async function decideChange(input: {
+  turn: LoadedTurn;
+  facts: SchedulingFacts;
+  upcoming: UpcomingMeeting[];
+  waiting: ReturnType<typeof pendingChange>;
+  confirmingCancel: boolean;
+  answeringWhich: boolean;
+  rebooking: boolean;
+  changeAsked: "cancel" | "reschedule" | null;
+  answeredMeeting: MeetingRef | null;
+  timezone: string;
+}): Promise<{
+  written: string;
+  scheduling?: SchedulingRecord;
+  offeredType?: MeetingType | null;
+  call?: CommittedToolCall;
+  rescheduleTarget?: { appointmentId: string; offered: Date[] };
+}> {
+  const { turn, facts, upcoming, waiting, timezone } = input;
+  const refs: MeetingRef[] = upcoming;
+
+  if (input.confirmingCancel) {
+    const meeting = refs.find((item) => item.id === waiting.pendingCancel);
+    if (meeting === undefined) return { written: NO_MEETING_TO_CHANGE_SENTENCE };
+    if (facts.answer === "no") return { written: keptSentence(meeting, timezone) };
+    const cancelled = await cancelAppointment(meeting.id, turn.lead.id);
+    if (!cancelled) return { written: NO_MEETING_TO_CHANGE_SENTENCE };
+    const original = upcoming.find((item) => item.id === meeting.id);
+    return {
+      written: cancelledSentence(meeting, timezone),
+      call: { name: "cancelMeeting", arguments: { appointmentId: meeting.id } },
+      scheduling: {
+        rebook: {
+          type: meeting.type,
+          propertyId: original?.propertyId ?? null,
+          propertyCode: meeting.propertyCode,
+        },
+      },
+    };
+  }
+
+  if (input.rebooking && waiting.rebook !== undefined) {
+    if (upcoming.length >= MAX_UPCOMING_MEETINGS) return { written: MEETING_LIMIT_SENTENCE };
+    const { rebook } = waiting;
+    const offered = await offerTimes({
+      turn,
+      intent: turn.lead.intent,
+      property:
+        rebook.type === "viewing" && rebook.propertyId !== null && rebook.propertyCode !== null
+          ? { id: rebook.propertyId, code: rebook.propertyCode }
+          : null,
+      constraint: facts.preference,
+      proposalOpen: turn.proposalOpen,
+      timezone,
+    });
+    return {
+      written: offered.reply,
+      offeredType: offered.type,
+      call: offered.call,
+      ...(offered.options.length > 0 ? { scheduling: { options: offered.options.map((at) => at.toISOString()) } } : {}),
+    };
+  }
+
+  const choice = input.answeringWhich ? waiting.pendingChoice : undefined;
+  const change = choice?.change ?? input.changeAsked;
+  if (change === null || change === undefined) return { written: NO_MEETING_TO_CHANGE_SENTENCE };
+  const pool = choice !== undefined ? refs.filter((item) => choice.ids.includes(item.id)) : refs;
+
+  // "A primeira" answers "qual delas?" by position; otherwise narrow by what the
+  // message names. While answering "qual delas?", a weekday names the meeting.
+  const position = facts.propertyRef !== null && "position" in facts.propertyRef ? facts.propertyRef.position : null;
+  const chosen =
+    choice !== undefined && input.answeredMeeting !== null
+      ? { meeting: input.answeredMeeting }
+      : choice !== undefined && position !== null && pool[position - 1] !== undefined
+      ? { meeting: pool[position - 1] }
+      : chooseMeeting(
+          pool,
+          {
+            code: facts.propertyRef !== null && "code" in facts.propertyRef ? facts.propertyRef.code : null,
+            weekday: facts.preference.weekday ?? null,
+            kind: facts.meetingKind,
+          },
+          choice !== undefined ? "cancel" : change,
+          timezone,
+        );
+
+  if ("none" in chosen) return { written: NO_MEETING_TO_CHANGE_SENTENCE };
+  if ("ask" in chosen) {
+    return { written: whichOneSentence(chosen.ask, timezone), scheduling: { pendingChoice: { change, ids: chosen.ask.map((item) => item.id) } } };
+  }
+  const meeting = chosen.meeting;
+  if (change === "cancel") {
+    return { written: cancelQuestion(meeting, timezone), scheduling: { pendingCancel: meeting.id } };
+  }
+
+  // Reschedule: the action loop decides whether a new time was named, as
+  // `bookMeeting` does; when the tool isn't called, the lead gets times to pick.
+  return { written: "", rescheduleTarget: { appointmentId: meeting.id, offered: [] } };
+}
+
+/**
  * Spec 006: propose times and write the sentence that presents them — or the
  * sentence that says there are none. Code throughout (FR-004a, FR-005d); the
  * model never proposes. The broker chosen stays inside the service (FR-005e).
@@ -1204,6 +1339,37 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   const declining = facts.declinedOffer && proposalOpen;
   // FR-005f: the booking tool is offered only for an actual pick.
   const picking = facts.pickedTime && proposalOpen && !declining;
+  // Spec 009: the lead's meetings still to come, and what the last reply left
+  // pending — a cancel to confirm, a choice between meetings, a rebook offer.
+  const booked = await listUpcomingMeetings(turn.lead.id);
+  const waiting = pendingChange(turn);
+  const reschedulingId = lastReschedulingId(turn);
+  // A pick among options offered to move a confirmed meeting.
+  const movingPick =
+    facts.pickedTime && !proposalOpen && reschedulingId !== null && booked.some((meeting) => meeting.id === reschedulingId);
+  const confirmingCancel = waiting.pendingCancel !== undefined && facts.answer !== null;
+  // A "no" with nothing open to decline, from a lead with a meeting booked, is a cancel.
+  const changeAsked: "cancel" | "reschedule" | null =
+    facts.changeRequest ?? (facts.declinedOffer && !proposalOpen && booked.length > 0 && !confirmingCancel ? "cancel" : null);
+  // The answer to "qual delas?" is read against the meetings just listed.
+  const answeredMeeting =
+    waiting.pendingChoice !== undefined
+      ? matchAnswer(
+          booked.filter((meeting) => waiting.pendingChoice?.ids.includes(meeting.id)),
+          leadText,
+          getConfig().FOLLOWUP_TIMEZONE,
+        )
+      : null;
+  const answeringWhich =
+    waiting.pendingChoice !== undefined &&
+    !confirmingCancel &&
+    (answeredMeeting !== null ||
+      changeAsked !== null ||
+      facts.propertyRef !== null ||
+      facts.preference.weekday !== undefined ||
+      facts.meetingKind !== null);
+  const rebooking = waiting.rebook !== undefined && facts.answer === "yes" && changeAsked === null && !confirmingCancel;
+  const changing = confirmingCancel || answeringWhich || changeAsked !== null || movingPick || rebooking;
   // FR-005h/i: a request the agency cannot meet — a meeting at the office or by
   // video, a ride, a broker chosen by a personal trait. It never proposes or
   // books, and it counts against the handoff streak like any other request the
@@ -1212,17 +1378,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   // "Quem vai me atender?" is FR-005e's question, not a request to choose.
   const refusingRequest =
     facts.outOfScopeRequest && !facts.askedWhoAttends && !refusingFormat && !declining && !picking;
-  // FR-004g: cancelling or moving a confirmed meeting is spec 009's. Until then,
-  // the honest "ainda não consigo" — never a "sem problema" that leaves the
-  // visit confirmed while the lead thinks it's off. A decline with nothing open
-  // to decline, from a lead who has a booking, is the same request.
-  const changingBooking =
-    (facts.wantsToChangeBooking || (facts.declinedOffer && !proposalOpen)) &&
-    !picking &&
-    !refusingFormat &&
-    !refusingRequest &&
-    (await hasConfirmedFutureAppointment(turn.lead.id));
-  const refused = refusingFormat || refusingRequest || changingBooking;
+  const refused = refusingFormat || refusingRequest;
   // FR-004b: only a property already shown here; anything else is ignored.
   const interest = facts.propertyRef === null ? null : await resolvePropertyRef(turn, facts.propertyRef);
   // A pick outranks a request for times on the same message: the extraction
@@ -1238,21 +1394,24 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     !declining &&
     !picking &&
     interest === null &&
-    (proposalOpen || (await hasConfirmedFutureAppointment(turn.lead.id)));
+    !changing &&
+    (proposalOpen || booked.length > 0);
   const wantsOffer =
     !declining &&
     !picking &&
     !refused &&
     !askingWhoAttends &&
+    !changing &&
     (facts.askedForTimes || facts.meetingKind !== null || interest !== null);
   // FR-005b: "complete" is shouldProposeMeeting's own check, without its
   // offer-outstanding clause.
   const scriptComplete = shouldProposeMeeting(intent, slots, score, false) !== null;
-  // FR-004d: several bookings are spec 009. Until then, an honest "can't yet".
-  const alreadyBooked = wantsOffer && scriptComplete && (await hasConfirmedFutureAppointment(turn.lead.id));
+  // Spec 009: up to three meetings still to come per lead.
+  const atLimit = wantsOffer && scriptComplete && booked.length >= MAX_UPCOMING_MEETINGS;
   // A "no" with nothing open to decline was still understood: it is not a
   // misunderstanding to count towards a handoff, only nothing to act on.
-  const acted = !refused && (facts.declinedOffer || picking || askingWhoAttends || (wantsOffer && !alreadyBooked));
+  const acted =
+    !refused && (facts.declinedOffer || picking || askingWhoAttends || changing || (wantsOffer && !atLimit));
 
   // A misunderstanding is an attempt the system could not use (FR-003a). A
   // reaction, a greeting or a failed extraction holds the streak instead of
@@ -1277,7 +1436,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   // The explicit ask still wins on any other message (spec 004 FR-027).
   // A request refused as outside the domain ("uma corretora LGBT pra me
   // atender") names a person too; it is still not a request to leave the agent.
-  const aboutTheMeeting = declining || picking || wantsOffer || askingWhoAttends || refused;
+  const aboutTheMeeting = declining || picking || wantsOffer || askingWhoAttends || refused || changing;
   const handoffReason = handoffDecision({
     leadAskedForHuman: extraction.leadAskedForHuman && !aboutTheMeeting,
     fallbackStreak,
@@ -1291,6 +1450,10 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   let written: string | null = null;
   let offeredType: MeetingType | null = null;
   let prefix: string | undefined;
+  // Spec 009: a meeting to move to a time the lead named — the action loop does it.
+  let rescheduleTarget: { appointmentId: string; offered: Date[] } | null = movingPick
+    ? { appointmentId: reschedulingId as string, offered: lastOfferedOptions(turn) }
+    : null;
   const property = interest ?? latestInterestedProperty(turn);
   // Re-proposing after a refused booking keeps the kind the lead was offered.
   const offer = async (constraint: Preference) =>
@@ -1310,6 +1473,24 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       written = refusingFormat && !callBooked ? `${CANNOT_ACT_REPLY} ${PHONE_OFFER_SENTENCE}` : CANNOT_ACT_REPLY;
     } else if (askingWhoAttends) {
       written = ATTENDEE_UNKNOWN_SENTENCE;
+    } else if (changing && !movingPick) {
+      const change = await decideChange({
+        turn,
+        facts,
+        upcoming: booked,
+        waiting,
+        confirmingCancel,
+        answeringWhich,
+        rebooking,
+        changeAsked,
+        answeredMeeting,
+        timezone,
+      });
+      written = change.written === "" ? null : change.written;
+      if (change.scheduling !== undefined) scheduling = { ...scheduling, ...change.scheduling };
+      if (change.offeredType !== undefined) offeredType = change.offeredType;
+      if (change.call !== undefined) toolCalls.push(change.call);
+      rescheduleTarget = change.rescheduleTarget ?? null;
     } else if (declining) {
       await declineProposal(turn.conversation.id);
       scheduling = { ...scheduling, declined: true };
@@ -1324,9 +1505,12 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       if ((facts.askedForTimes || facts.meetingKind !== null) && lastAgent?.content.startsWith(DETAILS_FIRST_SENTENCE) !== true) {
         prefix = DETAILS_FIRST_SENTENCE;
       }
-    } else if (wantsOffer && alreadyBooked) {
-      written = CANNOT_ACT_REPLY;
-    } else if (wantsOffer || (!proposalOpen && shouldProposeMeeting(intent, slots, score, offerOutstanding(turn)) !== null)) {
+    } else if (wantsOffer && atLimit) {
+      written = MEETING_LIMIT_SENTENCE;
+    } else if (
+      wantsOffer ||
+      (!proposalOpen && booked.length === 0 && shouldProposeMeeting(intent, slots, score, offerOutstanding(turn)) !== null)
+    ) {
       // FR-004e/f: a visit is about a property; the only other meeting is by phone.
       const target = meetingTarget({
         intent,
@@ -1380,17 +1564,23 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     searchRelevant.some((slot) => qualifyingSlots(intent).includes(slot));
   // FR-005f: booking is offered only on an actual pick of an open proposal.
   const bookingDue = picking && handoffReason === null && written === null;
+  // Spec 009: moving a confirmed meeting to a picked or named time.
+  const rescheduleDue = rescheduleTarget !== null && handoffReason === null && written === null;
 
   // `searchDue` only decides whether the action call is offered. The search
   // itself runs inside the loop, as a model tool call, and may run again
   // before any reply exists (FR-013).
   const searches: SearchOutcome[] = [];
   const bookings: BookResult[] = [];
+  const moves: RescheduleResult[] = [];
   const offeredTimes = bookingDue ? lastOfferedOptions(turn) : [];
-  if (searchDue || bookingDue) {
+  if (searchDue || bookingDue || rescheduleDue) {
     const briefing = [
       ...(searchDue ? ["Há uma busca a considerar com os critérios já registrados. Chame searchProperties."] : []),
       ...(bookingDue ? [bookingBriefing(offeredTimes, leadText, new Date(), timezone)] : []),
+      ...(rescheduleDue && rescheduleTarget !== null
+        ? [bookingBriefing(rescheduleTarget.offered, leadText, new Date(), timezone, "rescheduleMeeting")]
+        : []),
     ].join("\n\n");
     const acted = await act({
       turn,
@@ -1416,6 +1606,18 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
                 timezone,
                 onBooked: (result) => {
                   bookings.push(result);
+                },
+              },
+            }
+          : {}),
+        ...(rescheduleDue && rescheduleTarget !== null
+          ? {
+              reschedule: {
+                appointmentId: rescheduleTarget.appointmentId,
+                offered: rescheduleTarget.offered,
+                timezone,
+                onRescheduled: (result) => {
+                  moves.push(result);
                 },
               },
             }
@@ -1495,6 +1697,42 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     written = optionsSentence(offeredTimes, type, type === "viewing" ? (property?.code ?? null) : null, timezone);
     offeredType = type;
     scheduling = { ...scheduling, options: offeredTimes.map((at) => at.toISOString()) };
+  }
+
+  // Spec 009: the move's outcome. Moved → the new confirmation and its card.
+  // Refused → why, and options for that meeting. Nothing called → options.
+  if (rescheduleDue && rescheduleTarget !== null) {
+    const moved = moves.at(-1);
+    const meeting = booked.find((item) => item.id === rescheduleTarget?.appointmentId);
+    if (moved?.ok) {
+      written = rescheduledSentence(moved.scheduledAt, moved.type, moved.propertyCode, timezone);
+      scheduling = {
+        ...scheduling,
+        booking: {
+          appointmentId: moved.appointmentId,
+          scheduledAt: moved.scheduledAt.toISOString(),
+          type: moved.type,
+          propertyCode: moved.propertyCode,
+        },
+      };
+    } else if (meeting !== undefined) {
+      // Asked to move with no time named ("só de manhã", or nothing): options,
+      // narrowed by what was said.
+      const fresh = await computeRescheduleOptions(meeting.id, moved === undefined ? facts.preference : {});
+      const why = moved !== undefined && moved.reason !== "gone" && moved.reason in BOOKING_REFUSED
+        ? `${BOOKING_REFUSED[moved.reason as keyof typeof BOOKING_REFUSED]} `
+        : "";
+      if (fresh.ok) {
+        written = `${why}${rescheduleOptionsSentence(meeting, fresh.options, timezone)}`;
+        offeredType = fresh.type;
+        toolCalls.push({ name: "proposeMeeting", arguments: { kind: fresh.type, options: fresh.options.length, reschedule: true } });
+        scheduling = { ...scheduling, options: fresh.options.map((at) => at.toISOString()), reschedulingId: meeting.id };
+      } else {
+        written = `${why}${fresh.reason === "no_slots_for_constraint" ? `${NO_OPTIONS_FOR_CONSTRAINT_SENTENCE} Quer tentar outro dia ou horário?` : NO_OPTIONS_SENTENCE}`;
+      }
+    } else {
+      written = NO_MEETING_TO_CHANGE_SENTENCE;
+    }
   }
 
   if (written !== null) {

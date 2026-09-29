@@ -228,7 +228,8 @@ Teto 100. Faixas: **frio < 40**, **morno 40–69**, **quente ≥ 70**.
 | `lead.opted_out` | `{}` | 004 |
 | `lead.status_changed` | `{ from, to }` | 004 (agente até `scheduled`) · 005 (corretor) · 006 (visita) |
 | `lead.reassigned` | `{ fromBrokerId, toBrokerId }` | 005 |
-| `appointment.done` / `appointment.cancelled` | `{ appointmentId }` | 006 |
+| `appointment.done` / `appointment.cancelled` | `{ appointmentId }` — `actorType: user` pela agenda; `cancelled` também com `actorType: lead`, pelo chat, depois do sim (009) | 006 · 009 |
+| `appointment.rescheduled` | `{ appointmentId, from, to }` — a mesma linha, novo horário | 009 |
 
 As métricas do painel derivam daqui: tempo de primeira resposta
 (`lead.created` → primeira mensagem `agent`), taxa de qualificação

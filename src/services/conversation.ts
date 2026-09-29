@@ -330,6 +330,37 @@ export function lastOfferedType(turn: LoadedTurn): "viewing" | "call" | null {
   return kind === "viewing" || kind === "call" ? kind : null;
 }
 
+/**
+ * Spec 009: what the **last** agent reply left pending — a cancel to confirm, a
+ * choice between meetings, a rebook offer. Only the reply just before counts:
+ * a lead who talks about something else has moved on, and nothing is carried
+ * over from further back.
+ */
+export function pendingChange(turn: LoadedTurn): Pick<SchedulingRecord, "pendingCancel" | "pendingChoice" | "rebook"> {
+  const last = [...turn.history].reverse().find((message) => message.role === "agent");
+  const metadata = last?.metadata ?? {};
+  const choice = metadata.pendingChoice as { change?: unknown; ids?: unknown } | undefined;
+  const rebook = metadata.rebook as SchedulingRecord["rebook"] | undefined;
+  return {
+    ...(typeof metadata.pendingCancel === "string" ? { pendingCancel: metadata.pendingCancel } : {}),
+    ...(choice !== undefined &&
+    (choice.change === "cancel" || choice.change === "reschedule") &&
+    Array.isArray(choice.ids)
+      ? { pendingChoice: { change: choice.change, ids: choice.ids.filter((id): id is string => typeof id === "string") } }
+      : {}),
+    ...(rebook !== undefined && (rebook.type === "viewing" || rebook.type === "call") ? { rebook } : {}),
+  };
+}
+
+/** Spec 009: the appointment the latest options move, when they were offered for a reschedule. */
+export function lastReschedulingId(turn: LoadedTurn): string | null {
+  const carrier = [...turn.history]
+    .reverse()
+    .find((message) => message.role === "agent" && Array.isArray(message.metadata.meetingOptions));
+  const id = carrier?.metadata.reschedulingId;
+  return typeof id === "string" ? id : null;
+}
+
 /** FR-004b: the most recent property the lead pointed at, if any. */
 export function latestInterestedProperty(turn: LoadedTurn): { id: string; code: string } | null {
   const carrier = [...turn.history]
@@ -771,6 +802,14 @@ export interface SchedulingRecord {
   interestedProperty?: { id: string; code: string };
   /** The meeting booked this turn; the widget renders it as a card (FR-006). */
   booking?: { appointmentId: string; scheduledAt: string; type: "viewing" | "call"; propertyCode: string | null };
+  /** Spec 009: "quer mesmo cancelar?" was asked about this appointment; the next yes cancels it. */
+  pendingCancel?: string;
+  /** Spec 009: "qual delas?" was asked; the next message picks among these, for this change. */
+  pendingChoice?: { change: "cancel" | "reschedule"; ids: string[] };
+  /** Spec 009: the options this reply offered move this confirmed appointment, not a proposal. */
+  reschedulingId?: string;
+  /** Spec 009: a meeting was cancelled and "quer marcar outro dia?" asked; a yes offers these again. */
+  rebook?: { type: "viewing" | "call"; propertyId: string | null; propertyCode: string | null };
 }
 
 export interface CommitTurnResult {
@@ -910,6 +949,10 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
             ? { interestedProperty: input.scheduling.interestedProperty }
             : {}),
           ...(input.scheduling?.booking !== undefined ? { booking: input.scheduling.booking } : {}),
+          ...(input.scheduling?.pendingCancel !== undefined ? { pendingCancel: input.scheduling.pendingCancel } : {}),
+          ...(input.scheduling?.pendingChoice !== undefined ? { pendingChoice: input.scheduling.pendingChoice } : {}),
+          ...(input.scheduling?.reschedulingId !== undefined ? { reschedulingId: input.scheduling.reschedulingId } : {}),
+          ...(input.scheduling?.rebook !== undefined ? { rebook: input.scheduling.rebook } : {}),
           // Masked one level down, not as a whole: `maskPII` is key-aware and a
           // tool's `name` is the tool's, not a person's — masking the object
           // would write `u***` where `updateSlots` belongs.

@@ -1,8 +1,9 @@
 # O turno do agente — quem decide o quê
 
 > Mapa de referência para responder, a qualquer momento: **isto é uma chamada de modelo ou uma conta do código?
-> E o que liga isso neste turno?** Reflete o código das specs 004, 005, 007 e 006 (propor, reservar, as saídas,
-> o botão *Interessado* e o follow-up, marcados *(006)*).
+> E o que liga isso neste turno?** Reflete o código das specs 004, 005, 007, 006 (propor, reservar, as saídas,
+> o botão *Interessado* e o follow-up, marcados *(006)*) e 009 (cancelar, remarcar, até três compromissos,
+> marcados *(009)*).
 
 ## A regra, em uma frase
 
@@ -44,9 +45,9 @@ flowchart TD
     ACC --> DEC["Decidir<br/>handoffDecision · shouldProposeMeeting<br/>+ offerOutstanding · nextQuestion"]:::codigo
     DEC --> HO{"handoff?<br/>006: não, se a mensagem é sobre o encontro"}:::codigo
     HO -- "sim" --> W_HO["handoffReply"]:::escrita
-    HO -- "não" --> MEET["Encontro (006)<br/>formato ou pedido fora do domínio, ou mudar visita já confirmada → ainda não consigo (streak avança)<br/>recusa → declineProposal · pedido ou interesse → meetingTarget<br/>visita sem imóvel → pergunta qual · senão proposeAppointment"]:::codigo
-    MEET --> ACTQ{"act() oferecido?<br/>busca devida, sem frase de agenda<br/>006: proposta aberta + pickedTime"}:::codigo
-    ACTQ -- "sim" --> ACT["act() — até 3 passos<br/>searchProperties<br/>006: bookMeeting"]:::age
+    HO -- "não" --> MEET["Encontro (006)<br/>formato ou pedido fora do domínio → ainda não consigo (streak avança)<br/>recusa → declineProposal · pedido ou interesse → meetingTarget<br/>visita sem imóvel → pergunta qual · senão proposeAppointment<br/>009: mudar o que foi marcado → decideChange<br/>qual delas? · quer mesmo cancelar? → cancelAppointment · remarcar → opções"]:::codigo
+    MEET --> ACTQ{"act() oferecido?<br/>busca devida, sem frase de agenda<br/>006: proposta aberta + pickedTime<br/>009: compromisso a remarcar"}:::codigo
+    ACTQ -- "sim" --> ACT["act() — até 3 passos<br/>searchProperties<br/>006: bookMeeting · 009: rescheduleMeeting"]:::age
     ACTQ -- "não" --> AGENDA
     ACT --> AGENDA{"frase de agenda?<br/>opções · confirmação · recusa da reserva"}:::codigo
     AGENDA -- "sim" --> W_MEET["frase escrita pelo código<br/>datas, horários e 'alguém da nossa equipe'"]:::escrita
@@ -86,11 +87,13 @@ stateDiagram-v2
         proposta --> proposta: bookMeeting recusado (motivo + novas opções)
         proposta --> confirmada: pickedTime e bookMeeting, revalidado
         proposta --> recusada: declinedOffer com proposta aberta agora
-        confirmada --> confirmada: pedir para cancelar ou remarcar → ainda não consigo (até a 009)
+        confirmada --> aguardaSim: pedir para cancelar → quer mesmo cancelar? (009)
+        aguardaSim --> cancelada: sim → cancelAppointment
+        aguardaSim --> confirmada: não → continua marcada
         recusada --> proposta: o lead pede de novo
         confirmada --> realizada: corretor marca feita
-        confirmada --> cancelada: corretor cancela, ou 009 pelo lead
-        confirmada --> confirmada: 009 remarcar, mesma linha
+        confirmada --> cancelada: corretor cancela, pela agenda
+        confirmada --> confirmada: remarcar → rescheduleMeeting, mesma linha, mesma regra (009)
     }
 
     state "Follow-up (006)" as FU {
@@ -132,7 +135,7 @@ stateDiagram-v2
 | botão **Interessado** no card *(006)* | 🟩 widget envia | `app/(public)/chat/…/PropertyCard.tsx` | clique ou toque: posta *"Interessado em VMA-0005"* em nome do lead, como mensagem dele, e um turno normal começa; a resposta depende de onde a conversa está (FR-004d) |
 | debounce · `claimTurn` | 🟦 código | `channels/web.ts` · `services/conversation.ts` | toda mensagem; um turno por conversa, depois de `CHAT_DEBOUNCE_MS` de silêncio |
 | `looksLikeInjection` | 🟦 código | `domain/injection.ts` | todo turno; três frases fixas de tentativa de manipulação |
-| `extract()` | 🟨 modelo lê | `agent/orchestrator.ts` | todo turno que passou do portão. Devolve slots e os fatos `askedForHuman`, `optOut`, `attemptedAnswer`, `askedAboutCriteria`; **006:** `declinedOffer`, `askedForTimes`, `pickedTime`, `preferredWeekday`, `preferredPeriod`, `propertyPosition`, `propertyCode`, `askedWhoAttends`, `wantsToChangeBooking`, `meetingKind`, `unsupportedMeeting`, `outOfScopeRequest` |
+| `extract()` | 🟨 modelo lê | `agent/orchestrator.ts` | todo turno que passou do portão. Devolve slots e os fatos `askedForHuman`, `optOut`, `attemptedAnswer`, `askedAboutCriteria`; **006:** `declinedOffer`, `askedForTimes`, `pickedTime`, `preferredWeekday`, `preferredPeriod`, `propertyPosition`, `propertyCode`, `askedWhoAttends`, **009:** `changeRequest`, `answer`, `meetingKind`, `unsupportedMeeting`, `outOfScopeRequest` |
 | `recoverSlot()` | 🟨 modelo lê | `agent/recovery.ts` | slot pendente ficou vazio, a extração não disse nada dele, **e** o lead tentou responder |
 | `mergeSlots` | 🟦 código | `domain/slots.ts` | todo turno; separa preenchido, revisado, intenção trocada e recusado |
 | `accountTurn` | 🟦 código | `agent/orchestrator.ts` | todo turno; decide o streak. **006:** um pedido que a imobiliária não atende (encontro no escritório ou por vídeo, carona, escolher quem atende por aparência, cor, gênero, ideologia…) **avança** o streak, mesmo que o turno tenha aprendido algo |
@@ -141,7 +144,9 @@ stateDiagram-v2
 | `meetingTarget` *(006)* | 🟦 código | `agent/orchestrator.ts` | antes de propor: investidor → conversa por telefone; pediu telefone → telefone; imóvel em jogo → visita; cards na tela e nenhum apontado → **pergunta qual imóvel** (ou oferece o telefone), sem horários; nada mostrado ainda → telefone |
 | `proposeAppointment` *(006)* | 🟦 código | `services/scheduling.ts` | `shouldProposeMeeting`, **ou** `askedForTimes`/interesse com roteiro completo (incompleto: *"Assim que eu tiver seus dados…"*, uma vez; já agendado: *"ainda não consigo"*). Dia e período pedidos filtram **antes** do limite de três. Datas e horários são escritos pelo código |
 | `resolvePropertyRef` *(006)* | 🟦 código | `services/conversation.ts` | a extração trouxe `propertyRef` (*"o segundo"*, *"VMA-0005"*); resolve só contra imóveis **já mostrados nesta conversa**, nunca adivinha |
-| `declineProposal` *(006)* | 🟦 código | `services/scheduling.ts` | `declinedOffer` **com proposta aberta agora** — uma linha ainda `proposed` (`turn.proposalOpen`), não "já houve oferta" (`appointmentProposed`, que só evita repetir a oferta). Depois de uma reserva, *"não vou mais poder"* não é recusa: é pedido de mudança, respondido com *"ainda não consigo"* até a 009 |
+| `declineProposal` *(006)* | 🟦 código | `services/scheduling.ts` | `declinedOffer` **com proposta aberta agora** — uma linha ainda `proposed` (`turn.proposalOpen`), não "já houve oferta" (`appointmentProposed`, que só evita repetir a oferta). Depois de uma reserva, *"não vou mais poder"* não é recusa: é pedido de cancelamento (009) |
+| `decideChange` *(009)* | 🟦 código | `agent/orchestrator.ts` · `agent/meeting-change.ts` | `changeRequest` (cancelar/remarcar), um `answer` sim/não à pergunta anterior, ou a resposta a *"qual delas?"* — lida contra os compromissos listados (`matchAnswer`). Cancelar só depois do sim (`cancelAppointment`); remarcar vai ao `act()` e, sem horário dito, oferece horários daquele compromisso; depois de cancelar, um sim a *"quer marcar outro dia?"* oferece de novo. Até **três** compromissos futuros por lead |
+| `rescheduleMeeting` *(009)* | 🟥 tool | `agent/tools/reschedule-meeting.ts` | dentro do `act()`, quando o lead está remarcando. Move **a mesma linha** e revalida com o mesmo `checkSlot` da marcação, ignorando só o horário do próprio compromisso. O briefing traz os próximos sete dias já calculados, para "segunda" nunca virar uma segunda que passou |
 | `nextQuestion` | 🟦 código | `domain/slots.ts` | quando não há oferta nem handoff no turno — **quem escolhe a próxima pergunta é sempre o código** |
 | `act()` | 🟥 modelo age | `agent/act.ts` | critério de busca preenchido ou revisado com o roteiro qualificado; **006:** ou proposta aberta **e** `pickedTime` sem recusa |
 | `searchProperties` | 🟥 tool | `agent/tools/search-properties.ts` | dentro do `act()`. Agência e a recusa para investidor vêm do código, nunca do argumento. **006 FR-020:** uma área pedida casa com o bairro **ou a região** (*"zona norte"* acha Santana) |

@@ -123,3 +123,34 @@ export function toolNames(metadata: Record<string, unknown>): string[] {
   const calls = metadata.toolCalls;
   return Array.isArray(calls) ? calls.map((call) => (call as { name: string }).name) : [];
 }
+
+/**
+ * Spec 009 setup: a confirmed meeting written straight to the test database —
+ * what the lead already has before the conversation under test starts. With
+ * Ana, a purchase broker seeded Mon–Fri 09:00–18:00.
+ */
+export async function bookDirect(
+  lead: Lead,
+  meeting: { at: Date; type?: "viewing" | "call"; propertyCode?: string | null },
+): Promise<string> {
+  const [row] = await query(
+    `insert into appointments (agency_id, lead_id, conversation_id, broker_id, property_id, scheduled_at, type, status)
+     select c.agency_id, c.lead_id, c.id,
+            (select u.id from users u where u.agency_id = c.agency_id and u.name = 'Ana Ribeiro'),
+            (select p.id from properties p where p.agency_id = c.agency_id and p.code = $3),
+            $2, $4, 'confirmed'
+       from conversations c where c.id = $1
+     returning id`,
+    [lead.conversationId, meeting.at, meeting.propertyCode ?? null, meeting.type ?? (meeting.propertyCode ? "viewing" : "call")],
+  );
+  return row.id as string;
+}
+
+/** The next given weekday at hh:mm in São Paulo, at least two days from now. */
+export function nextLocal(weekday: "mon" | "tue" | "wed" | "thu" | "fri", hour: number, minute = 0): Date {
+  const names = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  const day = new Date(Date.now() + 2 * 24 * 60 * 60_000);
+  while (names[new Date(day.getTime() - 3 * 60 * 60_000).getUTCDay()] !== weekday) day.setTime(day.getTime() + 24 * 60 * 60_000);
+  const local = new Date(day.getTime() - 3 * 60 * 60_000);
+  return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), hour + 3, minute));
+}

@@ -49,7 +49,8 @@ type AppointmentStatus = "proposed" | "confirmed" | "done" | "cancelled";
  */
 const ALLOWED: Record<AppointmentStatus, readonly AppointmentStatus[]> = {
   proposed: ["confirmed", "cancelled"],
-  confirmed: ["done", "cancelled"],
+  // Spec 009: `confirmed → confirmed` is a reschedule — the same row, a new instant.
+  confirmed: ["done", "cancelled", "confirmed"],
   done: [],
   cancelled: [],
 };
@@ -552,5 +553,149 @@ export async function markAppointmentStatus(
       }
     }
     return { ok: true };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Spec 009: the lead changes what was booked
+// ---------------------------------------------------------------------------
+
+/** Up to this many confirmed meetings still to come per lead (spec 009, answered 29/09). */
+export const MAX_UPCOMING_MEETINGS = 3;
+
+export interface UpcomingMeeting {
+  id: string;
+  scheduledAt: Date;
+  type: MeetingType;
+  propertyId: string | null;
+  propertyCode: string | null;
+}
+
+/** The lead's confirmed meetings still to come, soonest first. No broker in the result (FR-005e). */
+export async function listUpcomingMeetings(leadId: string, now = new Date(), runner: Runner = getDb()): Promise<UpcomingMeeting[]> {
+  const rows = await runner
+    .select({
+      id: appointments.id,
+      scheduledAt: appointments.scheduledAt,
+      type: appointments.type,
+      propertyId: appointments.propertyId,
+      propertyCode: properties.code,
+    })
+    .from(appointments)
+    .leftJoin(properties, eq(properties.id, appointments.propertyId))
+    .where(and(eq(appointments.leadId, leadId), eq(appointments.status, "confirmed"), gte(appointments.scheduledAt, now)))
+    .orderBy(asc(appointments.scheduledAt));
+  return rows.map((row) => ({ ...row, propertyCode: row.propertyCode ?? null }));
+}
+
+/**
+ * The lead cancels a confirmed meeting, after saying yes to "quer mesmo
+ * cancelar?". Scoped to the lead, so a stale id from another conversation
+ * cancels nothing.
+ */
+export async function cancelAppointment(appointmentId: string, leadId: string): Promise<boolean> {
+  return getDb().transaction(async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(appointments)
+      .where(and(eq(appointments.id, appointmentId), eq(appointments.leadId, leadId), eq(appointments.status, "confirmed")));
+    if (row === undefined) return false;
+    if (!(await transitionAppointment(tx, row.id, "confirmed", "cancelled"))) return false;
+    await tx.insert(events).values({
+      agencyId: row.agencyId,
+      leadId: row.leadId,
+      conversationId: row.conversationId,
+      type: "appointment.cancelled",
+      actorType: "lead",
+      payload: { appointmentId: row.id },
+    });
+    return true;
+  });
+}
+
+/** A meeting's own busy slot never blocks moving it: its broker's other meetings do. */
+async function busyExcept(brokerId: string, appointmentId: string, runner: Runner, now: Date): Promise<Interval[]> {
+  const rows = await runner
+    .select({ id: appointments.id, scheduledAt: appointments.scheduledAt })
+    .from(appointments)
+    .where(
+      and(
+        eq(appointments.brokerId, brokerId),
+        eq(appointments.status, "confirmed"),
+        gte(appointments.scheduledAt, new Date(now.getTime() - MEETING_MINUTES * 60_000)),
+      ),
+    );
+  return rows
+    .filter((row) => row.id !== appointmentId)
+    .map(({ scheduledAt }) => ({ start: scheduledAt, end: new Date(scheduledAt.getTime() + MEETING_MINUTES * 60_000) }));
+}
+
+/** Options to move one confirmed meeting: its broker, its kind, the same rule as booking. Writes nothing. */
+export async function computeRescheduleOptions(
+  appointmentId: string,
+  constraint: Preference = {},
+  now = new Date(),
+): Promise<{ ok: true; options: Date[]; type: MeetingType; propertyCode: string | null } | { ok: false; reason: "gone" | "no_slots" | "no_slots_for_constraint" }> {
+  const db = getDb();
+  const [row] = await db
+    .select({ brokerId: appointments.brokerId, type: appointments.type, status: appointments.status, code: properties.code })
+    .from(appointments)
+    .leftJoin(properties, eq(properties.id, appointments.propertyId))
+    .where(eq(appointments.id, appointmentId));
+  if (row === undefined || row.status !== "confirmed") return { ok: false, reason: "gone" };
+  const rules = slotRules(await loadBrokerAvailability(row.brokerId, db), row.type);
+  const options = proposeSlots(await busyExcept(row.brokerId, appointmentId, db, now), now, rules, constraint);
+  if (options.length === 0) {
+    const constrained = constraint.weekday !== undefined || constraint.period !== undefined;
+    return { ok: false, reason: constrained ? "no_slots_for_constraint" : "no_slots" };
+  }
+  return { ok: true, options: options.map((option) => option.scheduledAt), type: row.type, propertyCode: row.code ?? null };
+}
+
+export type RescheduleResult =
+  | { ok: true; appointmentId: string; scheduledAt: Date; type: MeetingType; propertyCode: string | null }
+  | { ok: false; reason: "gone" | "no_such_option" | "too_soon" | "unavailable" | "collision" };
+
+/**
+ * Spec 009: move a confirmed meeting — the same row, a new instant, judged by
+ * the same `checkSlot` as booking, under the same per-broker lock.
+ */
+export async function rescheduleAppointment(input: {
+  appointmentId: string;
+  choice: { optionIndex: number } | { scheduledAt: Date };
+  offered?: Date[];
+  now?: Date;
+}): Promise<RescheduleResult> {
+  return getDb().transaction(async (tx) => {
+    const [row] = await tx.select().from(appointments).where(eq(appointments.id, input.appointmentId));
+    if (row === undefined || row.status !== "confirmed") return { ok: false, reason: "gone" };
+
+    const at = "optionIndex" in input.choice ? input.offered?.[input.choice.optionIndex - 1] : input.choice.scheduledAt;
+    if (at === undefined) return { ok: false, reason: "no_such_option" };
+
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${row.brokerId}))`);
+    const now = input.now ?? new Date();
+    const rules = slotRules(await loadBrokerAvailability(row.brokerId, tx), row.type);
+    const verdict = checkSlot(at, await busyExcept(row.brokerId, row.id, tx, now), now, rules);
+    if (!verdict.ok) return { ok: false, reason: verdict.reason };
+
+    if (!(await transitionAppointment(tx, row.id, "confirmed", "confirmed", { scheduledAt: at }))) {
+      return { ok: false, reason: "gone" };
+    }
+    await tx.insert(events).values({
+      agencyId: row.agencyId,
+      leadId: row.leadId,
+      conversationId: row.conversationId,
+      type: "appointment.rescheduled",
+      actorType: "agent",
+      payload: { appointmentId: row.id, from: row.scheduledAt.toISOString(), to: at.toISOString() },
+    });
+
+    let propertyCode: string | null = null;
+    if (row.propertyId !== null) {
+      const [property] = await tx.select({ code: properties.code }).from(properties).where(eq(properties.id, row.propertyId));
+      propertyCode = property?.code ?? null;
+    }
+    return { ok: true, appointmentId: row.id, scheduledAt: at, type: row.type, propertyCode };
   });
 }

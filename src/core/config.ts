@@ -190,3 +190,12 @@ export function getConfig(): Config {
   cached ??= loadConfig(process.env);
   return cached;
 }
+
+/**
+ * Forgets the parsed config, so the next read sees `process.env` as it is then.
+ * Only for a test preload that reads the config before the test file sets its
+ * own environment (`tests/support/observe.ts`).
+ */
+export function forgetConfig(): void {
+  cached = undefined;
+}

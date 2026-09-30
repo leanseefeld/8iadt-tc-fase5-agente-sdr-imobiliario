@@ -59,7 +59,7 @@ interface State {
   registration: Registration | null;
   attempted: boolean;
   /** Which process registered: `app` or `worker`. Both run the same image. */
-  service: ProcessName;
+  service: string;
 }
 
 function state(): State {
@@ -242,7 +242,11 @@ function maskedLeadId(leadId: string): string {
  * `src/worker/index.ts` (T049). Idempotent, and a no-op — including the imports
  * — unless all three keys are present.
  */
-export async function registerLangfuse(process: ProcessName): Promise<void> {
+export async function registerLangfuse(
+  process: ProcessName,
+  /** Names the emitter when it isn't the app or the worker — a test file, say. */
+  service?: string,
+): Promise<void> {
   if (state().attempted) return;
   state().attempted = true;
   log = createLogger(process, { module: "core/langfuse" });
@@ -250,7 +254,7 @@ export async function registerLangfuse(process: ProcessName): Promise<void> {
   // the registration because Next bundles `instrumentation.ts` separately from
   // the route handlers, and a module-level `let` is written in one instance and
   // read empty in the other.
-  state().service = process;
+  state().service = service ?? process;
 
   const config = getConfig();
   const publicKey = config.LANGFUSE_PUBLIC_KEY;
@@ -293,7 +297,7 @@ export async function registerLangfuse(process: ProcessName): Promise<void> {
     const provider = new NodeTracerProvider({
       spanProcessors: [processor],
       resource: resourceFromAttributes({
-        "service.name": `sdr-${process}`,
+        "service.name": `sdr-${service ?? process}`,
         "service.namespace": "sdr-imobiliario",
       }),
     });

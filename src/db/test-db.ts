@@ -97,6 +97,11 @@ async function main(): Promise<number> {
     TEST_DATABASE: "1",
     // A test run's traces are filed apart from the demo's in Langfuse.
     LANGFUSE_TRACING_ENVIRONMENT: "test",
+    // Every test process traces its model calls to Langfuse
+    // (tests/support/observe.ts). TRACE_TESTS=0 turns it off.
+    ...(process.env.TRACE_TESTS === "0"
+      ? {}
+      : { NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import=${process.cwd()}/tests/support/observe.ts`.trim() }),
   };
   if (run("node", ["src/db/migrate.ts"], env) !== 0) return 1;
   if (run("node", ["src/db/seed/index.ts"], env) !== 0) return 1;

@@ -6,9 +6,13 @@ import { closePool, getDb } from "../src/db/client.ts";
 import { agencies, appointments, conversations, events, followupJobs, leads, users } from "../src/db/schema.ts";
 import {
   bookAppointment,
+  cancelAppointment,
   computeOptions,
+  computeRescheduleOptions,
   declineProposal,
+  listUpcomingMeetings,
   proposeAppointment,
+  rescheduleAppointment,
 } from "../src/services/scheduling.ts";
 
 /**
@@ -205,6 +209,55 @@ test("scheduling service", { skip: !integration }, async (t) => {
     );
     const [row] = await db.select({ status: appointments.status }).from(appointments).where(eq(appointments.id, proposed.appointmentId));
     assert.equal(row.status, "proposed", "a refused booking leaves the proposal open");
+  });
+
+  // Spec 009 — moving and cancelling what was booked.
+  async function confirmedAt(at: Date, broker: string): Promise<{ id: string; leadId: string; conversationId: string }> {
+    const ctx = await conversation(broker);
+    const [row] = await db
+      .insert(appointments)
+      .values({ agencyId, leadId: ctx.leadId, conversationId: ctx.conversationId, brokerId: broker, scheduledAt: at, type: "call", status: "confirmed" })
+      .returning({ id: appointments.id });
+    return { id: row.id, ...ctx };
+  }
+
+  await t.test("009: a reschedule moves the same row, and its own slot never blocks it", async () => {
+    const wed10 = new Date("2030-01-09T13:00:00Z"); // Wednesday 10:00 local
+    const wed11 = new Date("2030-01-09T14:00:00Z"); // 11:00 — overlaps its own 10:00 hour
+    const meeting = await confirmedAt(wed10, carla);
+    const moved = await rescheduleAppointment({ appointmentId: meeting.id, choice: { scheduledAt: wed11 }, now: NOW });
+    assert.ok(moved.ok, JSON.stringify(moved));
+    const rows = await db.select().from(appointments).where(eq(appointments.leadId, meeting.leadId));
+    assert.equal(rows.length, 1, "moved, not duplicated");
+    assert.equal(rows[0].scheduledAt.toISOString(), wed11.toISOString());
+    const [event] = await db
+      .select()
+      .from(events)
+      .where(and(eq(events.conversationId, meeting.conversationId), eq(events.type, "appointment.rescheduled")));
+    assert.ok(event !== undefined);
+  });
+
+  await t.test("009: a reschedule is judged like a booking — notice, the broker's week, others' meetings", async () => {
+    const thu10 = new Date("2030-01-10T13:00:00Z");
+    const other = await confirmedAt(new Date("2030-01-10T17:00:00Z"), carla); // Thursday 14:00, someone else
+    const meeting = await confirmedAt(thu10, carla);
+    const at = (scheduledAt: Date) => rescheduleAppointment({ appointmentId: meeting.id, choice: { scheduledAt }, now: NOW });
+    assert.deepEqual(await at(new Date("2030-01-07T12:00:00Z")), { ok: false, reason: "too_soon" });
+    assert.deepEqual(await at(new Date("2030-01-12T13:00:00Z")), { ok: false, reason: "unavailable" }, "Saturday");
+    assert.deepEqual(await at(new Date("2030-01-10T17:00:00Z")), { ok: false, reason: "collision" });
+    void other;
+    const options = await computeRescheduleOptions(meeting.id, {}, NOW);
+    assert.ok(options.ok && options.options.every((option) => option.getTime() !== new Date("2030-01-10T17:00:00Z").getTime()));
+  });
+
+  await t.test("009: cancel is scoped to the lead, and leaves the list of what's still to come", async () => {
+    const meeting = await confirmedAt(new Date("2030-01-11T13:00:00Z"), carla);
+    const stranger = await conversation();
+    assert.equal(await cancelAppointment(meeting.id, stranger.leadId), false, "another lead's id cancels nothing");
+    assert.equal((await listUpcomingMeetings(meeting.leadId, NOW)).length, 1);
+    assert.equal(await cancelAppointment(meeting.id, meeting.leadId), true);
+    assert.equal((await listUpcomingMeetings(meeting.leadId, NOW)).length, 0);
+    assert.equal(await cancelAppointment(meeting.id, meeting.leadId), false, "twice is nothing");
   });
 
   await t.test("with no open proposal, booking has nothing to book", async () => {

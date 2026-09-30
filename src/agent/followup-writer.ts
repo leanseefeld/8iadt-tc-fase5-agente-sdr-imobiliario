@@ -55,7 +55,9 @@ function money(value: number): string {
     const millions = (value / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
     return `R$ ${millions} ${value >= 2_000_000 ? "milhões" : "milhão"}`;
   }
-  return `R$ ${Math.round(value / 1000)} mil`;
+  // Rents are exact: "R$ 3.500", never a rounded "R$ 4 mil" the lead didn't say.
+  if (value < 10_000) return `R$ ${value.toLocaleString("pt-BR")}`;
+  return `R$ ${(value / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil`;
 }
 
 /** "de 2 quartos em Moema, até R$ 700 mil" — whatever the slots know, in that order. */

@@ -187,12 +187,12 @@ test("FR-005d/FR-005e: the scheduling sentences are code-written and name no one
 test("spec 006: the extraction's meeting facts are read strictly, and anything malformed is absent", () => {
   assert.deepEqual(
     readSchedulingFacts({ pickedTime: "sim", preferredWeekday: "thu", preferredPeriod: "morning", propertyCode: " VMA-0005 " }),
-    { declinedOffer: false, askedForTimes: false, pickedTime: true, preference: { weekday: "thu", period: "morning" }, propertyRef: { code: "VMA-0005" }, askedWhoAttends: false, wantsToChangeBooking: false, meetingKind: null, unsupportedMeeting: false, outOfScopeRequest: false },
+    { declinedOffer: false, askedForTimes: false, pickedTime: true, preference: { weekday: "thu", period: "morning" }, propertyRef: { code: "VMA-0005" }, askedWhoAttends: false, changeRequest: null, answer: null, meetingKind: null, unsupportedMeeting: false, outOfScopeRequest: false },
   );
   assert.deepEqual(readSchedulingFacts({ propertyPosition: 2 }).propertyRef, { position: 2 });
   assert.deepEqual(readSchedulingFacts({ propertyPosition: 0, preferredWeekday: "quinta", preferredPeriod: "noite" }), {
     declinedOffer: false, askedForTimes: false, pickedTime: false, preference: {}, propertyRef: null, askedWhoAttends: false,
-    wantsToChangeBooking: false, meetingKind: null, unsupportedMeeting: false, outOfScopeRequest: false,
+    changeRequest: null, answer: null, meetingKind: null, unsupportedMeeting: false, outOfScopeRequest: false,
   });
 });
 
@@ -205,6 +205,12 @@ test("FR-004e/f: a visit needs a property; the only other meeting is by phone", 
   assert.equal(meetingTarget(base), "call", "nothing ever shown: the phone is what there is");
   assert.equal(meetingTarget({ ...base, kind: "call", property: vma }), "call", "asked for the phone, gets the phone");
   assert.equal(meetingTarget({ ...base, reofferingCall: true, cardsShown: true }), "call", "other times for a phone offer");
+  assert.equal(
+    meetingTarget({ ...base, reofferingCall: true, property: vma }),
+    "call",
+    "phone times narrowed with a property in play stay phone times (12B replay 29/09)",
+  );
+  assert.equal(meetingTarget({ ...base, kind: "visit", reofferingCall: true, property: vma }), "viewing");
   assert.equal(meetingTarget({ ...base, kind: "visit", reofferingCall: true, cardsShown: true }), "ask_property");
   assert.equal(meetingTarget({ ...base, intent: "investment", kind: "visit", property: vma }), "call", "FR-003a");
 });
@@ -222,4 +228,10 @@ test("the new meeting facts are read strictly", () => {
   assert.equal(facts.unsupportedMeeting, true);
   assert.equal(facts.outOfScopeRequest, true);
   assert.equal(readSchedulingFacts({ meetingKind: "zoom" }).meetingKind, null);
+});
+
+test("009: a 'true' for which change is kept, and resolved from the words later", () => {
+  assert.equal(readSchedulingFacts({ changeRequest: true }).changeRequest, "either");
+  assert.equal(readSchedulingFacts({ changeRequest: "reschedule" }).changeRequest, "reschedule");
+  assert.equal(readSchedulingFacts({ changeRequest: "talvez" }).changeRequest, null);
 });

@@ -16,6 +16,8 @@ test("a turn gets only the tools it has a reason for", () => {
   assert.deepEqual(Object.keys(actionTools({ booking })), ["bookMeeting"]);
   assert.deepEqual(Object.keys(actionTools({ search, booking })), ["searchProperties", "bookMeeting"]);
   assert.deepEqual(Object.keys(actionTools({})), []);
+  const reschedule = { appointmentId: "00000000-0000-0000-0000-000000000002", offered: [], timezone: "America/Sao_Paulo" };
+  assert.deepEqual(Object.keys(actionTools({ reschedule })), ["rescheduleMeeting"], "spec 009");
 });
 
 test("an investment search is not run", async () => {

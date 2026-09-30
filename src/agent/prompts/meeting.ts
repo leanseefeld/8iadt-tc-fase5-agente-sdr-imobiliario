@@ -110,7 +110,14 @@ export const BOOKING_REFUSED: Record<"too_soon" | "unavailable" | "collision" | 
  * and time of each, today's date, and what the lead wrote. The model maps "a
  * segunda" or "quinta às 11" onto `optionIndex`, or onto `date` + `time`.
  */
-export function bookingBriefing(offered: Date[], leadText: string, now: Date, timeZone: string): string {
+export function bookingBriefing(
+  offered: Date[],
+  leadText: string,
+  now: Date,
+  timeZone: string,
+  /** Spec 009 reuses the same briefing for `rescheduleMeeting`. */
+  toolName: "bookMeeting" | "rescheduleMeeting" = "bookMeeting",
+): string {
   const iso = (at: Date) => {
     const local = localParts(at, timeZone);
     const hh = String(Math.floor(local.minutes / 60)).padStart(2, "0");
@@ -119,14 +126,21 @@ export function bookingBriefing(offered: Date[], leadText: string, now: Date, ti
   };
   const today = localParts(now, timeZone);
   const lines = offered.map((at, index) => `${index + 1}) ${slotLabel(at, timeZone)} (${iso(at)})`);
+  // The next seven days, computed here: a 4-bit model reading "segunda" picked
+  // the Monday that had already passed. Code does the calendar; the model only
+  // looks the day up.
+  const week = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(now.getTime() + (index + 1) * 24 * 60 * 60_000);
+    return `${WEEKDAY[localParts(day, timeZone).weekday]} = ${iso(day).slice(0, 10)}`;
+  });
   return [
     `Hoje é ${WEEKDAY[today.weekday]} ${iso(now).slice(0, 10)}.`,
-    "Horários oferecidos à pessoa:",
-    ...lines,
+    `Próximos dias: ${week.join(" · ")}. Um dia da semana dito pela pessoa é sempre o próximo desta lista, nunca um que já passou.`,
+    ...(lines.length > 0 ? ["Horários oferecidos à pessoa:", ...lines] : ["Nenhum horário foi oferecido nesta conversa."]),
     `A pessoa escreveu: "${leadText}"`,
-    "Se ela escolheu um desses horários, chame bookMeeting com optionIndex.",
-    "Se ela disse outro dia e hora, chame bookMeeting com date (AAAA-MM-DD) e time (HH:MM).",
-    "Se ela não escolheu horário, não chame bookMeeting.",
+    ...(lines.length > 0 ? [`Se ela escolheu um desses horários, chame ${toolName} com optionIndex.`] : []),
+    `Se ela disse outro dia e hora, chame ${toolName} com date (AAAA-MM-DD) e time (HH:MM).`,
+    `Se ela não escolheu horário, não chame ${toolName}.`,
   ].join("\n");
 }
 
@@ -134,4 +148,81 @@ export function bookingBriefing(offered: Date[], leadText: string, now: Date, ti
 export function stillValidSentence(options: Date[], timeZone: string): string {
   const list = options.map((at, index) => `${index + 1}) ${slotLabel(at, timeZone)}`).join(" · ");
   return `Os horários que te passei continuam valendo: ${list}. Algum deles serve?`;
+}
+
+// ---------------------------------------------------------------------------
+// Spec 009: changing what was booked — code-written, like everything above
+// ---------------------------------------------------------------------------
+
+export interface MeetingRef {
+  id: string;
+  scheduledAt: Date;
+  type: MeetingType;
+  propertyCode: string | null;
+}
+
+/** "a visita ao VMA-0001" · "a conversa por telefone" */
+function theMeeting(meeting: Pick<MeetingRef, "type" | "propertyCode">): string {
+  if (meeting.type === "call") return "a conversa por telefone";
+  return meeting.propertyCode === null ? "a visita" : `a visita ao ${meeting.propertyCode}`;
+}
+
+/** Spec 009: asked before cancelling (answered 29/09). */
+export function cancelQuestion(meeting: MeetingRef, timeZone: string): string {
+  return `Quer mesmo cancelar ${theMeeting(meeting)} de ${slotLabel(meeting.scheduledAt, timeZone)}?`;
+}
+
+export function cancelledSentence(meeting: MeetingRef, timeZone: string): string {
+  return `Pronto, cancelei ${theMeeting(meeting)} de ${slotLabel(meeting.scheduledAt, timeZone)}. Quer marcar outro dia?`;
+}
+
+export function keptSentence(meeting: MeetingRef, timeZone: string): string {
+  return `Tudo certo, ${theMeeting(meeting)} de ${slotLabel(meeting.scheduledAt, timeZone)} continua marcada.`;
+}
+
+export function rescheduledSentence(at: Date, type: MeetingType, propertyCode: string | null, timeZone: string): string {
+  const kind =
+    type === "call" ? "Sua conversa por telefone" : propertyCode === null ? "Sua visita" : `Sua visita ao ${propertyCode}`;
+  return `Pronto! ${kind} foi remarcada para ${slotLabel(at, timeZone)}, com alguém da nossa equipe.`;
+}
+
+/** "Qual delas: a visita ao VMA-0001 (sex 02/10 às 14h) ou a conversa por telefone (ter 29/09 às 10h)?" */
+export function whichOneSentence(meetings: MeetingRef[], timeZone: string): string {
+  const items = meetings.map((meeting) => `${theMeeting(meeting)} (${slotLabel(meeting.scheduledAt, timeZone)})`);
+  const list = items.length === 2 ? items.join(" ou ") : `${items.slice(0, -1).join(", ")} ou ${items.at(-1)}`;
+  return `Qual delas: ${list}?`;
+}
+
+export function rescheduleOptionsSentence(meeting: MeetingRef, options: Date[], timeZone: string): string {
+  const list = options.map((at, index) => `${index + 1}) ${slotLabel(at, timeZone)}`).join(" · ");
+  return `Para remarcar ${theMeeting(meeting)}, tenho estes horários: ${list}. Qual fica melhor?`;
+}
+
+export const MEETING_LIMIT_SENTENCE =
+  "Você já tem três compromissos marcados, que é o máximo por aqui. Se quiser, posso cancelar ou remarcar um deles.";
+
+/** Spec 009: nothing still to come — maybe it already passed. A yes books a new one. */
+export const NO_MEETING_TO_CHANGE_SENTENCE =
+  "Não tenho nenhuma visita ou conversa marcada com você daqui pra frente. Quer marcar uma?";
+
+/**
+ * Spec 009, decided 29/09: the reply when nothing is pending — every agent has
+ * a way to close. Code-written because, left to the model, "obrigado" got
+ * "vou atualizar o seu cadastro" and "vou encaminhar para a equipe": next steps
+ * nobody takes. It restates what is booked and leaves the door open.
+ */
+export function closingSentence(
+  meetings: MeetingRef[],
+  leadText: string,
+  timeZone: string,
+  /** The last reply already closed: say it short, without the summary again. */
+  again = false,
+): string {
+  const thanked = /^\s*(muito\s+)?(obrigad|valeu|agradec)/iu.test(leadText);
+  const open = thanked ? "Por nada!" : "Combinado!";
+  if (again) return `${open} Se precisar de algo, é só chamar.`;
+  const items = meetings.map((meeting) => `${theMeeting(meeting)} (${slotLabel(meeting.scheduledAt, timeZone)})`);
+  const booked =
+    items.length === 0 ? "" : ` Fica marcado: ${items.length === 1 ? items[0] : `${items.slice(0, -1).join(", ")} e ${items.at(-1)}`}.`;
+  return `${open}${booked} Se precisar de algo, é só chamar.`;
 }

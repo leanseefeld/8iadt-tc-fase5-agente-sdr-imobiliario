@@ -7,6 +7,7 @@ import {
   type ToolRefusal,
 } from "./search-properties.ts";
 import { bookMeetingTool, type BookingContext } from "./book-meeting.ts";
+import { rescheduleMeetingTool, type RescheduleContext } from "./reschedule-meeting.ts";
 import { requestHandoff } from "./handoff.ts";
 import { optOut } from "./opt-out.ts";
 
@@ -20,7 +21,9 @@ import { optOut } from "./opt-out.ts";
  *
  * - `searchProperties` when a search criterion was filled or revised (spec 007);
  * - `bookMeeting` when a proposal is open **and** the extraction reports the lead
- *   picked or named a time (spec 006 FR-005f).
+ *   picked or named a time (spec 006 FR-005f);
+ * - `rescheduleMeeting` when the lead is moving a meeting already booked and
+ *   picked or named its new time (spec 009).
  *
  * Proposing a meeting is **not** a tool: code proposes (spec 006 FR-004a) when
  * `shouldProposeMeeting` says the offer is due or the lead asks for times. The
@@ -30,14 +33,19 @@ import { optOut } from "./opt-out.ts";
  * model calls; they stay exported because the names are the vocabulary of the
  * transcript and of spec 004's observability contract.
  */
-export function actionTools(context: { search?: SearchContext; booking?: BookingContext }): ToolSet {
+export function actionTools(context: {
+  search?: SearchContext;
+  booking?: BookingContext;
+  reschedule?: RescheduleContext;
+}): ToolSet {
   return {
     ...(context.search === undefined ? {} : { searchProperties: searchPropertiesTool(context.search) }),
     ...(context.booking === undefined ? {} : { bookMeeting: bookMeetingTool(context.booking) }),
+    ...(context.reschedule === undefined ? {} : { rescheduleMeeting: rescheduleMeetingTool(context.reschedule) }),
   };
 }
 
-export { updateSlots, requestHandoff, optOut, bookMeetingTool };
+export { updateSlots, requestHandoff, optOut, bookMeetingTool, rescheduleMeetingTool };
 export { runSearchProperties, searchPropertiesTool, MAX_SUGGESTIONS } from "./search-properties.ts";
-export type { SearchContext, SearchOutcome, ToolRefusal, BookingContext };
+export type { SearchContext, SearchOutcome, ToolRefusal, BookingContext, RescheduleContext };
 export { normalizeExtraction, updateSlotsInputSchema } from "./update-slots.ts";

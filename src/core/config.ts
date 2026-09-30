@@ -75,6 +75,9 @@ export const configSchema = z.object({
 
   // Runtime
   APP_PORT: port.default(3100),
+  // Read by next.config.ts only: extra hosts allowed to load dev resources,
+  // comma-separated (a LAN IP, to open the chat on a phone). Empty is fine.
+  DEV_ALLOWED_ORIGINS: z.string().optional(),
   WORKER_HEALTH_PORT: port.default(3101),
   // Read by docker-compose.yml to publish Postgres on the host, not by
   // application code — nothing inside the network uses it. Declared here
@@ -126,7 +129,7 @@ export const configSchema = z.object({
   // No meeting is offered sooner than this from now.
   SCHEDULING_MIN_NOTICE_MINUTES: positiveInt.default(120),
   // The hours a proposal tries, in this order, inside each broker's own availability.
-  SCHEDULING_PREFERRED_TIMES: timeList.default(["10:00", "14:00", "16:30"]),
+  SCHEDULING_PREFERRED_TIMES: timeList.default(["10:00", "14:00", "16:30", "09:00", "11:00"]),
 });
 
 /**
@@ -186,4 +189,13 @@ let cached: Config | undefined;
 export function getConfig(): Config {
   cached ??= loadConfig(process.env);
   return cached;
+}
+
+/**
+ * Forgets the parsed config, so the next read sees `process.env` as it is then.
+ * Only for a test preload that reads the config before the test file sets its
+ * own environment (`tests/support/observe.ts`).
+ */
+export function forgetConfig(): void {
+  cached = undefined;
 }

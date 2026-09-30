@@ -112,6 +112,25 @@ test("the agenda", { skip: !integration }, async (t) => {
     void booked;
   });
 
+  await t.test("looking back: the last days, most recent first, 'Ontem' by name, nothing still to come", async () => {
+    await meeting(ana, new Date("2030-01-06T15:00:00Z"), "confirmed", "Domingo"); // yesterday 12h
+    await meeting(ana, new Date("2030-01-03T13:00:00Z"), "confirmed", "Quinta"); // Thursday 10h
+    await meeting(ana, new Date("2030-01-03T18:00:00Z"), "confirmed", "Quinta tarde"); // Thursday 15h
+    const groups = await listAppointments(
+      { agencyId, userId: ana, role: "broker" },
+      { from: new Date("2029-12-08T03:00:00Z"), to: NOW },
+      NOW,
+      "desc",
+    );
+    assert.deepEqual(
+      groups.map((group) => [group.label, group.rows.map((row) => `${row.time} ${row.leadName}`)]),
+      [
+        ["Ontem", ["12h Domingo"]],
+        ["qui 03/01", ["15h Quinta tarde", "10h Quinta"]],
+      ],
+    );
+  });
+
   await t.test("a broker with nothing booked gets an empty agenda", async () => {
     const nobody = await user("Dora", "broker");
     assert.deepEqual(await listAppointments({ agencyId, userId: nobody, role: "broker" }, RANGE, NOW), []);

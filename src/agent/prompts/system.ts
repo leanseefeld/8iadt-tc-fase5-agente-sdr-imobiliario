@@ -258,7 +258,21 @@ function afterDetailsFirst(input: TurnPromptInput): string {
     : "";
 }
 
-function task(input: TurnPromptInput): string {
+/** Which instruction a phrased turn gets. Tests hold on to the id, so the words stay free to change. */
+export type TaskId =
+  | "search.one"
+  | "search.many"
+  | "search.none"
+  | "criteria.none"
+  | "criteria.found"
+  | "criteria.recite"
+  | "reconfirm"
+  | "boundary"
+  | "closing"
+  | "nothingToAsk"
+  | "question";
+
+export function chooseTask(input: TurnPromptInput): { id: TaskId; text: string } {
   // The cards are rendered from the search result, under this message. Anything
   // the model writes about a specific imóvel is prose the lead can already read
   // off the card — and prose is exactly where an invented price comes from.
@@ -268,61 +282,61 @@ function task(input: TurnPromptInput): string {
   // its own plural prose over a single card and promised more than the lead
   // could see.
   if (input.suggestions !== undefined && input.suggestions.count === 1) {
-    return `\nSua tarefa nesta mensagem: diga em UMA frase que encontrou um imóvel que combina
+    return { id: "search.one", text: `\nSua tarefa nesta mensagem: diga em UMA frase que encontrou um imóvel que combina
 com o que a pessoa contou, e pergunte o que ela achou dele. Fale sempre no singular:
 é UM imóvel só, e prometer mais do que apareceu na tela é o pior jeito de começar.
 NÃO descreva o imóvel, não cite preço, bairro nem código: o card aparece logo abaixo
-da sua mensagem e a pessoa consegue ler tudo nele.`;
+da sua mensagem e a pessoa consegue ler tudo nele.` };
   }
   if (input.suggestions !== undefined && input.suggestions.count > 1) {
-    return `\nSua tarefa nesta mensagem: diga em UMA frase que separou ${input.suggestions.count} ` +
+    return { id: "search.many", text: `\nSua tarefa nesta mensagem: diga em UMA frase que separou ${input.suggestions.count} ` +
       `opções que combinam com o que a pessoa contou, e pergunte qual delas chamou mais atenção.
 NÃO descreva os imóveis, não cite preço, bairro nem código: os cards aparecem logo abaixo
-da sua mensagem e a pessoa consegue ler tudo neles.`;
+da sua mensagem e a pessoa consegue ler tudo neles.` };
   }
   if (input.suggestions !== undefined && input.suggestions.count === 0) {
     const ask = input.suggestions.relaxable === null ? null : RELAX_ASKS[input.suggestions.relaxable];
-    return `\nSua tarefa nesta mensagem: diga com franqueza que não encontrou nenhum imóvel com
+    return { id: "search.none", text: `\nSua tarefa nesta mensagem: diga com franqueza que não encontrou nenhum imóvel com
 exatamente essas características agora${ask === null ? "" : `, e pergunte ${ask}`}.
 Não invente imóvel nenhum e não ofereça mais de uma mudança nos filtros. Não se ofereça
 para procurar em outros bairros, valores ou quartos por conta própria: peça que a pessoa
-diga o novo valor.`;
+diga o novo valor.` };
   }
   // FR-032: a search presented this turn outranks both of these, so they come
   // after the three `suggestions` branches above.
   if (input.askedAboutCriteria === true) {
     if (input.lastSearch !== undefined && input.lastSearch.count === 0) {
-      return `\nSua tarefa nesta mensagem: diga com franqueza que, com os critérios que já estão no estado, não encontrou nenhum imóvel. Repita esses critérios em uma frase e pergunte qual deles a pessoa quer mudar, pedindo o novo valor. Uma pergunta só. Não se ofereça para procurar em outros bairros, valores ou quartos por conta própria. Não diga que não entendeu.`;
+      return { id: "criteria.none", text: `\nSua tarefa nesta mensagem: diga com franqueza que, com os critérios que já estão no estado, não encontrou nenhum imóvel. Repita esses critérios em uma frase e pergunte qual deles a pessoa quer mudar, pedindo o novo valor. Uma pergunta só. Não se ofereça para procurar em outros bairros, valores ou quartos por conta própria. Não diga que não entendeu.` };
     }
     if (input.lastSearch !== undefined && input.lastSearch.count > 0) {
-      return `\nSua tarefa nesta mensagem: diga que, com os critérios que já estão no estado, encontrou ${input.lastSearch.count === 1 ? "um imóvel, o que já foi mostrado" : `${input.lastSearch.count} imóveis, os que já foram mostrados`}. Repita esses critérios em uma frase e pergunte se a pessoa quer mudar algum. Uma pergunta só. Não descreva imóvel nenhum. Não diga que não entendeu.`;
+      return { id: "criteria.found", text: `\nSua tarefa nesta mensagem: diga que, com os critérios que já estão no estado, encontrou ${input.lastSearch.count === 1 ? "um imóvel, o que já foi mostrado" : `${input.lastSearch.count} imóveis, os que já foram mostrados`}. Repita esses critérios em uma frase e pergunte se a pessoa quer mudar algum. Uma pergunta só. Não descreva imóvel nenhum. Não diga que não entendeu.` };
     }
-    return `\nSua tarefa nesta mensagem: repita em uma frase os critérios que já estão no estado, e pergunte se a pessoa quer mudar algum. Uma pergunta só. Não diga que não entendeu.`;
+    return { id: "criteria.recite", text: `\nSua tarefa nesta mensagem: repita em uma frase os critérios que já estão no estado, e pergunte se a pessoa quer mudar algum. Uma pergunta só. Não diga que não entendeu.` };
   }
   if (input.reconfirmation !== undefined && input.reconfirmation !== "") {
-    return `\nSua tarefa nesta mensagem: diga exatamente isto, e mais nada: ${input.reconfirmation}`;
+    return { id: "reconfirm", text: `\nSua tarefa nesta mensagem: diga exatamente isto, e mais nada: ${input.reconfirmation}` };
   }
   if (input.boundary !== undefined) {
-    return `\nSua tarefa nesta mensagem: a pessoa disse "${input.boundary.about}". Isso você não consegue confirmar nem resolver por aqui.
+    return { id: "boundary", text: `\nSua tarefa nesta mensagem: a pessoa disse "${input.boundary.about}". Isso você não consegue confirmar nem resolver por aqui.
 Em UMA frase, reconheça o que ela disse e diga com franqueza que isso você não consegue confirmar por aqui.
 Depois pergunte, sem insistir, se ela quer que alguém da equipe verifique isso para ela — essa é a única pergunta da mensagem.
-Não fale de quem vai atender a visita, não diga que já encaminhou e não prometa resposta nem prazo.`;
+Não fale de quem vai atender a visita, não diga que já encaminhou e não prometa resposta nem prazo.` };
   }
   if (input.closing !== undefined) {
-    return `\nSua tarefa nesta mensagem: a conversa está se encerrando por agora. Escreva UMA frase curta e calorosa de despedida — se a pessoa agradeceu, responda ao agradecimento — e diga que está por aqui se ela precisar.
-NÃO faça pergunta, NÃO ofereça nada novo e NÃO cite datas, horários nem imóveis${input.closing.summarized ? ": o que está marcado já foi dito logo antes da sua frase" : ""}.`;
+    return { id: "closing", text: `\nSua tarefa nesta mensagem: a conversa está se encerrando por agora. Escreva UMA frase curta e calorosa de despedida — se a pessoa agradeceu, responda ao agradecimento — e diga que está por aqui se ela precisar.
+NÃO faça pergunta, NÃO ofereça nada novo e NÃO cite datas, horários nem imóveis${input.closing.summarized ? ": o que está marcado já foi dito logo antes da sua frase" : ""}.` };
   }
   // Spec 006: a meeting offer never reaches this function. The options, the
   // confirmation and "no times" are code-written and sent without a model call
   // (FR-005d), so there is no branch here that could ask "qual dia da semana".
   if (input.question === null) {
-    return `\nSua tarefa nesta mensagem: reconheça em uma frase curta o que foi dito.
-NÃO faça nenhuma pergunta nova e não anuncie próximos passos: nada de "vou buscar", "vou passar para o corretor".`;
+    return { id: "nothingToAsk", text: `\nSua tarefa nesta mensagem: reconheça em uma frase curta o que foi dito.
+NÃO faça nenhuma pergunta nova e não anuncie próximos passos: nada de "vou buscar", "vou encaminhar".` };
   }
-  return `\nSua tarefa nesta mensagem: reconheça o que foi dito e faça ESTA pergunta, com suas
+  return { id: "question", text: `\nSua tarefa nesta mensagem: reconheça o que foi dito e faça ESTA pergunta, com suas
 palavras, sem mudar o assunto dela:
 
-  "${input.question.question}"`;
+  "${input.question.question}"` };
 }
 
 /**
@@ -421,7 +435,7 @@ export function turnBriefing(input: TurnPromptInput): string {
     renderSlots(input.intent, input.slots),
     lastSearchLine(input),
     acknowledgement(input),
-    task(input),
+    chooseTask(input).text,
     afterDecline(input),
     afterReturn(input),
     afterDetailsFirst(input),

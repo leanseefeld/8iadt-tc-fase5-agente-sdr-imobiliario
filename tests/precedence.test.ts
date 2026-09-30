@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { turnBriefing, type TurnPromptInput } from "../src/agent/prompts/system.ts";
+import { chooseTask, turnBriefing, type TurnPromptInput } from "../src/agent/prompts/system.ts";
 import { noMatchReply } from "../src/agent/prompts/fallback.ts";
 import { lastSearchOutcome, type LoadedTurn } from "../src/services/conversation.ts";
 import { EMPTY_SLOTS } from "../src/domain/slots.ts";
@@ -24,25 +24,20 @@ const base: TurnPromptInput = {
 const RECONFIRM = "Só pra confirmar: até R$ 600 mil, 2 quartos, Vila Mariana. Continua assim?";
 
 test("FR-032: a no-match outranks a reconfirmation", () => {
-  const briefing = turnBriefing({
-    ...base,
-    reconfirmation: RECONFIRM,
-    suggestions: { count: 0, relaxable: "neighborhoods" },
-  });
-  assert.match(briefing, /não encontrou nenhum imóvel/);
-  assert.equal(briefing.includes(RECONFIRM), false);
+  const input: TurnPromptInput = { ...base, reconfirmation: RECONFIRM, suggestions: { count: 0, relaxable: "neighborhoods" } };
+  assert.equal(chooseTask(input).id, "search.none");
+  assert.equal(turnBriefing(input).includes(RECONFIRM), false);
 });
 
 test("FR-032: cards outrank a reconfirmation and a criteria question", () => {
-  const briefing = turnBriefing({
+  const input: TurnPromptInput = {
     ...base,
     reconfirmation: RECONFIRM,
     askedAboutCriteria: true,
     suggestions: { count: 1, relaxable: null },
-  });
-  assert.match(briefing, /encontrou um imóvel/);
-  assert.equal(briefing.includes(RECONFIRM), false);
-  assert.doesNotMatch(briefing, /critérios que já estão no estado/);
+  };
+  assert.equal(chooseTask(input).id, "search.one");
+  assert.equal(turnBriefing(input).includes(RECONFIRM), false);
 });
 
 test("FR-032: with no search this turn, the reconfirmation still speaks", () => {
@@ -51,9 +46,9 @@ test("FR-032: with no search this turn, the reconfirmation still speaks", () => 
 });
 
 test("FR-033: a results question after an empty search is answered with the fact", () => {
-  const briefing = turnBriefing({ ...base, askedAboutCriteria: true, lastSearch: { count: 0 } });
-  assert.match(briefing, /não encontrou nenhum imóvel/);
-  assert.match(briefing, /nenhum imóvel encontrado/);
+  const input: TurnPromptInput = { ...base, askedAboutCriteria: true, lastSearch: { count: 0 } };
+  assert.equal(chooseTask(input).id, "criteria.none");
+  assert.match(turnBriefing(input), /Última busca com estes critérios: nenhum/, "the fact is in the state");
 });
 
 test("FR-033: the fact is not repeated on a turn that searched", () => {
@@ -163,9 +158,10 @@ test("FR-005g: every pair of reply kinds that can meet — the higher-ranked one
 });
 
 test("FR-005g: after a decline, the briefing forbids offering again and the reconfirmation is not in it", () => {
-  const briefing = turnBriefing({ ...base, declinedOffer: true, suggestions: { count: 2, relaxable: null } });
+  const input: TurnPromptInput = { ...base, declinedOffer: true, suggestions: { count: 2, relaxable: null } };
+  const briefing = turnBriefing(input);
   assert.match(briefing, /Não ofereça horários, visita nem conversa de novo/);
-  assert.match(briefing, /separou 2/, "the search result still wins the phrased part");
+  assert.equal(chooseTask(input).id, "search.many", "the search result still wins the phrased part");
   assert.equal(briefing.includes(RECONFIRM), false);
 });
 

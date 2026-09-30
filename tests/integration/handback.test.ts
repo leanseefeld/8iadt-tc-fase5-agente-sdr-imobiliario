@@ -7,12 +7,15 @@ import { assumeConversation, returnToAgent } from "../../src/services/handoff.ts
 import { collectingSink, runTurn } from "../../src/agent/orchestrator.ts";
 import { recordLeadMessage } from "../../src/services/conversation.ts";
 import type { LeadScope } from "../../src/services/auth.ts";
+import { useScriptedModel } from "../support/scripted-model.ts";
 
 /**
  * INTEGRATION=1 — SC-009. The re-entry line is posted when the broker returns
  * the conversation, before the lead's next message is processed.
  */
 const integration = process.env.INTEGRATION === "1";
+// The pipeline is under test here, not the sampler: the model is scripted.
+if (integration) useScriptedModel();
 
 test("handback posts the re-entry line before the lead writes again", { skip: !integration }, async () => {
   const pool = getPool();

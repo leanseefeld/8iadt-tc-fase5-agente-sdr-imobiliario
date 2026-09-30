@@ -5,6 +5,7 @@ import { closeNotifier } from "../../src/core/notifier.ts";
 import { createLogger } from "../../src/core/logging.ts";
 import { closePool, getDb, getPool } from "../../src/db/client.ts";
 import { summarize } from "../../src/jobs/summarize.ts";
+import { useScriptedModel } from "../support/scripted-model.ts";
 
 /**
  * INTEGRATION=1 — the outbox half of the summariser (FR-008 to FR-010).
@@ -19,6 +20,8 @@ import { summarize } from "../../src/jobs/summarize.ts";
  * that passes by timing is a test that fails by timing later.
  */
 const integration = process.env.INTEGRATION === "1";
+// The pipeline is under test here, not the sampler: the model is scripted.
+if (integration) useScriptedModel();
 const log = createLogger("worker", { module: "test" });
 
 interface Fixture {

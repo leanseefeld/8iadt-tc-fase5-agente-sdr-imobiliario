@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { closePool } from "../../src/db/client.ts";
 import { ATTENDEE_UNKNOWN_SENTENCE, BOOKING_REFUSED, NO_OPTIONS_FOR_CONSTRAINT_SENTENCE } from "../../src/agent/prompts/meeting.ts";
-import { OPTIONS, qualifiedLead, query, toolNames, type Lead } from "./support/meeting.ts";
+import { OPTIONS, qualifiedLead, query, toolNames, type Lead } from "../integration/support/meeting.ts";
 
 /**
  * INTEGRATION=1, local e4b — spec 006 T019, T020, T022c. The bring-up of the

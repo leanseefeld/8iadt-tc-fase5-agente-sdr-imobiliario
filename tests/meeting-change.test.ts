@@ -4,6 +4,7 @@ import { chooseMeeting, matchAnswer } from "../src/agent/meeting-change.ts";
 import {
   MEETING_LIMIT_SENTENCE,
   closingSentence,
+  closingSummary,
   cancelQuestion,
   cancelledSentence,
   keptSentence,
@@ -37,20 +38,27 @@ test("several: narrowed by code, by kind, and — for a cancel — by weekday; o
   assert.deepEqual(chooseMeeting([friday, tuesday], { ...none, code: "XYZ-0000" }, "cancel", TZ), { ask: [friday, tuesday] });
 });
 
+/** A sentence carries these facts, whatever the words around them. */
+function names(sentence: string, ...facts: string[]): void {
+  for (const fact of facts) assert.ok(sentence.includes(fact), `"${fact}" missing from: ${sentence}`);
+}
+
 test("the sentences are code-written, name the meeting and never a broker", () => {
-  assert.equal(cancelQuestion(friday, TZ), "Quer mesmo cancelar a visita ao VMA-0001 de sex 11/01 às 14h?");
-  assert.equal(cancelledSentence(call, TZ), "Pronto, cancelei a conversa por telefone de qua 09/01 às 16h30. Quer marcar outro dia?");
-  assert.equal(keptSentence(friday, TZ), "Tudo certo, a visita ao VMA-0001 de sex 11/01 às 14h continua marcada.");
-  assert.equal(
-    rescheduledSentence(tuesday.scheduledAt, "viewing", "MOE-0008", TZ),
-    "Pronto! Sua visita ao MOE-0008 foi remarcada para ter 08/01 às 10h, com alguém da nossa equipe.",
-  );
-  assert.equal(
-    whichOneSentence([friday, tuesday], TZ),
-    "Qual delas: a visita ao VMA-0001 (sex 11/01 às 14h) ou a visita ao MOE-0008 (ter 08/01 às 10h)?",
-  );
-  assert.match(rescheduleOptionsSentence(friday, [tuesday.scheduledAt], TZ), /^Para remarcar a visita ao VMA-0001, tenho estes horários: 1\) ter 08\/01 às 10h\./);
-  assert.match(MEETING_LIMIT_SENTENCE, /três compromissos/);
+  const cancel = cancelQuestion(friday, TZ);
+  names(cancel, "visita ao VMA-0001", "sex 11/01", "14h");
+  assert.ok(cancel.endsWith("?"), "it asks first");
+  names(cancelledSentence(call, TZ), "conversa por telefone", "qua 09/01", "16h30");
+  names(keptSentence(friday, TZ), "visita ao VMA-0001", "sex 11/01", "14h");
+  const moved = rescheduledSentence(tuesday.scheduledAt, "viewing", "MOE-0008", TZ);
+  names(moved, "visita ao MOE-0008", "ter 08/01", "10h", "alguém da nossa equipe");
+  const which = whichOneSentence([friday, tuesday], TZ);
+  names(which, "VMA-0001", "sex 11/01", "MOE-0008", "ter 08/01");
+  assert.ok(which.endsWith("?"));
+  names(rescheduleOptionsSentence(friday, [tuesday.scheduledAt], TZ), "VMA-0001", "1) ter 08/01 às 10h");
+  names(MEETING_LIMIT_SENTENCE, "três");
+  for (const sentence of [cancel, moved, which, cancelledSentence(call, TZ), keptSentence(friday, TZ)]) {
+    assert.doesNotMatch(sentence, /Ana|Ribeiro/, sentence);
+  }
 });
 
 test("the answer to 'qual delas?' is read against the meetings just listed", () => {
@@ -79,14 +87,14 @@ test("parseWhen reads the calendar words by code — weekdays, periods, hoje/ama
 });
 
 test("the closing restates what is booked and leaves the door open", () => {
-  assert.equal(
-    closingSentence([tuesday, call], "obrigado!", TZ),
-    "Por nada! Fica marcado: a visita ao MOE-0008 (ter 08/01 às 10h) e a conversa por telefone (qua 09/01 às 16h30). Se precisar de algo, é só chamar.",
-  );
-  assert.equal(closingSentence([], "não, obrigado", TZ), "Combinado! Se precisar de algo, é só chamar.", "a no-thanks is not a thank-you");
-  assert.equal(
+  const thanked = closingSentence([tuesday, call], "obrigado!", TZ);
+  names(thanked, "visita ao MOE-0008", "ter 08/01 às 10h", "conversa por telefone", "qua 09/01 às 16h30");
+  assert.match(thanked, /^Por nada!/, "a thank-you is answered");
+  assert.doesNotMatch(closingSentence([], "não, obrigado", TZ), /Por nada/, "a no-thanks is not a thank-you");
+  assert.doesNotMatch(
     closingSentence([tuesday, call], "não, obrigado", TZ, true),
-    "Combinado! Se precisar de algo, é só chamar.",
+    /MOE-0008/,
     "a second close in a row doesn't repeat the summary",
   );
+  names(closingSummary([tuesday], TZ), "visita ao MOE-0008", "ter 08/01 às 10h");
 });

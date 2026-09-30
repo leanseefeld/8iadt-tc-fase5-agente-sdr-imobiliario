@@ -8,7 +8,7 @@ import { overrideModel } from "../../src/agent/provider.ts";
  *
  * Each lead message consumes one `Script`: the extraction answers with its
  * `facts` as JSON, the action loop calls the `act` tools (then stops), and the
- * phrasing call streams `reply`. What the code writes itself — options,
+ * phrasing call streams `reply`. The broker's summary is a fixed, valid one. What the code writes itself — options,
  * confirmations, "quer mesmo cancelar?" — never reaches the model, which is
  * exactly what these tests are about.
  *
@@ -38,7 +38,7 @@ const USAGE = {
   outputTokens: { total: 1, text: 1, reasoning: 0 },
 };
 
-type Kind = "extract" | "act" | "reply";
+type Kind = "extract" | "act" | "summary" | "reply";
 
 function systemText(options: LanguageModelV4CallOptions): string {
   return options.prompt
@@ -49,6 +49,7 @@ function systemText(options: LanguageModelV4CallOptions): string {
 
 function kindOf(options: LanguageModelV4CallOptions): Kind {
   if (systemText(options).startsWith("Você lê mensagens")) return "extract";
+  if (systemText(options).startsWith("Você escreve resumos internos")) return "summary";
   if ((options.tools ?? []).length > 0) return "act";
   return "reply";
 }
@@ -74,6 +75,10 @@ export function useScriptedModel(): ScriptedModel {
     if (kind === "extract") {
       current = queue.shift() ?? {};
       return { content: [{ type: "text", text: JSON.stringify(current.facts ?? {}) }], tools: false };
+    }
+    if (kind === "summary") {
+      const summary = { summary: "Lead procura um imóvel; resumo escrito pelo modelo roteirizado.", previewLine: "Resumo roteirizado" };
+      return { content: [{ type: "text", text: JSON.stringify(summary) }], tools: false };
     }
     if (kind === "act") {
       // A second step carries the first step's tool results: stop there.

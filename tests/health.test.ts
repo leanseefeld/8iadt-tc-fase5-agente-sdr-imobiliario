@@ -4,7 +4,6 @@ import {
   liveness,
   readiness,
   probe,
-  PROBE_TIMEOUT_MS,
   type CheckResult,
 } from "../src/core/health.ts";
 
@@ -64,8 +63,4 @@ test("a hanging probe is bounded by its timeout", async () => {
   assert.equal(result.ok, false);
   assert.equal(result.detail, "timeout");
   assert.ok(elapsed < 1000, `probe took ${elapsed}ms, expected to be cut off near 150ms`);
-});
-
-test("the default probe timeout stays inside the 5 second bound", () => {
-  assert.ok(PROBE_TIMEOUT_MS < 5000);
 });

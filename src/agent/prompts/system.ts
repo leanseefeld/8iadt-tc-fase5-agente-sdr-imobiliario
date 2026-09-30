@@ -174,6 +174,8 @@ export interface TurnPromptInput {
    * acknowledgement goes first; this keeps the phrased part from offering again.
    */
   declinedOffer?: boolean;
+  /** Spec 009: the lead writes again after the agent closed the conversation. */
+  returning?: boolean;
   /**
    * Spec 006 FR-005b — the lead asked for times before the script was complete,
    * and the code-written "details first" sentence already answered that.
@@ -214,6 +216,12 @@ function acknowledgement(input: TurnPromptInput): string {
 }
 
 /** Spec 006: what the phrased part must not do after a decline. */
+function afterReturn(input: TurnPromptInput): string {
+  return input.returning === true
+    ? "\nA pessoa voltou a escrever depois de a conversa ter sido encerrada. Cumprimente com naturalidade, como quem retoma uma conversa com alguém conhecido, antes de seguir."
+    : "";
+}
+
 function afterDecline(input: TurnPromptInput): string {
   return input.declinedOffer === true
     ? "\nA pessoa acabou de recusar os horários oferecidos, e isso já foi respondido. Não ofereça horários, visita nem conversa de novo nesta mensagem."
@@ -381,6 +389,7 @@ export function turnBriefing(input: TurnPromptInput): string {
     acknowledgement(input),
     task(input),
     afterDecline(input),
+    afterReturn(input),
     afterDetailsFirst(input),
     multiParty(input),
     notes(input),

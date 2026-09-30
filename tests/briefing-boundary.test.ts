@@ -23,6 +23,7 @@ const PERMITTED = [
   "lastSearch",
   "declinedOffer",
   "detailsFirst",
+  "returning",
 ] as const;
 
 test("TurnPromptInput carries only the permitted fields", () => {

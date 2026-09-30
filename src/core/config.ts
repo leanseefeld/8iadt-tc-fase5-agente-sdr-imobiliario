@@ -129,7 +129,7 @@ export const configSchema = z.object({
   // No meeting is offered sooner than this from now.
   SCHEDULING_MIN_NOTICE_MINUTES: positiveInt.default(120),
   // The hours a proposal tries, in this order, inside each broker's own availability.
-  SCHEDULING_PREFERRED_TIMES: timeList.default(["10:00", "14:00", "16:30"]),
+  SCHEDULING_PREFERRED_TIMES: timeList.default(["10:00", "14:00", "16:30", "09:00", "11:00"]),
 });
 
 /**

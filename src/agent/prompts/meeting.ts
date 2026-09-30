@@ -201,4 +201,21 @@ export function rescheduleOptionsSentence(meeting: MeetingRef, options: Date[], 
 export const MEETING_LIMIT_SENTENCE =
   "Você já tem três compromissos marcados, que é o máximo por aqui. Se quiser, posso cancelar ou remarcar um deles.";
 
-export const NO_MEETING_TO_CHANGE_SENTENCE = "Não encontrei nenhuma visita ou conversa marcada para mudar.";
+/** Spec 009: nothing still to come — maybe it already passed. A yes books a new one. */
+export const NO_MEETING_TO_CHANGE_SENTENCE =
+  "Não tenho nenhuma visita ou conversa marcada com você daqui pra frente. Quer marcar uma?";
+
+/**
+ * Spec 009, decided 29/09: the reply when nothing is pending — every agent has
+ * a way to close. Code-written because, left to the model, "obrigado" got
+ * "vou atualizar o seu cadastro" and "vou encaminhar para a equipe": next steps
+ * nobody takes. It restates what is booked and leaves the door open.
+ */
+export function closingSentence(meetings: MeetingRef[], leadText: string, timeZone: string): string {
+  const thanked = /^\s*(muito\s+)?(obrigad|valeu|agradec)/iu.test(leadText);
+  const open = thanked ? "Por nada!" : "Combinado!";
+  const items = meetings.map((meeting) => `${theMeeting(meeting)} (${slotLabel(meeting.scheduledAt, timeZone)})`);
+  const booked =
+    items.length === 0 ? "" : ` Fica marcado: ${items.length === 1 ? items[0] : `${items.slice(0, -1).join(", ")} e ${items.at(-1)}`}.`;
+  return `${open}${booked} Se precisar de algo, é só chamar.`;
+}

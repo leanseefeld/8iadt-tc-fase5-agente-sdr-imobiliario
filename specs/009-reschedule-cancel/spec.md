@@ -52,6 +52,22 @@ reschedule moves that row rather than creating another.
    booked; both meetings stand.
 7. **The limit.** Three meetings booked; asking for another → told the limit is three, and offered to change one.
 
+## Decided after the phone tests (29/09)
+
+The developer tested four conversations on a phone; each was replayed on e4b and 12B, and these came from it:
+
+- **A close.** When nothing is pending and the lead asks nothing, the agent closes in a code-written sentence
+  — *"Por nada! Fica marcado: … Se precisar de algo, é só chamar."* — instead of inventing a next step. When the
+  lead writes again after a close, the agent greets them back naturally before going on.
+- **Calendar words are read by code**: weekday names, *manhã/tarde*, *hoje/amanhã/depois de amanhã*.
+- **Times on the table come first**: with options offered, *"nada na quarta?"* or *"quinta"* asks for other
+  options, not to move something already booked — unless the message says to move or cancel it.
+- **Nothing still to come to change** (it already passed): a request for times becomes a new booking; otherwise
+  the agent says there's nothing booked from now on and offers to book.
+- **Mornings offer 9h and 11h too**, after 10h, 14h and 16h30; options are shown in time order.
+- **Declining an offer is not opting out**: only an explicit request to stop receiving messages closes the
+  conversation.
+
 ## Open questions
 
 None open. Answered on 29/09: ask before cancelling; rescheduling uses booking's two-hour notice; up to three

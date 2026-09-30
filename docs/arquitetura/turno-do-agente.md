@@ -54,12 +54,14 @@ flowchart TD
     AGENDA -- "não" --> FACTS["reconfirmação · último resultado de busca<br/>fatos derivados do Postgres"]:::codigo
     FACTS --> CANT{"tentou algo que não dá para usar<br/>e fez uma pergunta?"}:::codigo
     CANT -- "sim" --> W_CANT["ainda não consigo te ajudar com isso"]:::escrita
-    CANT -- "não" --> TASK["task()<br/>escolhe UMA instrução por precedência"]:::codigo
+    CANT -- "não" --> FECHA{"nada pendente e nada perguntado?<br/>009: fechamento"}:::codigo
+    FECHA -- "sim" --> W_FECHA["Por nada! Fica marcado: …<br/>Se precisar de algo, é só chamar."]:::escrita
+    FECHA -- "não" --> TASK["task()<br/>escolhe UMA instrução por precedência<br/>009: depois de um fechamento, retomar com naturalidade"]:::codigo
     TASK --> PHR["phrase()<br/>streaming frase a frase<br/>006: depois de um prefixo escrito, se houver"]:::fala
     PHR --> GRD{"guardas por frase<br/>sintaxe · idioma · valores · nº de perguntas"}:::codigo
     GRD -- "reprovou" --> W_FB["fallbackText"]:::escrita
     GRD -- "passou" --> COMMIT
-    W_REF & W_FAIL & W_OPT & W_HO & W_MEET & W_CANT & W_FB --> COMMIT["commitTurn<br/>mensagens · slots · eventos<br/>006: opções e reserva nos metadados<br/>006: agenda o follow-up se sobrou pergunta ou opções"]:::codigo
+    W_REF & W_FAIL & W_OPT & W_HO & W_MEET & W_CANT & W_FECHA & W_FB --> COMMIT["commitTurn<br/>mensagens · slots · eventos<br/>006: opções e reserva nos metadados<br/>006: agenda o follow-up se sobrou pergunta ou opções"]:::codigo
 ```
 
 **Por que três chamadas de modelo, e não uma.** `extract()` é um contrato JSON estreito, estabilizado a duras
@@ -141,10 +143,12 @@ stateDiagram-v2
 | `accountTurn` | 🟦 código | `agent/orchestrator.ts` | todo turno; decide o streak. **006:** um pedido que a imobiliária não atende (encontro no escritório ou por vídeo, carona, escolher quem atende por aparência, cor, gênero, ideologia…) **avança** o streak, mesmo que o turno tenha aprendido algo |
 | `handoffDecision` | 🟦 código | `domain/handoff.ts` | lead pediu humano (**006:** numa mensagem que não é sobre o encontro), ou streak chegou a 2 |
 | `shouldProposeMeeting` | 🟦 código | `domain/handoff.ts` | roteiro completo (compra/aluguel: quente e com contato; investimento: sempre) **e** nenhuma oferta já feita (`offerOutstanding`) |
-| `meetingTarget` *(006)* | 🟦 código | `agent/orchestrator.ts` | antes de propor: investidor → conversa por telefone; pediu telefone → telefone; imóvel em jogo → visita; cards na tela e nenhum apontado → **pergunta qual imóvel** (ou oferece o telefone), sem horários; nada mostrado ainda → telefone |
+| `meetingTarget` *(006)* | 🟦 código | `agent/orchestrator.ts` | antes de propor: investidor → conversa por telefone; pediu telefone → telefone; horários de telefone já na mesa → telefone *(009)*; imóvel em jogo → visita; cards na tela e nenhum apontado → **pergunta qual imóvel** (ou oferece o telefone), sem horários; nada mostrado ainda → telefone |
 | `proposeAppointment` *(006)* | 🟦 código | `services/scheduling.ts` | `shouldProposeMeeting`, **ou** `askedForTimes`/interesse com roteiro completo (incompleto: *"Assim que eu tiver seus dados…"*, uma vez; já agendado: *"ainda não consigo"*). Dia e período pedidos filtram **antes** do limite de três. Datas e horários são escritos pelo código |
 | `resolvePropertyRef` *(006)* | 🟦 código | `services/conversation.ts` | a extração trouxe `propertyRef` (*"o segundo"*, *"VMA-0005"*); resolve só contra imóveis **já mostrados nesta conversa**, nunca adivinha |
 | `declineProposal` *(006)* | 🟦 código | `services/scheduling.ts` | `declinedOffer` **com proposta aberta agora** — uma linha ainda `proposed` (`turn.proposalOpen`), não "já houve oferta" (`appointmentProposed`, que só evita repetir a oferta). Depois de uma reserva, *"não vou mais poder"* não é recusa: é pedido de cancelamento (009) |
+| `parseWhen` *(009)* | 🟦 código | `agent/meeting-change.ts` | todo turno: lê do texto os dias da semana, *manhã/tarde* e *hoje/amanhã/depois de amanhã* (relativos à data de hoje) e completa o que o modelo extraiu — o que o código acha vale mais. Com horários na mesa, um dia ou período sozinho (*"nada na quarta?"*) pede outras opções da proposta, a não ser que a mensagem diga para remarcar ou cancelar |
+| fechamento *(009)* | 🟩 código | `agent/prompts/meeting.ts` `closingSentence` | nada pendente, nenhuma pergunta, nada aprendido, e já houve oferta ou há compromisso: *"Por nada! Fica marcado: … Se precisar de algo, é só chamar."* A mensagem seguinte do lead é uma retomada: o modelo cumprimenta com naturalidade antes de seguir |
 | `decideChange` *(009)* | 🟦 código | `agent/orchestrator.ts` · `agent/meeting-change.ts` | `changeRequest` (cancelar/remarcar), um `answer` sim/não à pergunta anterior, ou a resposta a *"qual delas?"* — lida contra os compromissos listados (`matchAnswer`). Cancelar só depois do sim (`cancelAppointment`); remarcar vai ao `act()` e, sem horário dito, oferece horários daquele compromisso; depois de cancelar, um sim a *"quer marcar outro dia?"* oferece de novo. Até **três** compromissos futuros por lead |
 | `rescheduleMeeting` *(009)* | 🟥 tool | `agent/tools/reschedule-meeting.ts` | dentro do `act()`, quando o lead está remarcando. Move **a mesma linha** e revalida com o mesmo `checkSlot` da marcação, ignorando só o horário do próprio compromisso. O briefing traz os próximos sete dias já calculados, para "segunda" nunca virar uma segunda que passou |
 | `nextQuestion` | 🟦 código | `domain/slots.ts` | quando não há oferta nem handoff no turno — **quem escolhe a próxima pergunta é sempre o código** |

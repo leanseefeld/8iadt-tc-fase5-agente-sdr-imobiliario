@@ -101,8 +101,9 @@ export const EXTRACTION_FIELDS: readonly ExtractionField[] = [
   {
     key: "optOut",
     description:
-      "true SÓ se a pessoa pediu para não receber mais mensagens, para sair ou para ser " +
-      "removida do contato. Na dúvida, false.",
+      "true SÓ se a pessoa pediu com todas as letras para não receber mais mensagens, para sair ou para ser " +
+      'removida do contato ("pare de me mandar mensagem", "me tira da lista"). Recusar uma oferta ("não, ' +
+      'obrigado"), agradecer ou se despedir NÃO é isso. Na dúvida, false.',
   },
   {
     key: "askedAboutCriteria",

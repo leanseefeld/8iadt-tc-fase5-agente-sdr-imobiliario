@@ -61,3 +61,31 @@ export function matchAnswer(pool: MeetingRef[], text: string, timeZone: string):
   });
   return hits.length === 1 ? hits[0] : null;
 }
+
+/**
+ * The day and period a message names, read by code from a closed vocabulary —
+ * the weekday names, "manhã"/"tarde", and "hoje"/"amanhã"/"depois de amanhã",
+ * which are relative to `now`. The 4-bit extraction missed "nada na quarta?"
+ * entirely and read "amanhã" as a random weekday; a calendar word is not a
+ * judgement call. The model's own reading still counts where this finds nothing.
+ */
+export function parseWhen(text: string, now: Date, timeZone: string): { weekday?: Weekday; period?: "morning" | "afternoon" } {
+  // "a segunda opção" is option two, not Monday.
+  const said = text.toLowerCase().replace(/segunda\s+op[çc][ãa]o/gu, "");
+  // A whole word, accents included: `\b` doesn't see "ã" as a letter.
+  const word = (pattern: string) => new RegExp(`(?<!\\p{L})(?:${pattern})(?!\\p{L})`, "u").test(said);
+  const DAY = 24 * 60 * 60_000;
+  const found: { weekday?: Weekday; period?: "morning" | "afternoon" } = {};
+  if (word("depois de amanh[ãa]")) found.weekday = localParts(new Date(now.getTime() + 2 * DAY), timeZone).weekday;
+  else if (word("amanh[ãa]")) found.weekday = localParts(new Date(now.getTime() + DAY), timeZone).weekday;
+  else if (word("hoje")) found.weekday = localParts(now, timeZone).weekday;
+  else {
+    const hits = (Object.keys(WEEKDAY_WORDS) as Weekday[]).filter((day) => WEEKDAY_WORDS[day].some((name) => word(`${name}(?:-feira)?`)));
+    if (hits.length === 1) found.weekday = hits[0];
+  }
+  // "amanhã de manhã": "amanhã" is the day; "de manhã" is the period.
+  const morning = word("(?:de|pela) manh[ãa]") || word("manh[ãa]zinha");
+  const afternoon = word("(?:de|à|a|pela) tarde") || word("fim de tarde");
+  if (morning !== afternoon) found.period = morning ? "morning" : "afternoon";
+  return found;
+}

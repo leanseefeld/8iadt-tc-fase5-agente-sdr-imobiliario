@@ -30,6 +30,7 @@ test("the opening's detail is what the lead is looking for", () => {
   assert.equal(searchDetail(SLOTS), "de 2 quartos em Moema, até R$ 700 mil");
   assert.equal(searchDetail({ priceMax: 1_200_000 }), "até R$ 1,2 milhão");
   assert.equal(searchDetail({}), "");
+  assert.equal(searchDetail({ priceMax: 3500 }), "até R$ 3.500", "a rent, exactly — not a rounded 4 mil");
   assert.equal(
     fallbackOpening({ slots: SLOTS, leadName: "Camila Andrade", intent: "purchase" }),
     "Oi, Camila! Passando para retomar a busca pelo imóvel de 2 quartos em Moema, até R$ 700 mil.",

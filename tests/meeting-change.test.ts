@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { chooseMeeting, matchAnswer } from "../src/agent/meeting-change.ts";
 import {
   MEETING_LIMIT_SENTENCE,
+  closingSentence,
   cancelQuestion,
   cancelledSentence,
   keptSentence,
@@ -61,4 +62,26 @@ test("the answer to 'qual delas?' is read against the meetings just listed", () 
   assert.equal(matchAnswer(pool, "08/01", TZ), tuesday);
   assert.equal(matchAnswer(pool, "tanto faz", TZ), null, "nothing singled out");
   assert.equal(matchAnswer([friday, tuesday], "a visita", TZ), null, "both are visits");
+});
+
+test("parseWhen reads the calendar words by code — weekdays, periods, hoje/amanhã", async () => {
+  const { parseWhen } = await import("../src/agent/meeting-change.ts");
+  const tuesday = new Date("2026-09-29T20:00:00Z"); // ter 29/09, 17h in São Paulo
+  assert.deepEqual(parseWhen("nada na quarta?", tuesday, TZ), { weekday: "wed" });
+  assert.deepEqual(parseWhen("essa pode ser amanhã de tarde mesmo", tuesday, TZ), { weekday: "wed", period: "afternoon" });
+  assert.deepEqual(parseWhen("amanhã de manhã", tuesday, TZ), { weekday: "wed", period: "morning" });
+  assert.deepEqual(parseWhen("depois de amanhã", tuesday, TZ), { weekday: "thu" });
+  assert.deepEqual(parseWhen("tem como ser na sexta-feira de manhã?", tuesday, TZ), { weekday: "fri", period: "morning" });
+  assert.deepEqual(parseWhen("hoje à tarde", tuesday, TZ), { weekday: "tue", period: "afternoon" });
+  assert.deepEqual(parseWhen("terça ou quarta", tuesday, TZ), {}, "two days is not one");
+  assert.deepEqual(parseWhen("obrigado!", tuesday, TZ), {});
+  assert.deepEqual(parseWhen("pode ser a segunda opção", tuesday, TZ), {}, "option two, not Monday");
+});
+
+test("the closing restates what is booked and leaves the door open", () => {
+  assert.equal(
+    closingSentence([tuesday, call], "obrigado!", TZ),
+    "Por nada! Fica marcado: a visita ao MOE-0008 (ter 08/01 às 10h) e a conversa por telefone (qua 09/01 às 16h30). Se precisar de algo, é só chamar.",
+  );
+  assert.equal(closingSentence([], "não, obrigado", TZ), "Combinado! Se precisar de algo, é só chamar.", "a no-thanks is not a thank-you");
 });

@@ -186,7 +186,10 @@ export async function computeOptions(input: ComputeInput, runner: Runner = getDb
   const now = input.now ?? new Date();
   const rules = slotRules(await loadBrokerAvailability(brokerId, runner), type);
   const busy = await loadBusyIntervals(brokerId, runner, now);
-  const options = proposeSlots(busy, now, rules, input.constraint ?? {});
+  // Chosen in preference order, shown in time order: "10h, 9h, 11h" reads as a mistake.
+  const options = proposeSlots(busy, now, rules, input.constraint ?? {}).sort(
+    (a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime(),
+  );
 
   if (options.length === 0) {
     const constrained = input.constraint?.weekday !== undefined || input.constraint?.period !== undefined;
@@ -647,7 +650,9 @@ export async function computeRescheduleOptions(
     .where(eq(appointments.id, appointmentId));
   if (row === undefined || row.status !== "confirmed") return { ok: false, reason: "gone" };
   const rules = slotRules(await loadBrokerAvailability(row.brokerId, db), row.type);
-  const options = proposeSlots(await busyExcept(row.brokerId, appointmentId, db, now), now, rules, constraint);
+  const options = proposeSlots(await busyExcept(row.brokerId, appointmentId, db, now), now, rules, constraint).sort(
+    (a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime(),
+  );
   if (options.length === 0) {
     const constrained = constraint.weekday !== undefined || constraint.period !== undefined;
     return { ok: false, reason: constrained ? "no_slots_for_constraint" : "no_slots" };

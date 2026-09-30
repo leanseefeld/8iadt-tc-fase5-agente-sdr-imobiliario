@@ -336,7 +336,9 @@ export function lastOfferedType(turn: LoadedTurn): "viewing" | "call" | null {
  * a lead who talks about something else has moved on, and nothing is carried
  * over from further back.
  */
-export function pendingChange(turn: LoadedTurn): Pick<SchedulingRecord, "pendingCancel" | "pendingChoice" | "rebook"> {
+export function pendingChange(
+  turn: LoadedTurn,
+): Pick<SchedulingRecord, "pendingCancel" | "pendingChoice" | "rebook" | "closing"> {
   const last = [...turn.history].reverse().find((message) => message.role === "agent");
   const metadata = last?.metadata ?? {};
   const choice = metadata.pendingChoice as { change?: unknown; ids?: unknown } | undefined;
@@ -349,6 +351,7 @@ export function pendingChange(turn: LoadedTurn): Pick<SchedulingRecord, "pending
       ? { pendingChoice: { change: choice.change, ids: choice.ids.filter((id): id is string => typeof id === "string") } }
       : {}),
     ...(rebook !== undefined && (rebook.type === "viewing" || rebook.type === "call") ? { rebook } : {}),
+    ...(metadata.closing === true ? { closing: true as const } : {}),
   };
 }
 
@@ -810,6 +813,8 @@ export interface SchedulingRecord {
   reschedulingId?: string;
   /** Spec 009: a meeting was cancelled and "quer marcar outro dia?" asked; a yes offers these again. */
   rebook?: { type: "viewing" | "call"; propertyId: string | null; propertyCode: string | null };
+  /** Spec 009: this reply closed the conversation for now; the next message is a return. */
+  closing?: true;
 }
 
 export interface CommitTurnResult {
@@ -953,6 +958,7 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
           ...(input.scheduling?.pendingChoice !== undefined ? { pendingChoice: input.scheduling.pendingChoice } : {}),
           ...(input.scheduling?.reschedulingId !== undefined ? { reschedulingId: input.scheduling.reschedulingId } : {}),
           ...(input.scheduling?.rebook !== undefined ? { rebook: input.scheduling.rebook } : {}),
+          ...(input.scheduling?.closing === true ? { closing: true } : {}),
           // Masked one level down, not as a whole: `maskPII` is key-aware and a
           // tool's `name` is the tool's, not a person's — masking the object
           // would write `u***` where `updateSlots` belongs.

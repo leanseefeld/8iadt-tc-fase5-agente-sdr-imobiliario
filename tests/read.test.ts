@@ -83,3 +83,10 @@ test("the change verbs", () => {
     ],
   );
 });
+
+test("'não vou mais poder' is a cancel unless the message says to move it", () => {
+  const reschedule = { scheduling: { ...NO_SCHEDULING, changeRequest: "reschedule" as const } };
+  assert.equal(read("não vou mais poder na sexta", reschedule).facts.changeRequest, "cancel");
+  assert.equal(read("não vou poder na sexta, dá pra passar pra segunda?", reschedule).facts.changeRequest, "reschedule");
+  assert.equal(read("queria remarcar", reschedule).facts.changeRequest, "reschedule");
+});

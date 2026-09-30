@@ -140,7 +140,13 @@ export function readTurn(model: ModelReading, context: ReadingContext): Reading 
   const bare = readAcknowledgement(text) !== null;
   // "Outros imóveis" is the criteria question, never something for the team.
   const moreProperties = asksForMoreProperties(text);
-  const scheduling = bare ? { ...model.scheduling, unsupportedMeeting: false, outOfScopeRequest: false } : model.scheduling;
+  const changeVerb = mentionsChange(text);
+  const cancelVerb = mentionsCancel(text);
+  const echoed = bare ? { ...model.scheduling, unsupportedMeeting: false, outOfScopeRequest: false } : model.scheduling;
+  // "Não vou mais poder" with no word about moving it is a cancel, whatever the
+  // model called it: e4b read it as a reschedule in 2 of 3 eval runs (30/09).
+  const scheduling: SchedulingFacts =
+    echoed.changeRequest === "reschedule" && cancelVerb && !changeVerb ? { ...echoed, changeRequest: "cancel" } : echoed;
   const facts: SchedulingFacts = {
     ...scheduling,
     // What code finds in the text wins over the model's guess (spec 009).
@@ -158,8 +164,8 @@ export function readTurn(model: ModelReading, context: ReadingContext): Reading 
     // the extraction didn't say.
     answer: facts.answer ?? (context.yesNoPending ? readYesNo(text) : null),
     namesADay: facts.preference.weekday !== undefined || facts.preference.period !== undefined,
-    changeVerb: mentionsChange(text),
-    cancelVerb: mentionsCancel(text),
+    changeVerb,
+    cancelVerb,
     act: settleAct(model.act, text, remainder),
     remainder,
   };

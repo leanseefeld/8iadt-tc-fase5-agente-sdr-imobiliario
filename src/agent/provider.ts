@@ -85,8 +85,26 @@ function buildProvider(extra: Record<string, unknown>) {
 let provider: ReturnType<typeof buildProvider> | undefined;
 let jsonProvider: ReturnType<typeof buildProvider> | undefined;
 
+/**
+ * A model that stands in for the provider, for every call in this process.
+ * Tests only: a scripted model (`tests/support/scripted-model.ts`) makes the
+ * code's decisions testable without a sampler in the loop. On `globalThis`
+ * so every module instance sees the same one.
+ */
+const OVERRIDE = Symbol.for("sdr.agent.provider.override");
+
+export function overrideModel(model: LanguageModel | null): void {
+  (globalThis as Record<symbol, LanguageModel | undefined>)[OVERRIDE] = model ?? undefined;
+}
+
+function overridden(): LanguageModel | undefined {
+  return (globalThis as Record<symbol, LanguageModel | undefined>)[OVERRIDE];
+}
+
 /** The configured chat model. `modelId` is for the rare call that needs another. */
 export function getModel(modelId?: string): LanguageModel {
+  const stand = overridden();
+  if (stand !== undefined) return stand;
   provider ??= buildProvider({});
   return provider.chatModel(modelId ?? getConfig().MODEL_ID);
 }
@@ -96,6 +114,8 @@ export function getModel(modelId?: string): LanguageModel {
  * the text itself — see `rewritingFetch` for why the schema is not sent.
  */
 export function getJsonModel(): LanguageModel {
+  const stand = overridden();
+  if (stand !== undefined) return stand;
   jsonProvider ??= buildProvider({ response_format: { type: "json_object" } });
   return jsonProvider.chatModel(getConfig().MODEL_ID);
 }

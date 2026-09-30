@@ -5,8 +5,8 @@ The overnight work of 30/09/2026 on branch `015-fronteira`. The developer's deci
 
 ## Retomar aqui
 
-**Última atividade:** 2026-09-30T00:18-03:00, by the interactive session.
-**Etapa atual:** 1 done. Next is stage 2.
+**Última atividade:** 2026-09-30T00:20-03:00, by the interactive session.
+**Etapa atual:** 2 done. Next is stage 3.
 
 A session that resumes this work:
 
@@ -38,7 +38,7 @@ A session that resumes this work:
 
 - [x] **1 · Spec** — `specs/015-fronteira/spec.md`, one page like 009's, written from the decisions, then a
   consistency check against the constitution and the turn map.
-- [ ] **2 · Scripted-model harness** — `MockLanguageModelV4` from `ai/test` returns the facts JSON a test hands it,
+- [x] **2 · Scripted-model harness** — `MockLanguageModelV4` from `ai/test` returns the facts JSON a test hands it,
   and the first decision tests run without e4b.
 - [ ] **3 · Boundary** — new code in pure modules, not in `run()`:
   - act and remainder in the extraction, with the code safety net for thanks/agreement;
@@ -66,3 +66,4 @@ A session that resumes this work:
 ## Diário
 
 - 2026-09-30T00:18-03:00 · Stage 1: `spec.md` (one page) and `plan.md` (consistency check, design, the decisions I made).
+- 2026-09-30T00:20-03:00 · Stage 2: `overrideModel` in `agent/provider.ts` (a test seam); `tests/support/scripted-model.ts` (`MockLanguageModelV4`: extraction answers the scripted facts, the action loop calls the scripted tools, the reply streams a fixed sentence); `tests/integration/scripted-meetings.test.ts` with 3 cases (009 examples 1 and 2, thanks close), 4 s with no model.

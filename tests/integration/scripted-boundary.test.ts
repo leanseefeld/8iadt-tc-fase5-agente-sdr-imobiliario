@@ -128,6 +128,23 @@ test("spec 015, scripted", { skip: !integration }, async (t) => {
     assert.equal((await fabi.lastMetadata()).closing, true);
   });
 
+  await t.test("a pick after an offer is a pick, not a yes to the offer", async () => {
+    const gil = await lead();
+    await showProperty(gil, "MOE-0001");
+    model.push(
+      { facts: { meetingKind: "visit", askedForTimes: true, propertyCode: "MOE-0001" } },
+      { facts: { messageAct: "question", uncovered: "vocês trabalham com financiamento?" } },
+      // The model reads the pick as a yes too; the pick wins.
+      { facts: { pickedTime: true, answer: "yes" }, act: [{ tool: "bookMeeting", input: { optionIndex: 1 } }] },
+    );
+    await gil.say("quero visitar o MOE-0001");
+    await gil.say("vocês trabalham com financiamento?");
+    assert.deepEqual((await gil.lastMetadata()).humanOffer, { about: "vocês trabalham com financiamento?" });
+    const booked = await gil.say("pode ser a primeira opção");
+    assert.match(booked.reply, /^Pronto!/);
+    assert.equal(booked.handoffReason, null);
+  });
+
   await t.test("7 · thanks with something left over is the offer, not the close", async () => {
     const eva = await lead();
     await bookDirect(eva, { at: nextLocal("fri", 10), propertyCode: "MOE-0001" });

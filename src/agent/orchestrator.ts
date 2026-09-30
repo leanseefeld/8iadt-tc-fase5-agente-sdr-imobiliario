@@ -1532,7 +1532,13 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   // question or piece of information left over, which is understood — it may
   // get the offer — and never a misunderstanding.
   const messageAct = settleAct(extraction.act, leadText, extraction.remainder);
-  const offerTaken = waiting.humanOffer !== undefined && !confirmingCancel ? offerOutcome(answer) : null;
+  // A message that does something the turn already handles — picks a time,
+  // changes a meeting, asks for times — is that, not a yes to the offer: "pode
+  // ser a primeira opção" after an offer was read as a yes and handed off.
+  const offerTaken =
+    waiting.humanOffer !== undefined && !confirmingCancel && !picking && !movingPick && !changing && !wantsOffer
+      ? offerOutcome(answer)
+      : null;
   const openRemainder =
     extraction.remainder !== null && (messageAct === "request" || messageAct === "question" || messageAct === "inform");
   const acted =

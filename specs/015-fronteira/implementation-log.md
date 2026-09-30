@@ -5,8 +5,8 @@ The overnight work of 30/09/2026 on branch `015-fronteira`. The developer's deci
 
 ## Retomar aqui
 
-**Última atividade:** 2026-09-30T00:43-03:00, by the interactive session.
-**Etapa atual:** 3 done. Next is stage 4 (test cleanup and `npm run eval`).
+**Última atividade:** 2026-09-30T00:58-03:00, by the interactive session.
+**Etapa atual:** 4 done. Next is stage 5 (the `run()` refactor, if there's time) or stage 6.
 
 A session that resumes this work:
 
@@ -47,7 +47,7 @@ A session that resumes this work:
   - the close: summary by code, courtesy by the model;
   - the turn map updated;
   - new replay conversations (husband, dog, discount, ride, thanks, "outros imóveis"), validated by reading.
-- [ ] **4 · Test cleanup** — the list on the page:
+- [x] **4 · Test cleanup** — the list on the page:
   - delete the tests that mirror constants;
   - rewrite the exact-sentence tests to check facts;
   - turn the prompt-text regexes into instruction ids;
@@ -88,3 +88,8 @@ A session that resumes this work:
   - Broker takeover conversations added (10: offer taken → Ana → hand back; 11: Ana steps in on her own). Both resume naturally, except the one below.
   - **Left for the morning:** after the hand back, "a visita de segunda continua de pé?" gets the team offer, because the phrasing node isn't given the booked meetings in its state. That is a data-flow gap, not a guardrail gap (see *Perguntas para a manhã*).
 - 2026-09-30T00:43-03:00 · Stage 3 done. The turn map is updated: the code readings node, the boundary, the pending offer, the close (code summary plus model courtesy), the capability list, and the 015 state machine. Both Mermaid diagrams parse and render (mermaid 11).
+- 2026-09-30T00:58-03:00 · Stage 4 done.
+  - Deterministic suite (`npm run test:integration`): 395/395 in 58 s. It took ~7 min with e4b.
+  - `npm run eval` (e4b): 11 files, 58 tests, 6 min. The first run failed 2:
+    - booking: "não vou mais poder" read as a reschedule. That's the model; it passed on rerun.
+    - meeting-escapes: **a defect of mine**. After a boundary offer ("vocês trabalham com financiamento?"), "pode ser a primeira opção" was read as a yes and handed off. The offer's answer now counts only when the message does nothing else the turn handles. There's a scripted test for it. Rerun: both files pass.

@@ -208,6 +208,25 @@ export const EXTRACTION_FIELDS: readonly ExtractionField[] = [
       'Se a pessoa citou o código de um imóvel, como "VMA-0005" ou "Interessado em MOE-0003", ' +
       "esse código, exatamente como escrito. Senão, null.",
   },
+  // Spec 015. Last on purpose: the fields above are read first, and what they
+  // left over is what these two describe.
+  {
+    key: "messageAct",
+    description:
+      "O que a mensagem faz, numa palavra: thanks se agradece ou se despede; agree se só concorda ou confirma " +
+      '("ok", "beleza"); answer se responde a uma pergunta sua; request se pede alguma coisa; question se ' +
+      "pergunta alguma coisa; inform se conta algo sem pedir nem perguntar; other para o resto (risada, " +
+      "cumprimento, emoji).",
+    values: ["thanks", "agree", "answer", "request", "question", "inform", "other"],
+  },
+  {
+    key: "uncovered",
+    description:
+      "O trecho da mensagem que nenhum dos campos acima registrou: um pedido, uma pergunta ou uma informação " +
+      'que ficou sem lugar ("meu marido vai junto", "o condomínio aceita cachorro?", "consegue um desconto?"), ' +
+      "com as palavras da pessoa. null se os campos acima já cobrem a mensagem, ou se ela é só agradecimento, " +
+      "concordância, cumprimento ou risada.",
+  },
 ];
 
 export interface Extracted {
@@ -239,6 +258,8 @@ export interface Extracted {
   meetingKind: string | null;
   unsupportedMeeting: boolean;
   outOfScopeRequest: boolean;
+  messageAct: string | null;
+  uncovered: string | null;
 }
 
 /** The model writes `true`, `"true"` or `"sim"`; all three mean the same thing. */

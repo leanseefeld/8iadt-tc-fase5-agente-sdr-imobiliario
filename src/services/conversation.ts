@@ -338,11 +338,12 @@ export function lastOfferedType(turn: LoadedTurn): "viewing" | "call" | null {
  */
 export function pendingChange(
   turn: LoadedTurn,
-): Pick<SchedulingRecord, "pendingCancel" | "pendingChoice" | "rebook" | "closing"> {
+): Pick<SchedulingRecord, "pendingCancel" | "pendingChoice" | "rebook" | "closing" | "humanOffer"> {
   const last = [...turn.history].reverse().find((message) => message.role === "agent");
   const metadata = last?.metadata ?? {};
   const choice = metadata.pendingChoice as { change?: unknown; ids?: unknown } | undefined;
   const rebook = metadata.rebook as SchedulingRecord["rebook"] | undefined;
+  const offer = metadata.humanOffer as { about?: unknown } | undefined;
   return {
     ...(typeof metadata.pendingCancel === "string" ? { pendingCancel: metadata.pendingCancel } : {}),
     ...(choice !== undefined &&
@@ -352,6 +353,7 @@ export function pendingChange(
       : {}),
     ...(rebook !== undefined && (rebook.type === "viewing" || rebook.type === "call") ? { rebook } : {}),
     ...(metadata.closing === true ? { closing: true as const } : {}),
+    ...(offer !== undefined && typeof offer.about === "string" ? { humanOffer: { about: offer.about } } : {}),
   };
 }
 
@@ -815,6 +817,11 @@ export interface SchedulingRecord {
   rebook?: { type: "viewing" | "call"; propertyId: string | null; propertyCode: string | null };
   /** Spec 009: this reply closed the conversation for now; the next message is a return. */
   closing?: true;
+  /**
+   * Spec 015: this reply offered to have someone from the team check `about`,
+   * something the agent can't resolve. The next yes is a handoff, a no a close.
+   */
+  humanOffer?: { about: string };
 }
 
 export interface CommitTurnResult {
@@ -959,6 +966,7 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
           ...(input.scheduling?.reschedulingId !== undefined ? { reschedulingId: input.scheduling.reschedulingId } : {}),
           ...(input.scheduling?.rebook !== undefined ? { rebook: input.scheduling.rebook } : {}),
           ...(input.scheduling?.closing === true ? { closing: true } : {}),
+          ...(input.scheduling?.humanOffer !== undefined ? { humanOffer: input.scheduling.humanOffer } : {}),
           // Masked one level down, not as a whole: `maskPII` is key-aware and a
           // tool's `name` is the tool's, not a person's — masking the object
           // would write `u***` where `updateSlots` belongs.

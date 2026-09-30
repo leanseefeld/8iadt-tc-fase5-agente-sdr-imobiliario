@@ -103,4 +103,16 @@ test("replay 29/09", async (t) => {
     "agradecido! 😊",
     "não, obrigado",
   ]);
+
+  // 5 · Closing, the cases the phone tests didn't reach: a thank-you with times
+  // still on the table is not a goodbye; after a close, the lead comes back.
+  const five = await lead();
+  await withProperty(five, "MOE-0001");
+  await replay("5 · a thank-you with options open, a close, and a return", five, [
+    "quero visitar o MOE-0001",
+    "obrigado!",
+    "a primeira",
+    "valeu!",
+    "oi, tudo bem? queria ver outros imóveis também",
+  ]);
 });

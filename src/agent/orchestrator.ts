@@ -1837,7 +1837,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     !leadText.includes("?") &&
     (booked.length > 0 || offerOutstanding(turn));
   if (nothingPending) {
-    written = closingSentence(booked, leadText, timezone);
+    written = closingSentence(booked, leadText, timezone, waiting.closing === true);
     scheduling = { ...scheduling, closing: true };
   }
 

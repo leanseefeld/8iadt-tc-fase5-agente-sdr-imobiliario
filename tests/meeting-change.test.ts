@@ -84,4 +84,9 @@ test("the closing restates what is booked and leaves the door open", () => {
     "Por nada! Fica marcado: a visita ao MOE-0008 (ter 08/01 às 10h) e a conversa por telefone (qua 09/01 às 16h30). Se precisar de algo, é só chamar.",
   );
   assert.equal(closingSentence([], "não, obrigado", TZ), "Combinado! Se precisar de algo, é só chamar.", "a no-thanks is not a thank-you");
+  assert.equal(
+    closingSentence([tuesday, call], "não, obrigado", TZ, true),
+    "Combinado! Se precisar de algo, é só chamar.",
+    "a second close in a row doesn't repeat the summary",
+  );
 });

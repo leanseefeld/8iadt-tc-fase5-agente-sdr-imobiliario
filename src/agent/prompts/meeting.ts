@@ -211,9 +211,16 @@ export const NO_MEETING_TO_CHANGE_SENTENCE =
  * "vou atualizar o seu cadastro" and "vou encaminhar para a equipe": next steps
  * nobody takes. It restates what is booked and leaves the door open.
  */
-export function closingSentence(meetings: MeetingRef[], leadText: string, timeZone: string): string {
+export function closingSentence(
+  meetings: MeetingRef[],
+  leadText: string,
+  timeZone: string,
+  /** The last reply already closed: say it short, without the summary again. */
+  again = false,
+): string {
   const thanked = /^\s*(muito\s+)?(obrigad|valeu|agradec)/iu.test(leadText);
   const open = thanked ? "Por nada!" : "Combinado!";
+  if (again) return `${open} Se precisar de algo, é só chamar.`;
   const items = meetings.map((meeting) => `${theMeeting(meeting)} (${slotLabel(meeting.scheduledAt, timeZone)})`);
   const booked =
     items.length === 0 ? "" : ` Fica marcado: ${items.length === 1 ? items[0] : `${items.slice(0, -1).join(", ")} e ${items.at(-1)}`}.`;

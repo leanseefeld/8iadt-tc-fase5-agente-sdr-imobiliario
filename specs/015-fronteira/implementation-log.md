@@ -5,8 +5,8 @@ The overnight work of 30/09/2026 on branch `015-fronteira`. The developer's deci
 
 ## Retomar aqui
 
-**Última atividade:** 2026-09-30T00:20-03:00, by the interactive session.
-**Etapa atual:** 0 — setup finished. Next is stage 1.
+**Última atividade:** 2026-09-30T00:18-03:00, by the interactive session.
+**Etapa atual:** 1 done. Next is stage 2.
 
 A session that resumes this work:
 
@@ -36,7 +36,7 @@ A session that resumes this work:
 
 ## Etapas
 
-- [ ] **1 · Spec** — `specs/015-fronteira/spec.md`, one page like 009's, written from the decisions, then a
+- [x] **1 · Spec** — `specs/015-fronteira/spec.md`, one page like 009's, written from the decisions, then a
   consistency check against the constitution and the turn map.
 - [ ] **2 · Scripted-model harness** — `MockLanguageModelV4` from `ai/test` returns the facts JSON a test hands it,
   and the first decision tests run without e4b.
@@ -64,3 +64,5 @@ A session that resumes this work:
 *(none yet)*
 
 ## Diário
+
+- 2026-09-30T00:18-03:00 · Stage 1: `spec.md` (one page) and `plan.md` (consistency check, design, the decisions I made).

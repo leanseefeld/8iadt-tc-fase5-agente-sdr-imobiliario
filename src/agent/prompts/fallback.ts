@@ -127,7 +127,7 @@ export function notUnderstoodReply(question: Question | null): string {
  * that says nothing would be worse than a turn that sounds like a form.
  */
 export function guardedReply(question: Question | null): string {
-  return question === null
-    ? "Perfeito, anotado! Já vou passar isso para o corretor que vai te atender."
-    : `Perfeito, anotado! ${question.question}`;
+  // Spec 015: never a next step nothing performs — this used to say "já vou
+  // passar isso para o corretor", and no tool passes anything to anyone.
+  return question === null ? "Perfeito, anotado!" : `Perfeito, anotado! ${question.question}`;
 }

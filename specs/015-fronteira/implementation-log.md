@@ -5,8 +5,8 @@ The overnight work of 30/09/2026 on branch `015-fronteira`. The developer's deci
 
 ## Retomar aqui
 
-**Última atividade:** 2026-09-30T00:58-03:00, by the interactive session.
-**Etapa atual:** 4 done. Next is stage 5 (the `run()` refactor, if there's time) or stage 6.
+**Última atividade:** 2026-09-30T01:09-03:00, by the interactive session.
+**Etapa atual:** 5 done (partly, see the log). Next is stage 6: the night's close.
 
 A session that resumes this work:
 
@@ -52,7 +52,7 @@ A session that resumes this work:
   - rewrite the exact-sentence tests to check facts;
   - turn the prompt-text regexes into instruction ids;
   - move the real-model tests to `npm run eval`.
-- [ ] **5 · `run()` refactor, if there is time** — move the meeting, change and close decisions into modules,
+- [x] **5 · `run()` refactor, if there is time** — move the meeting, change and close decisions into modules,
   with no behaviour change.
 - [ ] **6 · Close the night** — full e4b suite, `npm run eval`, the replay read, the failure log updated, and the
   page republished with the report on top. The page is
@@ -93,3 +93,12 @@ A session that resumes this work:
   - `npm run eval` (e4b): 11 files, 58 tests, 6 min. The first run failed 2:
     - booking: "não vou mais poder" read as a reschedule. That's the model; it passed on rerun.
     - meeting-escapes: **a defect of mine**. After a boundary offer ("vocês trabalham com financiamento?"), "pode ser a primeira opção" was read as a yes and handed off. The offer's answer now counts only when the message does nothing else the turn handles. There's a scripted test for it. Rerun: both files pass.
+- 2026-09-30T01:09-03:00 · Stage 5, done in part, and on purpose.
+  - The turn's first node is now its own module: `readTurn` (`agent/read.ts`) settles what the message says. It takes the model's reading plus the code readings (day and period, yes/no, change verbs, bare thanks, an ordinal pick, "outros imóveis"), and `run()` decides from its `Reading`, never from the raw text.
+  - `extract()` is back to the model's reading alone. The contract is in `tests/read.test.ts`.
+  - The meeting and change decisions stay in `run()`. Moving them is the next refactor step (see the page), and not worth the risk tonight.
+  - The full replay after the refactor surfaced three code defects that e4b's variance had hidden, all fixed with scripted tests:
+    - "não vou mais poder" didn't count as a cancel unless the model said so;
+    - a question the task forbids now gets dropped by an output guard;
+    - the guard's fallback promised "já vou passar isso para o corretor".
+  - Deterministic suite: all pass.

@@ -1,0 +1,85 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { NO_SCHEDULING, readTurn, type ModelReading, type ReadingContext } from "../src/agent/read.ts";
+
+/**
+ * The turn's first node: the model's reading, settled by what code reads from
+ * a closed vocabulary. Everything after it decides from this output.
+ */
+
+const TZ = "America/Sao_Paulo";
+// A Tuesday, 29/09/2026, 21h in São Paulo.
+const NOW = new Date("2026-09-30T00:00:00Z");
+
+const nothing: ModelReading = {
+  leadAskedForHuman: false,
+  optedOut: false,
+  askedAboutCriteria: false,
+  scheduling: NO_SCHEDULING,
+  act: null,
+  remainder: null,
+};
+
+function read(text: string, model: Partial<ModelReading> = {}, context: Partial<ReadingContext> = {}) {
+  return readTurn(
+    { ...nothing, ...model },
+    { text, now: NOW, timeZone: TZ, optionsOnTable: false, yesNoPending: false, ...context },
+  );
+}
+
+test("a bare thanks requests nothing, whatever the model echoed", () => {
+  const reading = read("valeu!", {
+    leadAskedForHuman: true,
+    optedOut: true,
+    scheduling: { ...NO_SCHEDULING, outOfScopeRequest: true, unsupportedMeeting: true },
+    act: "inform",
+  });
+  assert.equal(reading.leadAskedForHuman, false);
+  assert.equal(reading.optedOut, false);
+  assert.equal(reading.facts.outOfScopeRequest, false);
+  assert.equal(reading.facts.unsupportedMeeting, false);
+  assert.equal(reading.act, "thanks");
+  // A real request is left alone.
+  assert.equal(read("quero falar com um corretor", { leadAskedForHuman: true }).leadAskedForHuman, true);
+});
+
+test("asking for more properties is the criteria question, never a remainder", () => {
+  const reading = read("queria ver outros imóveis também", { remainder: "outros imóveis", act: "request" });
+  assert.equal(reading.askedAboutCriteria, true);
+  assert.equal(reading.remainder, null);
+});
+
+test("the day and period named in the text win over the model's guess", () => {
+  const reading = read("pode ser amanhã de tarde", {
+    scheduling: { ...NO_SCHEDULING, preference: { weekday: "tue" } },
+  });
+  assert.deepEqual(reading.facts.preference, { weekday: "wed", period: "afternoon" });
+  assert.equal(reading.namesADay, true);
+});
+
+test("an ordinal is a pick only with options on the table", () => {
+  assert.equal(read("a primeira", {}, { optionsOnTable: true }).facts.pickedTime, true);
+  assert.equal(read("a primeira").facts.pickedTime, false);
+});
+
+test("yes and no are read from the words only when a yes/no question is pending", () => {
+  assert.equal(read("não, deixa", {}, { yesNoPending: true }).answer, "no");
+  assert.equal(read("sim, pode", {}, { yesNoPending: true }).answer, "yes");
+  assert.equal(read("não, deixa").answer, null);
+  const model = { scheduling: { ...NO_SCHEDULING, answer: "yes" as const } };
+  assert.equal(read("hmm", model, { yesNoPending: true }).answer, "yes", "the extraction's answer stands");
+});
+
+test("the change verbs", () => {
+  assert.deepEqual(
+    ["dá pra passar pra segunda?", "não vou mais poder", "obrigado"].map((text) => {
+      const reading = read(text);
+      return [reading.changeVerb, reading.cancelVerb];
+    }),
+    [
+      [true, false],
+      [false, true],
+      [false, false],
+    ],
+  );
+});

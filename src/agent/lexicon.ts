@@ -132,3 +132,20 @@ export function readAcknowledgement(text: string): "thanks" | "agree" | null {
   if (onlyOf(said, [...THANKS, ...AGREEMENT])) return THANKS.some((word) => said.includes(word)) ? "thanks" : "agree";
   return null;
 }
+
+/** A yes or a no to the question just asked, from how the message starts. */
+export function readYesNo(text: string): "yes" | "no" | null {
+  if (/^\s*(n[ãa]o|melhor n[ãa]o|deixa)(?!\p{L})/iu.test(text)) return "no";
+  if (/^\s*(sim|pode|isso|quero|claro|confirmo)(?!\p{L})/iu.test(text)) return "yes";
+  return null;
+}
+
+/** "Remarcar", "mudar", "passar pra segunda", "cancelar", "desmarcar". */
+export function mentionsChange(text: string): boolean {
+  return /remarc|mudar|trocar|passar|cancel|desmarc/iu.test(text);
+}
+
+/** "Cancelar", "desmarcar", "não vou mais poder", "não posso mais". */
+export function mentionsCancel(text: string): boolean {
+  return /cancel|desmarc|n[ãa]o vou (mais )?poder|n[ãa]o posso mais/iu.test(text);
+}

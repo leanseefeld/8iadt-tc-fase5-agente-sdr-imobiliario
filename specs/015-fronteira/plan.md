@@ -20,10 +20,34 @@ confirm in the morning.
 
 ## Design
 
-- **`src/agent/lexicon.ts`**: the pt-BR readings done by code. `readAcknowledgement(text)` is the safety net.
-  `parseWhen` and the yes/no reading move here during the refactor stage.
-- **`src/agent/decide/boundary.ts`**: pure. `decideBoundary(facts, turn) → { offer: string } | null`, and
-  `readOfferAnswer(...)` for the turn after an offer.
+The turn as nodes, each with a typed input and output. The data flow is what decides where a rule belongs:
+
+```
+lead text ─▶ extract() ──ModelReading──▶ readTurn() ──Reading──▶ decide (run) ──▶ act() ──▶ phrase() ──▶ guards ──▶ commitTurn
+             model reads                  code settles             code decides     tools      model speaks  code checks
+```
+
+- **Reading a closed vocabulary** (a weekday, "amanhã", a bare "obrigado", "a primeira", sim/não) is not a
+  guardrail. It's the reading node doing its job, so it lives in `readTurn` (`agent/read.ts`) and `lexicon.ts`,
+  not in the decisions.
+- **Decisions** (precedence, what wins the turn) read only a `Reading`. That's why the scripted model can test
+  them from facts alone.
+- **Guardrails** sit on the output: the reply guards, and the offer question the code adds when the phrasing
+  forgot it.
+- **Plan/think loop:** only the action step (`act()`, at most 3 tool steps). Nothing else in the turn needs one.
+
+Files:
+
+- **`src/agent/read.ts`**: `readTurn(model, context) → Reading`. The node that settles what the message says. It
+  moved out of `run()` in the refactor stage, with `SchedulingFacts` and `readSchedulingFacts`.
+- **`src/agent/lexicon.ts`**: the pt-BR readings done by code:
+  - `readAcknowledgement` (the safety net);
+  - `readOptionPick`;
+  - `asksForMoreProperties`;
+  - `readYesNo`, `mentionsChange` and `mentionsCancel`.
+- **`src/agent/decide/boundary.ts`**: pure:
+  - `settleAct`, and `boundaryOffer(act, remainder, phrasedTurn) → { about } | null`;
+  - `offerOutcome(answer)` for the turn after an offer.
 - **Extraction** (`tools/update-slots.ts`): `messageAct` (thanks, agree, answer, request, question, inform, other)
   and `uncovered` (string or null).
 - **Pending state**: `humanOffer: { about }` on the agent message's metadata, read by `pendingChange`.
@@ -45,4 +69,13 @@ confirm in the morning.
   That keeps one question per message, and leaves the precedence of 006 and 009 untouched.
 - **The script's question waits** for a turn with a boundary offer. It comes back on the next turn.
 - **Yes/no to the offer** is read like the other pending questions: the extraction's `answer`, or the words when
-  it didn't say.
+  it didn't say. It counts only when the message does nothing else the turn handles, such as picking a time or
+  changing a meeting. The e4b eval caught "pode ser a primeira opção" being read as a yes and handed off.
+- **The offer question is guaranteed.** When the phrased offer asks nothing, the code adds "Quer que alguém da
+  nossa equipe verifique isso pra você?". An offer the lead can't see is no offer.
+- **What code reads by itself.** These are closed vocabulary, all in `readTurn`:
+  - a bare thanks can't carry a refusal, a request for a person or an opt-out echoed from the previous message;
+  - "outros imóveis" / "mais opções" is the criteria question;
+  - with times on the table, an ordinal is a pick.
+- **`outOfScopeRequest` is a closed positive list** ("true SÓ para…; qualquer outra coisa é false"). A negative
+  clause ("perguntas sobre o condomínio NÃO são isso") made e4b refuse more, not less.

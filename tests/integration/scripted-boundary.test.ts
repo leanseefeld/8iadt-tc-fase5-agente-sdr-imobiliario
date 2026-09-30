@@ -145,6 +145,23 @@ test("spec 015, scripted", { skip: !integration }, async (t) => {
     assert.equal(booked.handoffReason, null);
   });
 
+  await t.test("a question the task forbids is dropped, not sent", async () => {
+    const hugo = await lead();
+    await bookDirect(hugo, { at: nextLocal("thu", 14), propertyCode: "MOE-0001" });
+    model.push({ facts: { messageAct: "thanks" }, reply: "Imagina! Quer marcar mais alguma visita?" });
+    const closed = await hugo.say("obrigado!");
+    assert.doesNotMatch(closed.reply, /\?/);
+    assert.match(closed.reply, /Imagina!$/);
+  });
+
+  await t.test("'não vou mais poder' about a meeting that already passed: nothing to change, even unread", async () => {
+    const ivo = await lead();
+    await bookDirect(ivo, { at: new Date(Date.now() - 24 * 60 * 60_000), type: "call" });
+    model.push({ facts: { messageAct: "inform", declinedOffer: true } });
+    const reply = await ivo.say("não vou mais poder na terça");
+    assert.match(reply.reply, /^Não tenho nenhuma visita ou conversa marcada/);
+  });
+
   await t.test("7 · thanks with something left over is the offer, not the close", async () => {
     const eva = await lead();
     await bookDirect(eva, { at: nextLocal("fri", 10), propertyCode: "MOE-0001" });

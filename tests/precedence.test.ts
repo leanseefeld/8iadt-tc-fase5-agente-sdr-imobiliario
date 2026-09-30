@@ -126,7 +126,8 @@ test("US4: the reconfirmation names what changed before what it puts in doubt", 
 // Spec 006 FR-005g — one reply per turn, and the decline as a prefix (SC-017)
 // ---------------------------------------------------------------------------
 
-import { accountTurn, meetingTarget, readSchedulingFacts, replyKind, type ReplyKind } from "../src/agent/orchestrator.ts";
+import { accountTurn, meetingTarget, replyKind, type ReplyKind } from "../src/agent/orchestrator.ts";
+import { readSchedulingFacts } from "../src/agent/read.ts";
 import {
   confirmationSentence,
   optionsSentence,

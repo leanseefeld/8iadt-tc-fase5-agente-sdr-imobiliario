@@ -5,8 +5,8 @@ The overnight work of 30/09/2026 on branch `015-fronteira`. The developer's deci
 
 ## Retomar aqui
 
-**Última atividade:** 2026-09-30T01:09-03:00, by the interactive session.
-**Etapa atual:** 5 done (partly, see the log). Next is stage 6: the night's close.
+**Última atividade:** 2026-09-30T01:23-03:00, by the interactive session.
+**Etapa atual:** ALL STAGES DONE. A resumed session has nothing to do: stop without changing anything. The next steps wait for the developer's decisions on the page.
 
 A session that resumes this work:
 
@@ -54,7 +54,7 @@ A session that resumes this work:
   - move the real-model tests to `npm run eval`.
 - [x] **5 · `run()` refactor, if there is time** — move the meeting, change and close decisions into modules,
   with no behaviour change.
-- [ ] **6 · Close the night** — full e4b suite, `npm run eval`, the replay read, the failure log updated, and the
+- [x] **6 · Close the night** — full e4b suite, `npm run eval`, the replay read, the failure log updated, and the
   page republished with the report on top. The page is
   https://claude.ai/artifact/33mz8wuQWo3qABXV8xaVFq; a scheduled session can't republish it, so the report
   goes at the end of this file.
@@ -102,3 +102,9 @@ A session that resumes this work:
     - a question the task forbids now gets dropped by an output guard;
     - the guard's fallback promised "já vou passar isso para o corretor".
   - Deterministic suite: all pass.
+- 2026-09-30T01:23-03:00 · Stage 6 done.
+  - Eval (e4b) 56/58. The booking failure ("não vou mais poder" read as reschedule, 2 of 3 runs) is now settled in `readTurn`; the rerun passes.
+  - Deterministic suite 405/405.
+  - Final replay of 11 conversations, read.
+  - Failure log updated.
+  - The page is republished with the report on top: https://claude.ai/artifact/33mz8wuQWo3qABXV8xaVFq. Its decisions: answer from the state (FR-023), the close order, FR-005e after a broker introduces herself, the merge of 015.

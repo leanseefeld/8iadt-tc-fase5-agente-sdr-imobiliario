@@ -85,6 +85,22 @@ team check it.
 6. **Thanks with times on the table.** *"obrigado!"* while options are open doesn't close. The options stay.
 7. **Mixed.** *"obrigado, e meu marido vai junto"* after booking → the boundary offer (example 1), not the close.
 
+## Decided on the morning of 30/09
+
+- **Answering from the state.** The phrasing's state lists **what is booked**, like the criteria. It costs a line
+  per meeting, and only when there is one, which is less than a tool call. A question about a booked meeting
+  (*"a visita de segunda continua de pé?"*) is answered from it. With nothing booked, the answer is *"Não tenho
+  nenhuma visita ou conversa marcada… Quer marcar uma?"*.
+- **The close.** The model gets the summary and says it and the goodbye in its own words. It no longer gets a
+  code prefix.
+- **Who attends.** *"Daqui eu só consigo ver o dia, o horário, o tipo e o imóvel do que está marcado; quem vai te
+  atender, só os corretores conseguem confirmar. Quer que eu chame um corretor pra tirar essa ou outra dúvida?"*
+  - A yes is the handoff.
+  - A broker who spoke stays the authority; nobody is named.
+- **From the developer's phone test that morning.**
+  - A change of purpose must be said: *"isso"* no longer turns a renter into a buyer.
+  - Sofia never offers to search: the search runs by itself when the criteria are complete.
+
 ## Open questions
 
 None open. Answered on 30/09: the direction (act + remainder + boundary + capability list); a short spec before

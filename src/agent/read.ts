@@ -29,6 +29,8 @@ export interface SchedulingFacts {
   preference: Preference;
   propertyRef: PropertyRef | null;
   askedWhoAttends: boolean;
+  /** Spec 015: a question about a meeting already booked ("continua de pé?"). */
+  askedAboutMeetings: boolean;
   /**
    * Spec 009: cancel or move a meeting already confirmed. `either` is the 4-bit
    * model writing `true` instead of which one; the turn decides from the text.
@@ -51,6 +53,7 @@ export const NO_SCHEDULING: SchedulingFacts = {
   preference: {},
   propertyRef: null,
   askedWhoAttends: false,
+  askedAboutMeetings: false,
   changeRequest: null,
   answer: null,
   meetingKind: null,
@@ -80,6 +83,7 @@ export function readSchedulingFacts(object: Record<string, unknown>): Scheduling
     preference,
     propertyRef,
     askedWhoAttends: isTrue(object.askedWhoAttends),
+    askedAboutMeetings: isTrue(object.askedAboutMeetings),
     changeRequest:
       object.changeRequest === "cancel" || object.changeRequest === "reschedule"
         ? object.changeRequest
@@ -142,7 +146,9 @@ export function readTurn(model: ModelReading, context: ReadingContext): Reading 
   const moreProperties = asksForMoreProperties(text);
   const changeVerb = mentionsChange(text);
   const cancelVerb = mentionsCancel(text);
-  const echoed = bare ? { ...model.scheduling, unsupportedMeeting: false, outOfScopeRequest: false } : model.scheduling;
+  const echoed = bare
+    ? { ...model.scheduling, unsupportedMeeting: false, outOfScopeRequest: false, askedAboutMeetings: false }
+    : model.scheduling;
   // "Não vou mais poder" with no word about moving it is a cancel, whatever the
   // model called it: e4b read it as a reschedule in 2 of 3 eval runs (30/09).
   const scheduling: SchedulingFacts =

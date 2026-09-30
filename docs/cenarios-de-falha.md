@@ -20,14 +20,19 @@ verdade é uma decisão de produto ainda não tomada.
 | No celular (390 px), o menu do topo do painel fica apertado e corta *Agenda* | 28/09 | **014** (UX) | Anterior à 006 |
 | Cenário 1 da compra: um guard reescreve uma resposta com duas perguntas (*"…pelo menos 2 quartos, sendo um deles usado como escritório, certo?"*) | Suíte de 29/09 (e4b) | Modelo | O guard fez o trabalho dele; o teste falha porque exige nenhuma reescrita |
 | *"obrigado!"* com horários na mesa repete a mesma lista de horários | Replay de 29/09, conversa 5 (e4b) | Modelo (ecoa o imóvel) | Não fecha, como decidido; só soa robótico |
-| Depois que a Ana devolve a conversa, *"a visita de segunda continua de pé né?"* recebe *"Ainda não consigo te ajudar com isso"* (ou, numa rodada, a oferta de verificar com a equipe) | Replay de 30/09, conversa 10 (e4b) | **Decisão do desenvolvedor** (FR-023) · fluxo de dados | O `phrase()` não recebe os compromissos marcados no estado; a Sofia sabe a resposta. Proposta na página *Fronteira da Sofia* |
-| Depois de a Ana dizer *"vou te acompanhar na visita"*, *"quem vai estar na visita?"* recebe *"ainda não consigo te dizer o nome…"* | Replay de 30/09, conversa 11 (e4b) | 006 FR-005e (decidido) | Segue a regra de nem confirmar nem negar depois de uma devolução; soa estranho logo depois de a Ana se apresentar |
 | O e4b às vezes não devolve a sobra de *"o condomínio aceita cachorro?"*, e a oferta de verificar com a equipe não acontece | Replay de 30/09, conversa 10, 1 em 3 (e4b) | Modelo | Quando a sobra vem, a oferta sai certa (conversas 7 e 10 nas outras rodadas) |
+| A pergunta de bairro *"Tem algum bairro ou região específica em mente, ou aceita sugestões?"* é de ou-isto-ou-aquilo; um *"não"* (ou *"sim"*) não preenche nada | Teste do desenvolvedor, 30/09 08:39 (e4b) | **Produto** (texto da pergunta) · 004 | Com o bairro vazio, o roteiro não completa e a busca não roda |
+| Duas respostas curtas não entendidas seguidas (*"sim"*, *"quero ver imóveis"*) viram handoff | Teste do desenvolvedor, 30/09 08:40 (e4b) | 004 FR-027 · decisão pendente 6 | Mesma família do *"tanto faz"* (011) |
 
 ## Resolvidos
 
 | Cenário | Resolvido em | Como |
 |---|---|---|
+| Depois da devolução, *"a visita de segunda continua de pé?"* recebia *"Ainda não consigo te ajudar com isso"* | 30/09 (015) | Os compromissos marcados estão no estado; a pergunta é respondida a partir dele |
+| *"Quem vai estar na visita?"* logo depois de a corretora se apresentar soava estranho | 30/09 (015) | *"Daqui eu só vejo dia, horário, tipo e imóvel; quem vai, só os corretores confirmam"* + oferta de chamar um |
+| *"isso"* (confirmando valor e quartos) virou a intenção de aluguel para compra; *"Meu nome é Rafael"* fazia o mesmo com investimento | 30/09 (015) | Trocar uma intenção já definida exige palavra de finalidade na mensagem (filtro de evidência) |
+| A Sofia ofereceu *"ver os imóveis"* antes de o roteiro estar completo, e o *"sim"* do lead não levou a nada | 30/09 (015) | A lista do que a Sofia pode diz que a busca acontece sozinha e proíbe oferecer buscar |
+| Um segundo fechamento seguido saía como *"Oi de novo!"* | 30/09 (015) | A instrução de retomada não vale num turno que é despedida |
 | *"meu marido vai junto"* depois de marcar recebia o fechamento | 30/09 (015) | A sobra que nada no turno responde recebe a oferta de verificar com a equipe; sim → handoff, não → fechamento |
 | Depois de fechar, *"queria ver outros imóveis"* perguntava o bairro de novo (ou, com a 015, virava oferta à equipe) | 30/09 (015) | O código lê *"outros imóveis"* / *"mais opções"* como a pergunta sobre os critérios |
 | O e4b lia *"não vou mais poder"* como remarcar (2 em 3 rodadas da avaliação) | 30/09 (015) | `readTurn`: sem palavra de remarcar/mudar/passar, é cancelamento |

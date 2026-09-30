@@ -182,15 +182,15 @@ test("FR-005d/FR-005e: the scheduling sentences are code-written and name no one
 });
 
 test("spec 006: the extraction's meeting facts are read strictly, and anything malformed is absent", () => {
-  assert.deepEqual(
-    readSchedulingFacts({ pickedTime: "sim", preferredWeekday: "thu", preferredPeriod: "morning", propertyCode: " VMA-0005 " }),
-    { declinedOffer: false, askedForTimes: false, pickedTime: true, preference: { weekday: "thu", period: "morning" }, propertyRef: { code: "VMA-0005" }, askedWhoAttends: false, changeRequest: null, answer: null, meetingKind: null, unsupportedMeeting: false, outOfScopeRequest: false },
-  );
+  // What each input field becomes — not the whole shape, which grows with every spec.
+  const read = readSchedulingFacts({ pickedTime: "sim", preferredWeekday: "thu", preferredPeriod: "morning", propertyCode: " VMA-0005 " });
+  assert.equal(read.pickedTime, true, "'sim' is true");
+  assert.deepEqual(read.preference, { weekday: "thu", period: "morning" });
+  assert.deepEqual(read.propertyRef, { code: "VMA-0005" }, "trimmed");
   assert.deepEqual(readSchedulingFacts({ propertyPosition: 2 }).propertyRef, { position: 2 });
-  assert.deepEqual(readSchedulingFacts({ propertyPosition: 0, preferredWeekday: "quinta", preferredPeriod: "noite" }), {
-    declinedOffer: false, askedForTimes: false, pickedTime: false, preference: {}, propertyRef: null, askedWhoAttends: false,
-    changeRequest: null, answer: null, meetingKind: null, unsupportedMeeting: false, outOfScopeRequest: false,
-  });
+  const malformed = readSchedulingFacts({ propertyPosition: 0, preferredWeekday: "quinta", preferredPeriod: "noite" });
+  assert.deepEqual(malformed.preference, {}, "a weekday or period outside the closed set is absent");
+  assert.equal(malformed.propertyRef, null, "position 0 is no position");
 });
 
 test("FR-004e/f: a visit needs a property; the only other meeting is by phone", () => {

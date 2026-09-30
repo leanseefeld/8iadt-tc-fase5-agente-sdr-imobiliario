@@ -53,13 +53,28 @@ test("meeting decisions, scripted", { skip: !integration }, async (t) => {
     assert.equal(await status(id), "confirmed");
   });
 
+  await t.test("the purpose changes only when the message says so (the 'isso' and 'Meu nome é' flips)", async () => {
+    const intentOf = async (created: Lead) =>
+      (await query("select intent from leads where id = $1", [created.leadId]))[0].intent as string;
+    const nina = await lead();
+    model.push({ facts: { intent: "rental", messageAct: "agree" } }, { facts: { intent: "rental", name: "Nina" } });
+    await nina.say("isso");
+    assert.equal(await intentOf(nina), "purchase", "'isso' is not a change of purpose");
+    await nina.say("Meu nome é Nina");
+    assert.equal(await intentOf(nina), "purchase");
+    const otto = await lead();
+    model.push({ facts: { intent: "rental" } });
+    await otto.say("na verdade quero alugar");
+    assert.equal(await intentOf(otto), "rental", "said, so it changes");
+  });
+
   await t.test("a thank-you after booking closes with the summary; a second one is short", async () => {
     const ana = await lead();
     await bookDirect(ana, { at: nextLocal("mon", 10), propertyCode: "MOE-0001" });
     model.push({ facts: {} }, { facts: {} });
-    const first = await ana.say("obrigado!");
-    assert.match(first.reply, /Fica marcado: a visita ao MOE-0001/);
-    const second = await ana.say("valeu!");
-    assert.doesNotMatch(second.reply, /Fica marcado/);
+    await ana.say("obrigado!");
+    assert.match(model.briefings.at(-1) ?? "", /lembre o que fica marcado.*a visita ao MOE-0001/s);
+    await ana.say("valeu!");
+    assert.doesNotMatch(model.briefings.at(-1) ?? "", /lembre o que fica marcado/, "a second close is the courtesy alone");
   });
 });

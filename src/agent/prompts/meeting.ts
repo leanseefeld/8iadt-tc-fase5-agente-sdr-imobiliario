@@ -77,10 +77,13 @@ export const DETAILS_FIRST_SENTENCE = "Claro! Assim que eu tiver seus dados, te 
 
 /**
  * FR-005e: asked who will attend. Neither a name nor a guess — the team
- * calendar is internal and who goes can change at the last minute.
+ * calendar is internal and who goes can change at the last minute. Decided
+ * 30/09 (spec 015): say what the agent can see, that only the brokers confirm
+ * who goes — which leaves a broker who spoke as the authority — and offer to
+ * call one.
  */
 export const ATTENDEE_UNKNOWN_SENTENCE =
-  "Ainda não consigo te dizer o nome de quem vai te atender, mas está tudo registrado no sistema com alguém da nossa equipe.";
+  "Daqui eu só consigo ver o dia, o horário, o tipo e o imóvel do que está marcado; quem vai te atender, só os corretores conseguem confirmar. Quer que eu chame um corretor pra tirar essa ou outra dúvida?";
 
 /**
  * FR-004e: a visit is about a property. With cards on screen and none pointed
@@ -211,6 +214,11 @@ export const NO_MEETING_TO_CHANGE_SENTENCE =
  * to a sampler: left alone, "obrigado" got "vou atualizar o seu cadastro" and
  * "vou encaminhar para a equipe", next steps nobody takes.
  */
+/** Spec 015: one booked meeting as the state lists it for the phrasing. */
+export function describeMeeting(meeting: MeetingRef, timeZone: string): string {
+  return `${theMeeting(meeting)}: ${slotLabel(meeting.scheduledAt, timeZone)}`;
+}
+
 export function closingSummary(meetings: MeetingRef[], timeZone: string): string {
   const items = meetings.map((meeting) => `${theMeeting(meeting)} (${slotLabel(meeting.scheduledAt, timeZone)})`);
   return `Fica marcado: ${items.length === 1 ? items[0] : `${items.slice(0, -1).join(", ")} e ${items.at(-1)}`}.`;

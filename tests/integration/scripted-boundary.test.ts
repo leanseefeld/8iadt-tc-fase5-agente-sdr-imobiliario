@@ -49,7 +49,9 @@ test("spec 015, scripted", { skip: !integration }, async (t) => {
     assert.equal(offered.closing, undefined, "an offer is not a close");
 
     const closed = await ana.say("não precisa");
-    assert.match(closed.reply, /^Fica marcado: a visita ao MOE-0001 .*Beleza! Tô por aqui\.$/);
+    // The model restates what is booked; the code hands it the facts.
+    assert.equal(closed.reply, "Beleza! Tô por aqui.");
+    assert.match(model.briefings.at(-1) ?? "", /lembre o que fica marcado.*a visita ao MOE-0001: seg/s);
     const after = await ana.lastMetadata();
     assert.equal(after.closing, true);
     assert.equal(after.humanOffer, undefined, "no new offer");
@@ -96,7 +98,8 @@ test("spec 015, scripted", { skip: !integration }, async (t) => {
       { facts: { messageAct: "thanks" }, reply: "De nada!" },
     );
     const first = await cid.say("valeu!");
-    assert.match(first.reply, /^Fica marcado: a visita ao MOE-0001 .*Imagina!$/);
+    assert.equal(first.reply, "Imagina!");
+    assert.match(model.briefings.at(-1) ?? "", /lembre o que fica marcado/);
     assert.equal((await cid.lastMetadata()).humanOffer, undefined);
     const second = await cid.say("obrigado");
     assert.equal(second.reply, "De nada!", "courtesy only, no summary");
@@ -160,6 +163,37 @@ test("spec 015, scripted", { skip: !integration }, async (t) => {
     model.push({ facts: { messageAct: "inform", declinedOffer: true } });
     const reply = await ivo.say("não vou mais poder na terça");
     assert.match(reply.reply, /^Não tenho nenhuma visita ou conversa marcada/);
+  });
+
+  await t.test("'a visita continua de pé?' is answered from what is booked (decided 30/09)", async () => {
+    const jana = await lead();
+    await bookDirect(jana, { at: nextLocal("mon", 10), propertyCode: "MOE-0001" });
+    model.push({ facts: { askedAboutMeetings: true, messageAct: "question" }, reply: "Sim, continua marcada!" });
+    const reply = await jana.say("a visita de segunda continua de pé?");
+    assert.equal(reply.reply, "Sim, continua marcada!");
+    const briefing = model.briefings.at(-1) ?? "";
+    assert.match(briefing, /Compromissos marcados: a visita ao MOE-0001: seg/);
+    assert.match(briefing, /perguntou sobre o que está marcado/);
+    assert.equal((await jana.lastMetadata()).humanOffer, undefined, "not an offer: the agent knows");
+  });
+
+  await t.test("the same question with nothing booked: nothing to answer, an offer to book", async () => {
+    const kai = await lead();
+    model.push({ facts: { askedAboutMeetings: true, messageAct: "question" } });
+    const reply = await kai.say("a visita continua de pé?");
+    assert.match(reply.reply, /^Não tenho nenhuma visita ou conversa marcada/);
+  });
+
+  await t.test("who attends: what the agent can see, only brokers confirm, and a yes calls one (decided 30/09)", async () => {
+    const lia = await lead();
+    await bookDirect(lia, { at: nextLocal("tue", 10), propertyCode: "MOE-0001" });
+    model.push({ facts: { askedWhoAttends: true, messageAct: "question" } }, { facts: { answer: "yes" } });
+    const said = await lia.say("quem vai estar na visita?");
+    assert.match(said.reply, /só os corretores conseguem confirmar/);
+    assert.doesNotMatch(said.reply, /Ana|Ribeiro/);
+    assert.deepEqual((await lia.lastMetadata()).humanOffer, { about: "quem vai atender" });
+    const handed = await lia.say("sim");
+    assert.match(handed.reply, /já estou chamando um corretor/);
   });
 
   await t.test("7 · thanks with something left over is the offer, not the close", async () => {

@@ -66,7 +66,7 @@ import { chooseMeeting, matchAnswer } from "./meeting-change.ts";
 import { actionTools, type SearchOutcome } from "./tools/index.ts";
 import {
   closingSentence,
-  closingSummary,
+  describeMeeting,
   BOUNDARY_FALLBACK_SENTENCE,
   BOUNDARY_OFFER_QUESTION,
   MEETING_LIMIT_SENTENCE,
@@ -516,9 +516,24 @@ function withoutInventedSlots(
   extracted: SlotExtraction,
   leadText: string,
   pending: Askable | null,
+  currentIntent: Intent,
 ): { slots: SlotExtraction; dropped: SlotKey[] } {
   const kept: Record<string, unknown> = { ...extracted };
   const dropped: SlotKey[] = [];
+
+  // The purpose, once known, changes only when the message says so. A first
+  // identification needs no word of its own (a search with no purpose is a
+  // purchase), but "isso" is not a change from renting to buying.
+  if (
+    kept.intent !== undefined &&
+    currentIntent !== "undefined" &&
+    kept.intent !== currentIntent &&
+    pending !== "intent" &&
+    !hasEvidence("intent", leadText)
+  ) {
+    log.info({ from: currentIntent, to: kept.intent }, "dropped an intent change the lead never said");
+    delete kept.intent;
+  }
 
   for (const slot of ["urgency", "investorProfile", "returnExpectation"] as const) {
     if (kept[slot] === undefined) continue;
@@ -558,7 +573,7 @@ async function extract(turn: LoadedTurn, pending: Askable | null): Promise<Extra
         continue;
       }
 
-      const gated = withoutInventedSlots(normalizeExtraction(object), unansweredText(turn), pending);
+      const gated = withoutInventedSlots(normalizeExtraction(object), unansweredText(turn), pending, turn.lead.intent);
       const extracted = gated.slots;
       const askedForHuman = isTrue(object.askedForHuman);
       const optedOut = isTrue(object.optOut);
@@ -1450,6 +1465,10 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     !askingWhoAttends &&
     !changing &&
     (facts.askedForTimes || facts.meetingKind !== null || interest !== null || aboutTheOffer || newInstead);
+  // Spec 015 (decided 30/09): "a visita continua de pé?" is answered from what
+  // is booked — the state carries it — never with "ainda não consigo".
+  const askingAboutMeetings =
+    facts.askedAboutMeetings && !refused && !picking && !changing && !askingWhoAttends && !wantsOffer;
   // FR-005b: "complete" is shouldProposeMeeting's own check, without its
   // offer-outstanding clause.
   const scriptComplete = shouldProposeMeeting(intent, slots, score, false) !== null;
@@ -1479,6 +1498,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       changing ||
       (wantsOffer && !atLimit) ||
       offerTaken !== null ||
+      askingAboutMeetings ||
       openRemainder);
 
   // A misunderstanding is an attempt the system could not use (FR-003a). A
@@ -1504,7 +1524,8 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   // The explicit ask still wins on any other message (spec 004 FR-027).
   // A request refused as outside the domain ("uma corretora LGBT pra me
   // atender") names a person too; it is still not a request to leave the agent.
-  const aboutTheMeeting = declining || picking || wantsOffer || askingWhoAttends || refused || changing;
+  const aboutTheMeeting =
+    declining || picking || wantsOffer || askingWhoAttends || askingAboutMeetings || refused || changing;
   const handoffReason = handoffDecision({
     leadAskedForHuman: (reading.leadAskedForHuman && !aboutTheMeeting) || offerTaken === "handoff",
     fallbackStreak,
@@ -1541,6 +1562,10 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       written = refusingFormat && !callBooked ? `${CANNOT_ACT_REPLY} ${PHONE_OFFER_SENTENCE}` : CANNOT_ACT_REPLY;
     } else if (askingWhoAttends) {
       written = ATTENDEE_UNKNOWN_SENTENCE;
+      // The sentence offers to call a broker: a yes hands off, like 015's offer.
+      scheduling = { ...scheduling, humanOffer: { about: "quem vai atender" } };
+    } else if (askingAboutMeetings && booked.length === 0) {
+      written = NO_MEETING_TO_CHANGE_SENTENCE;
     } else if (changing && !movingPick) {
       const change = await decideChange({
         turn,
@@ -1817,6 +1842,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       !searchDue &&
       !search.searched &&
       !reading.askedAboutCriteria &&
+      !askingAboutMeetings &&
       revisedThisTurn.length === 0 &&
       offerTaken === null,
   });
@@ -1838,17 +1864,23 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     !wantsOffer &&
     !changing &&
     !askingWhoAttends &&
+    !askingAboutMeetings &&
     !reading.askedAboutCriteria &&
     filledThisTurn.length === 0 &&
     revisedThisTurn.length === 0 &&
     !leadText.includes("?") &&
     (booked.length > 0 || offerOutstanding(turn) || offerTaken === "close");
-  const closing = nothingPending ? { again: waiting.closing === true } : null;
-  if (closing !== null) {
-    scheduling = { ...scheduling, closing: true };
-    // A second close in a row is the courtesy alone.
-    if (!closing.again && booked.length > 0) prefix = closingSummary(booked, timezone);
-  }
+  // Decided 30/09: the model restates what is booked and says goodbye; the
+  // code hands it the facts. A second close in a row is the courtesy alone.
+  const closing = nothingPending
+    ? {
+        summary:
+          waiting.closing === true || booked.length === 0
+            ? null
+            : booked.map((meeting) => describeMeeting(meeting, timezone)).join("; "),
+      }
+    : null;
+  if (closing !== null) scheduling = { ...scheduling, closing: true };
 
   if (written !== null) {
     return finish({
@@ -1960,11 +1992,14 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     question: asking,
     consented,
     ...(teamOffer === null ? {} : { boundary: teamOffer }),
-    ...(closing === null ? {} : { closing: { summarized: prefix !== undefined } }),
+    ...(closing === null ? {} : { closing }),
+    ...(booked.length === 0 ? {} : { booked: booked.map((meeting) => describeMeeting(meeting, timezone)) }),
+    ...(askingAboutMeetings ? { askedAboutMeetings: true } : {}),
     meeting: null,
     notUnderstood,
     ...(declining ? { declinedOffer: true } : {}),
-    ...(waiting.closing === true ? { returning: true } : {}),
+    // A close answering a close is a goodbye, not a return ("Oi de novo!").
+    ...(waiting.closing === true && closing === null ? { returning: true } : {}),
     ...(prefix === DETAILS_FIRST_SENTENCE ? { detailsFirst: true } : {}),
     ...(reading.askedAboutCriteria ? { askedAboutCriteria: true } : {}),
     ...(reconfirmText === null ? {} : { reconfirmation: reconfirmText }),
@@ -1980,7 +2015,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   const phrased = await phrase({
     turn,
     briefing: turnBriefing(briefingInput),
-    noQuestions: taskId === "nothingToAsk" || taskId === "closing",
+    noQuestions: taskId === "nothingToAsk" || taskId === "closing" || taskId === "meetings.status",
     question: asking,
     // On a search turn the script's question waits for the next one, but the
     // guard still has to tolerate a sentence that previews it.
@@ -2006,7 +2041,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
         : teamOffer !== null
           ? { fallbackText: BOUNDARY_FALLBACK_SENTENCE }
           : closing !== null
-            ? { fallbackText: closingSentence([], leadText, timezone, true) }
+            ? { fallbackText: closingSentence(closing.summary === null ? [] : booked, leadText, timezone) }
             : {}),
     ...(prefix === undefined ? {} : { prefix }),
     ...(teamOffer === null ? {} : { mustAsk: BOUNDARY_OFFER_QUESTION }),

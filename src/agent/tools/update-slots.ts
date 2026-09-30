@@ -197,6 +197,13 @@ export const EXTRACTION_FIELDS: readonly ExtractionField[] = [
     values: ["yes", "no"],
   },
   {
+    key: "askedAboutMeetings",
+    description:
+      "true se a pessoa perguntou sobre uma visita ou conversa JÁ marcada: se continua de pé, quando é, que " +
+      'horas é ("a visita de segunda continua de pé?", "que horas era mesmo?"). Pedir para mudar ou cancelar ' +
+      "NÃO é isso, nem perguntar quem vai atender. Na dúvida, false.",
+  },
+  {
     key: "askedWhoAttends",
     description:
       'true se a pessoa perguntou quem vai atendê-la na visita ou conversa ("quem vai me atender?", ' +
@@ -254,6 +261,7 @@ export interface Extracted {
   propertyPosition: number | null;
   propertyCode: string | null;
   askedWhoAttends: boolean;
+  askedAboutMeetings: boolean;
   changeRequest: string | null;
   answer: string | null;
   meetingKind: string | null;

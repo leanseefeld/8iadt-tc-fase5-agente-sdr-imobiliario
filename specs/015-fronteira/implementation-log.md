@@ -5,8 +5,8 @@ The overnight work of 30/09/2026 on branch `015-fronteira`. The developer's deci
 
 ## Retomar aqui
 
-**Última atividade:** 2026-09-30T00:41-03:00, by the interactive session.
-**Etapa atual:** 3 in progress: the code and the scripted tests are done. Next: the e4b replay of the new conversations, then the turn map.
+**Última atividade:** 2026-09-30T00:43-03:00, by the interactive session.
+**Etapa atual:** 3 done. Next is stage 4 (test cleanup and `npm run eval`).
 
 A session that resumes this work:
 
@@ -40,7 +40,7 @@ A session that resumes this work:
   consistency check against the constitution and the turn map.
 - [x] **2 · Scripted-model harness** — `MockLanguageModelV4` from `ai/test` returns the facts JSON a test hands it,
   and the first decision tests run without e4b.
-- [ ] **3 · Boundary** — new code in pure modules, not in `run()`:
+- [x] **3 · Boundary** — new code in pure modules, not in `run()`:
   - act and remainder in the extraction, with the code safety net for thanks/agreement;
   - the boundary route and the pending offer (yes → handoff; no → guided close);
   - the capability list in the reply prompt, cache-friendly (fixed parts first), with discount becoming an offer;
@@ -87,3 +87,4 @@ A session that resumes this work:
     - the "nothing to ask" task no longer invites a next step ("vou buscar…").
   - Broker takeover conversations added (10: offer taken → Ana → hand back; 11: Ana steps in on her own). Both resume naturally, except the one below.
   - **Left for the morning:** after the hand back, "a visita de segunda continua de pé?" gets the team offer, because the phrasing node isn't given the booked meetings in its state. That is a data-flow gap, not a guardrail gap (see *Perguntas para a manhã*).
+- 2026-09-30T00:43-03:00 · Stage 3 done. The turn map is updated: the code readings node, the boundary, the pending offer, the close (code summary plus model courtesy), the capability list, and the 015 state machine. Both Mermaid diagrams parse and render (mermaid 11).

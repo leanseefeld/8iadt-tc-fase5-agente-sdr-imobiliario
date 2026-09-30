@@ -88,6 +88,35 @@ function onlyOf(text: string, vocabulary: readonly string[]): boolean {
   return matched > 0;
 }
 
+const ORDINALS: Record<string, number> = {
+  primeira: 1, primeiro: 1, "1": 1, "1ª": 1, "1a": 1, um: 1, uma: 1,
+  segunda: 2, segundo: 2, "2": 2, "2ª": 2, "2a": 2, dois: 2, duas: 2,
+  terceira: 3, terceiro: 3, "3": 3, "3ª": 3, "3a": 3, "três": 3, tres: 3,
+};
+
+/**
+ * With times on the table, "a primeira", "2", "pode ser a segunda opção" is a
+ * pick among them — the whole message, nothing else in it. The model once read
+ * "a primeira" as the first property card and booked nothing.
+ */
+export function readOptionPick(text: string): number | null {
+  const said = bare(text);
+  const match = said.match(
+    /^(?:(?:pode ser|quero|prefiro|fico com|vou de|escolho)\s+)?(?:(?:a|o)\s+)?(?:op[çc][ãa]o\s+)?(\S+)(?:\s+(?:op[çc][ãa]o|hor[áa]rio))?(?:\s+(?:por favor|pfv|pf))?$/u,
+  );
+  if (match === null) return null;
+  return ORDINALS[match[1]] ?? null;
+}
+
+/**
+ * Spec 015: "queria ver outros imóveis", "tem mais opções?" — a request the
+ * agent already answers (the criteria and what the search found), so it is
+ * never something left over for the team.
+ */
+export function asksForMoreProperties(text: string): boolean {
+  return /(?<!\p{L})(outr[oa]s|mais)\s+(im[óo]ve(?:l|is)|op[çc][õo]es|apartamentos?|casas?)(?!\p{L})/iu.test(text);
+}
+
 /**
  * Spec 015's safety net: the whole message is only thanks, or only agreement.
  * "obrigado!", "valeu 😊", "ok, obrigado", "👍". Anything more ("obrigado, e meu

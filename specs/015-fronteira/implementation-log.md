@@ -5,7 +5,7 @@ The overnight work of 30/09/2026 on branch `015-fronteira`. The developer's deci
 
 ## Retomar aqui
 
-**Última atividade:** 2026-09-30T00:25-03:00, by the interactive session.
+**Última atividade:** 2026-09-30T00:41-03:00, by the interactive session.
 **Etapa atual:** 3 in progress: the code and the scripted tests are done. Next: the e4b replay of the new conversations, then the turn map.
 
 A session that resumes this work:
@@ -61,10 +61,29 @@ A session that resumes this work:
 
 ## Perguntas para a manhã
 
-*(none yet)*
+1. **Answering from the state.** After a hand back, *"a visita de segunda continua de pé?"* got the offer to
+   have the team check it. Sofia knows the answer. The phrasing node never receives the booked meetings: its
+   state has only the criteria, and questions no field captures go either to the offer or to "ainda não consigo
+   te ajudar" (FR-023). Proposal:
+   - the state block given to the phrasing gains **what is booked**, which is a fact like the criteria;
+   - a question the state answers gets a phrased answer from the state;
+   - the offer stays for what is outside the capability list.
+
+   This touches FR-023's "say so rather than guess", which is why it isn't built without your ok.
 
 ## Diário
 
 - 2026-09-30T00:18-03:00 · Stage 1: `spec.md` (one page) and `plan.md` (consistency check, design, the decisions I made).
 - 2026-09-30T00:20-03:00 · Stage 2: `overrideModel` in `agent/provider.ts` (a test seam); `tests/support/scripted-model.ts` (`MockLanguageModelV4`: extraction answers the scripted facts, the action loop calls the scripted tools, the reply streams a fixed sentence); `tests/integration/scripted-meetings.test.ts` with 3 cases (009 examples 1 and 2, thanks close), 4 s with no model.
 - 2026-09-30T00:25-03:00 · Stage 3 (code): `lexicon.ts` (the thanks safety net), `decide/boundary.ts` (act, remainder, offer, outcome), two extraction fields (`messageAct`, `uncovered`), `humanOffer` pending on the metadata, yes → handoff and no → close in `run()`, the close as code summary plus model courtesy, the capability list in the constant reply prompt, and the discount rule moved out of the refusal. Tests: `tests/boundary.test.ts` (tables) and `tests/integration/scripted-boundary.test.ts` (the spec's 7 examples) all pass with no model, in 12 s.
+- 2026-09-30T00:41-03:00 · Stage 3 validated on e4b with the replay (conversations 5–11, by reading).
+  - Fixes from it:
+    - a guaranteed offer question when the model forgets it (`mustAsk`);
+    - `outOfScopeRequest` as a closed positive list (the negative phrasing made e4b refuse the husband and the dog);
+    - the remainder excludes what Sofia already does;
+    - a bare thanks drops refusal/handoff/opt-out facts the model echoed from the previous message;
+    - "outros imóveis" read as the criteria question;
+    - with times on the table an ordinal is a pick ("a primeira" had been read as a property card);
+    - the "nothing to ask" task no longer invites a next step ("vou buscar…").
+  - Broker takeover conversations added (10: offer taken → Ana → hand back; 11: Ana steps in on her own). Both resume naturally, except the one below.
+  - **Left for the morning:** after the hand back, "a visita de segunda continua de pé?" gets the team offer, because the phrasing node isn't given the booked meetings in its state. That is a data-flow gap, not a guardrail gap (see *Perguntas para a manhã*).

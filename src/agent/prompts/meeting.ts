@@ -237,5 +237,6 @@ export function closingSentence(
  * Spec 015: the offer, when the phrased one fails or a guard throws it away.
  * It names nothing the lead said, so it is safe for any remainder.
  */
-export const BOUNDARY_FALLBACK_SENTENCE =
-  "Isso eu não consigo garantir por aqui. Quer que alguém da nossa equipe verifique pra você?";
+export const BOUNDARY_OFFER_QUESTION = "Quer que alguém da nossa equipe verifique isso pra você?";
+
+export const BOUNDARY_FALLBACK_SENTENCE = `Isso eu não consigo garantir por aqui. ${BOUNDARY_OFFER_QUESTION}`;

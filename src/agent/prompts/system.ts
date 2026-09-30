@@ -46,7 +46,7 @@ const CAPABILITIES = `O que você consegue fazer, e só isto:
 - buscar imóveis do catálogo da imobiliária;
 - marcar, remarcar e cancelar uma visita a um imóvel ou uma conversa por telefone;
 - explicar os critérios que está usando na busca.
-O que você NÃO consegue garantir nem resolver por aqui: nada de uma visita além do dia e da hora (quem vai junto, animais, chaves, estacionamento), desconto e negociação de valor, financiamento e documentos, regras do condomínio.
+O que você NÃO consegue garantir nem resolver por aqui: nada de uma visita além do dia e da hora (acompanhantes, animais, chaves, estacionamento), desconto e negociação de valor, financiamento e documentos, regras do condomínio.
 Nunca diga que fez, está fazendo ou vai fazer algo fora dessa lista ("vou registrar", "vou verificar", "vou encaminhar", "vou te mostrar opções"). Fale só do que já aconteceu nesta conversa.`;
 
 const RULES = `Regras que você não quebra:
@@ -303,9 +303,10 @@ diga o novo valor.`;
     return `\nSua tarefa nesta mensagem: diga exatamente isto, e mais nada: ${input.reconfirmation}`;
   }
   if (input.boundary !== undefined) {
-    return `\nSua tarefa nesta mensagem: a pessoa disse "${input.boundary.about}". Isso você não consegue garantir nem resolver por aqui.
-Reconheça em poucas palavras o que ela disse, diga isso com franqueza e ofereça, sem insistir, que alguém da equipe verifique para ela.
-Termine com essa oferta como a única pergunta da mensagem. Não diga que já encaminhou nem prometa resposta ou prazo.`;
+    return `\nSua tarefa nesta mensagem: a pessoa disse "${input.boundary.about}". Isso você não consegue confirmar nem resolver por aqui.
+Em UMA frase, reconheça o que ela disse e diga com franqueza que isso você não consegue confirmar por aqui.
+Depois pergunte, sem insistir, se ela quer que alguém da equipe verifique isso para ela — essa é a única pergunta da mensagem.
+Não fale de quem vai atender a visita, não diga que já encaminhou e não prometa resposta nem prazo.`;
   }
   if (input.closing !== undefined) {
     return `\nSua tarefa nesta mensagem: a conversa está se encerrando por agora. Escreva UMA frase curta e calorosa de despedida — se a pessoa agradeceu, responda ao agradecimento — e diga que está por aqui se ela precisar.
@@ -315,8 +316,8 @@ NÃO faça pergunta, NÃO ofereça nada novo e NÃO cite datas, horários nem im
   // confirmation and "no times" are code-written and sent without a model call
   // (FR-005d), so there is no branch here that could ask "qual dia da semana".
   if (input.question === null) {
-    return `\nSua tarefa nesta mensagem: reconheça o que foi dito e diga em uma frase o que
-acontece a seguir. NÃO faça nenhuma pergunta nova.`;
+    return `\nSua tarefa nesta mensagem: reconheça em uma frase curta o que foi dito.
+NÃO faça nenhuma pergunta nova e não anuncie próximos passos: nada de "vou buscar", "vou passar para o corretor".`;
   }
   return `\nSua tarefa nesta mensagem: reconheça o que foi dito e faça ESTA pergunta, com suas
 palavras, sem mudar o assunto dela:

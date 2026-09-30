@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { boundaryOffer, offerOutcome, readAct, readRemainder, settleAct } from "../src/agent/decide/boundary.ts";
-import { readAcknowledgement } from "../src/agent/lexicon.ts";
+import { asksForMoreProperties, readAcknowledgement, readOptionPick } from "../src/agent/lexicon.ts";
 
 /** Spec 015 — what the agent can't resolve, decided in code. */
 
@@ -62,4 +62,28 @@ test("the extraction's act and remainder, as the 4-bit model writes them", () =>
   assert.equal(readRemainder("  meu  marido vai junto "), "meu marido vai junto");
   for (const empty of ["", "null", "nada", "-", null, 3]) assert.equal(readRemainder(empty), null, String(empty));
   assert.equal(readRemainder("x".repeat(300))?.length, 200);
+});
+
+test("asking for more properties is the criteria question, read by code", () => {
+  for (const text of ["queria ver outros imóveis também", "tem mais opções?", "e outras casas?", "mais apartamentos"]) {
+    assert.equal(asksForMoreProperties(text), true, text);
+  }
+  for (const text of ["meu marido vai junto", "outro dia", "mais tarde", "imóveis"]) {
+    assert.equal(asksForMoreProperties(text), false, text);
+  }
+});
+
+test("with times on the table, an ordinal is a pick, read by code", () => {
+  const cases: Array<[string, number | null]> = [
+    ["a primeira", 1],
+    ["2", 2],
+    ["pode ser a segunda opção", 2],
+    ["opção 3", 3],
+    ["a terceira, por favor", 3],
+    ["quero a 1", 1],
+    ["a primeira que você mandou de manhã", null],
+    ["segunda às 10", null],
+    ["obrigado", null],
+  ];
+  for (const [text, expected] of cases) assert.equal(readOptionPick(text), expected, text);
 });

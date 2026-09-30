@@ -73,9 +73,11 @@ test("spec 015, scripted", { skip: !integration }, async (t) => {
   await t.test("3 · discount is an offer, not a refusal", async () => {
     const leo = await lead();
     await bookDirect(leo, { at: nextLocal("wed", 10), propertyCode: "MOE-0001" });
-    model.push({ facts: { messageAct: "request", uncovered: "consegue um desconto?" } });
-    await leo.say("consegue um desconto?");
+    // The model forgets to ask: the code asks for it.
+    model.push({ facts: { messageAct: "request", uncovered: "consegue um desconto?" }, reply: "Desconto eu não consigo negociar por aqui." });
+    const reply = await leo.say("consegue um desconto?");
     assert.deepEqual((await leo.lastMetadata()).humanOffer, { about: "consegue um desconto?" });
+    assert.match(reply.reply, /^Desconto eu não consigo negociar por aqui\. Quer que alguém da nossa equipe verifique isso pra você\?$/);
   });
 
   await t.test("4 · a ride stays a refusal", async () => {
@@ -111,6 +113,19 @@ test("spec 015, scripted", { skip: !integration }, async (t) => {
     assert.match(offered.reply, OPTIONS);
     await dani.say("obrigado!");
     assert.equal((await dani.lastMetadata()).closing, undefined);
+  });
+
+  await t.test("a bare thanks after a refusal is not a second refusal (the model echoes the first)", async () => {
+    const fabi = await lead();
+    await bookDirect(fabi, { at: nextLocal("fri", 14), propertyCode: "MOE-0001" });
+    model.push(
+      { facts: { outOfScopeRequest: true, messageAct: "request" } },
+      { facts: { outOfScopeRequest: true, messageAct: "thanks" }, reply: "Imagina!" },
+    );
+    await fabi.say("vocês me dão carona até lá?");
+    const thanked = await fabi.say("valeu!");
+    assert.match(thanked.reply, /Imagina!$/);
+    assert.equal((await fabi.lastMetadata()).closing, true);
   });
 
   await t.test("7 · thanks with something left over is the offer, not the close", async () => {

@@ -61,12 +61,14 @@ import { getJsonModel, modelCall } from "./provider.ts";
 import { plausiblyAnswers, recoverSlot } from "./recovery.ts";
 import { act } from "./act.ts";
 import { boundaryOffer, offerOutcome, readAct, readRemainder, settleAct, type MessageAct } from "./decide/boundary.ts";
+import { asksForMoreProperties, readAcknowledgement, readOptionPick } from "./lexicon.ts";
 import { chooseMeeting, matchAnswer, parseWhen } from "./meeting-change.ts";
 import { actionTools, type SearchOutcome } from "./tools/index.ts";
 import {
   closingSentence,
   closingSummary,
   BOUNDARY_FALLBACK_SENTENCE,
+  BOUNDARY_OFFER_QUESTION,
   MEETING_LIMIT_SENTENCE,
   NO_MEETING_TO_CHANGE_SENTENCE,
   cancelQuestion,
@@ -629,11 +631,19 @@ async function extract(turn: LoadedTurn, pending: Askable | null): Promise<Extra
 
       const gated = withoutInventedSlots(normalizeExtraction(object), unansweredText(turn), pending);
       const extracted = gated.slots;
-      const askedForHuman = isTrue(object.askedForHuman);
-      const optedOut = isTrue(object.optOut);
+      // Spec 015: what code reads by itself. A bare "valeu!" requests nothing —
+      // the model sometimes echoes the refusal it read one message earlier, and
+      // a second refusal is a handoff. "Outros imóveis" is the criteria question,
+      // never something left over for the team.
+      const said = unansweredText(turn);
+      const bare = readAcknowledgement(said) !== null;
+      const moreProperties = asksForMoreProperties(said);
+      const askedForHuman = isTrue(object.askedForHuman) && !bare;
+      const optedOut = isTrue(object.optOut) && !bare;
       const attemptedAnswer = isTrue(object.attemptedAnswer);
-      const askedAboutCriteria = isTrue(object.askedAboutCriteria);
-      const scheduling = readSchedulingFacts(object);
+      const askedAboutCriteria = isTrue(object.askedAboutCriteria) || moreProperties;
+      const read = readSchedulingFacts(object);
+      const scheduling = bare ? { ...read, unsupportedMeeting: false, outOfScopeRequest: false } : read;
 
       // The transcript and the spans keep the vocabulary they had when this was
       // a tool call: `commitTurn` writes these, not the AI SDK, and
@@ -653,7 +663,7 @@ async function extract(turn: LoadedTurn, pending: Askable | null): Promise<Extra
         scheduling,
         dropped: gated.dropped,
         act: readAct(object.messageAct),
-        remainder: readRemainder(object.uncovered),
+        remainder: moreProperties ? null : readRemainder(object.uncovered),
         failed: false,
       };
     } catch (error) {
@@ -719,6 +729,12 @@ interface PhraseInput {
    * compete with the reply; it precedes whatever wins.
    */
   prefix?: string;
+  /**
+   * Spec 015: a question the reply must end up asking. When the phrased reply
+   * doesn't ask anything, it goes out after it — an offer the lead can't see is
+   * no offer, and a "sim" to nothing would still hand the conversation off.
+   */
+  mustAsk?: string;
   sink: ReplySink;
   startedAt: number;
 }
@@ -807,6 +823,9 @@ async function phrase(input: PhraseInput): Promise<PhrasedReply> {
   // to move, so the chosen question goes out on its own.
   if (rejectedBy !== null && input.question !== null && !chunks.some((c) => c.includes("?"))) {
     await emit(input.question.question);
+  }
+  if (input.mustAsk !== undefined && !chunks.some((c) => c.includes("?"))) {
+    await emit(input.mustAsk);
   }
 
   return { chunks, guard: rejectedBy, failed };
@@ -1375,6 +1394,9 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   const facts: SchedulingFacts = {
     ...extraction.scheduling,
     preference: { ...extraction.scheduling.preference, ...when },
+    // With times on the table, "a primeira" is a pick, read by code.
+    pickedTime:
+      extraction.scheduling.pickedTime || (readOptionPick(leadText) !== null && lastOfferedOptions(turn).length > 0),
   };
   // Open **now** — a row still `proposed` — not "an offer was ever made".
   const proposalOpen = turn.proposalOpen;
@@ -2047,6 +2069,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
             ? { fallbackText: closingSentence([], leadText, timezone, true) }
             : {}),
     ...(prefix === undefined ? {} : { prefix }),
+    ...(teamOffer === null ? {} : { mustAsk: BOUNDARY_OFFER_QUESTION }),
     sink: context.sink,
     startedAt: context.startedAt,
   });

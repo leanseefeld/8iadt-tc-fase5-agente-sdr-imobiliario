@@ -1,5 +1,7 @@
 import test from "node:test";
 import { closePool } from "../../../src/db/client.ts";
+import { closeNotifier } from "../../../src/core/notifier.ts";
+import { assumeConversation, returnToAgent, sendBrokerReply } from "../../../src/services/handoff.ts";
 import { bookDirect, nextLocal, qualifiedLead, query, type Lead } from "./meeting.ts";
 
 /**
@@ -28,10 +30,21 @@ async function withProperty(lead: Lead, code: string): Promise<void> {
   );
 }
 
+/** `REPLAY_ONLY=6,7` replays just those conversations. */
+const only = (process.env.REPLAY_ONLY ?? "").split(",").filter((n) => n !== "");
+
 async function replay(name: string, lead: Lead, lines: string[]): Promise<void> {
+  if (only.length > 0 && !only.includes(name.split(" ")[0])) return;
   const out = [`\n=== ${name} (${process.env.MODEL_ID ?? "?"})`];
   for (const text of lines) {
-    const turn = await lead.say(text);
+    let turn;
+    try {
+      turn = await lead.say(text);
+    } catch (error) {
+      // A handoff pauses the conversation; what follows goes to a person.
+      out.push(`  L: ${text}`, `  (sem turno: ${(error as Error).message})`);
+      break;
+    }
     const calls = ((await lead.lastMetadata()).toolCalls ?? []) as { name: string; arguments: Record<string, unknown> }[];
     const facts = Object.entries(calls[0]?.arguments ?? {})
       .filter(([key, value]) => value !== false && value !== null && !["optOut", "attemptedAnswer"].includes(key))
@@ -52,6 +65,7 @@ test("replay 29/09", async (t) => {
   };
   t.after(async () => {
     for (const created of leads) await created.cleanup();
+    await closeNotifier();
     await closePool();
   });
 
@@ -114,5 +128,65 @@ test("replay 29/09", async (t) => {
     "a primeira",
     "valeu!",
     "oi, tudo bem? queria ver outros imóveis também",
+  ]);
+
+  // 6–9 · Spec 015: what Sofia can't resolve, each with a visit booked.
+  const booked = async () => {
+    const created = await lead();
+    await withProperty(created, "MOE-0001");
+    await bookDirect(created, { at: nextLocal("mon", 10), propertyCode: "MOE-0001" });
+    return created;
+  };
+  await replay("6 · 015: husband, then no", await booked(), ["meu marido vai junto", "não precisa"]);
+  await replay("7 · 015: dog, then yes", await booked(), ["o condomínio aceita cachorro?", "quero"]);
+  await replay("8 · 015: discount, ride, thanks", await booked(), [
+    "consegue um desconto?",
+    "vocês me dão carona até lá?",
+    "valeu!",
+  ]);
+  await replay("9 · 015: thanks with something left over", await booked(), ["obrigado, e meu marido vai junto"]);
+
+  // 10–11 · A person takes over and hands back: after the lead took the offer,
+  // and by the broker's own initiative. Printed as the whole conversation.
+  const [ana] = await query("select id, agency_id from users where email = 'ana@demo.com.br'");
+  const scope = { agencyId: ana.agency_id as string, defaultOwnLeadsOnly: true };
+  const brokerSteps = async (name: string, created: Lead, steps: Array<[string, string]>) => {
+    if (only.length > 0 && !only.includes(name.split(" ")[0])) return;
+    const since = new Date();
+    for (const [who, text] of steps) {
+      if (who === "lead") {
+        try {
+          await created.say(text);
+        } catch {
+          // Held by a person: the message was stored, and no turn ran.
+        }
+      } else if (who === "assume") await assumeConversation(scope, created.leadId, ana.id as string);
+      else if (who === "return") await returnToAgent(scope, created.leadId, ana.id as string);
+      else await sendBrokerReply(scope, created.leadId, ana.id as string, text);
+    }
+    const rows = await query(
+      "select role, content from messages where conversation_id = $1 and created_at >= $2 order by created_at",
+      [created.conversationId, since],
+    );
+    const tag: Record<string, string> = { lead: "L", agent: "A", broker: "Ana" };
+    console.log([`\n=== ${name} (${process.env.MODEL_ID ?? "?"})`, ...rows.map((row) => `  ${tag[row.role as string] ?? row.role}: ${row.content}`)].join("\n"));
+  };
+  await brokerSteps("10 · 015: offer taken, Ana answers and hands back", await booked(), [
+    ["lead", "o condomínio aceita cachorro?"],
+    ["lead", "quero"],
+    ["assume", ""],
+    ["broker", "Oi Camila, aqui é a Ana! Aceita sim, animais de pequeno porte. Mais alguma dúvida?"],
+    ["lead", "não, era só isso. obrigada!"],
+    ["return", ""],
+    ["lead", "ah, e a visita de segunda continua de pé né?"],
+  ]);
+  await brokerSteps("11 · 015: Ana steps in on her own, then hands back", await booked(), [
+    ["lead", "quero saber mais sobre o bairro"],
+    ["assume", ""],
+    ["broker", "Oi Camila, aqui é a Ana, vou te acompanhar na visita de segunda. Quer que eu te mande a planta do apartamento?"],
+    ["lead", "pode sim!"],
+    ["broker", "Enviei no seu e-mail. Qualquer coisa, me chama!"],
+    ["return", ""],
+    ["lead", "recebi, obrigada! quem vai estar na visita mesmo?"],
   ]);
 });

@@ -61,15 +61,8 @@ A session that resumes this work:
 
 ## Perguntas para a manhã
 
-1. **Answering from the state.** After a hand back, *"a visita de segunda continua de pé?"* got the offer to
-   have the team check it. Sofia knows the answer. The phrasing node never receives the booked meetings: its
-   state has only the criteria, and questions no field captures go either to the offer or to "ainda não consigo
-   te ajudar" (FR-023). Proposal:
-   - the state block given to the phrasing gains **what is booked**, which is a fact like the criteria;
-   - a question the state answers gets a phrased answer from the state;
-   - the offer stays for what is outside the capability list.
-
-   This touches FR-023's "say so rather than guess", which is why it isn't built without your ok.
+1. ~~Answering from the state~~: answered on 30/09. The booked meetings are in the phrasing's state, and a question
+   about them is answered from it (`askedAboutMeetings`). See the spec, *Decided on the morning of 30/09*.
 
 ## Diário
 

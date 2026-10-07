@@ -13,7 +13,6 @@ verdade é uma decisão de produto ainda não tomada.
 |---|---|---|---|
 | Resposta genérica (*"tanto faz"*, *"qualquer um"*) a quartos, tamanho etc. às vezes dispara handoff — às vezes numa única resposta | Testes manuais do desenvolvedor | **011** (agente de investimento) + decisão de produto | Indefinição: o roteiro não diz o que *"sem preferência"* vale para cada campo. Adiado, por decisão de 29/09, para quando chegarmos no agente de investimento |
 | O nome não é registrado (*"Bia"* → *"Como posso te chamar?"* de novo) | Replay de 29/09 (e4b) | 004 (extração) · modelo | Deslize de leitura; ver se persiste no 12B |
-| *"Quero investir em imóveis para renda"* termina com intenção **compra** (vira em *"Meu nome é Rafael…"*) | Suíte de 29/09: 12B 1 em 3; e4b também | Modelo · **011** | O teste do cenário 2 mostra a intenção de cada turno quando falha |
 | Mudar de assunto com uma proposta aberta e escolher depois falha às vezes | `meeting-escapes`, ~2 em 10 (e4b) | Modelo | Os testes mostram os fatos extraídos quando falham |
 | O modelo promete o que nenhuma ação fez: *"vou registrar seu interesse no sistema"*, *"vou verificar as outras opções"* | Conversas de 28 e 29/09 | **012** (guarda de fatos) | Não é do fluxo de agenda: nenhuma ação sustenta a frase · ver proposta *fronteira da Sofia* (manifesto de capacidades) · 30/09: a lista do que a Sofia pode (prompt fixo), a tarefa sem próximos passos e o texto de reserva do guard atacam as fontes |
 | A resposta depois de uma busca numera cards que não são numerados (*"Os imóveis 1, 3 e 5…"*) | Replay de 28/09 | **012** | Mesma família: afirmar o que não está na tela |
@@ -28,6 +27,7 @@ verdade é uma decisão de produto ainda não tomada.
 
 | Cenário | Resolvido em | Como |
 |---|---|---|
+| *"Quero investir em imóveis para renda"* terminava com intenção **compra** (virava em *"Meu nome é Rafael…"*) | 30/09 (015) | Trocar uma intenção já definida exige palavra de finalidade na mensagem; os dois cenários avaliados passaram depois |
 | Depois da devolução, *"a visita de segunda continua de pé?"* recebia *"Ainda não consigo te ajudar com isso"* | 30/09 (015) | Os compromissos marcados estão no estado; a pergunta é respondida a partir dele |
 | *"Quem vai estar na visita?"* logo depois de a corretora se apresentar soava estranho | 30/09 (015) | *"Daqui eu só vejo dia, horário, tipo e imóvel; quem vai, só os corretores confirmam"* + oferta de chamar um |
 | *"isso"* (confirmando valor e quartos) virou a intenção de aluguel para compra; *"Meu nome é Rafael"* fazia o mesmo com investimento | 30/09 (015) | Trocar uma intenção já definida exige palavra de finalidade na mensagem (filtro de evidência) |

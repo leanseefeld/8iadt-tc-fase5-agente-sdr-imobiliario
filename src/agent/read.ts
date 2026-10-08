@@ -4,6 +4,7 @@ import { settleAct, type MessageAct } from "./decide/boundary.ts";
 import {
   asksAboutBooking,
   asksForMoreProperties,
+  isShortReply,
   mentionsCancel,
   mentionsChange,
   mentionsCode,
@@ -172,7 +173,8 @@ export function readTurn(model: ModelReading, context: ReadingContext): Reading 
     // With times on the table, "a primeira" is a pick (spec 015).
     pickedTime: said.pickedTime || (context.optionsOnTable && readOptionPick(text) !== null),
   };
-  const remainder = moreProperties ? null : model.remainder;
+  // A short reply is an answer attempt, never something left for the team.
+  const remainder = moreProperties || isShortReply(text) ? null : model.remainder;
   return {
     // "ok", "beleza" try to say nothing: e4b sometimes called them attempts, and
     // two of them after an offer added up to a handoff (eval, 07/10).

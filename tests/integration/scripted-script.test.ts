@@ -43,6 +43,15 @@ test("the script, scripted", { skip: !integration }, async (t) => {
     assert.equal(reply.handoffReason, null);
   });
 
+  await t.test("a short reply the model could not place gets 'não entendi', not the team offer", async () => {
+    const eva = await lead();
+    await setState(eva, "rental", {});
+    model.push({ facts: { uncovered: "inicial", messageAct: "other", attemptedAnswer: true } });
+    const reply = await eva.say("inicial");
+    assert.equal((await eva.lastMetadata()).humanOffer, undefined);
+    assert.equal(reply.outcome, "fallback", "said it didn't understand");
+  });
+
   await t.test("'alugar' answers 'comprar, alugar ou investir?' even when the model read nothing", async () => {
     const cid = await lead();
     await setState(cid, "undefined", {});

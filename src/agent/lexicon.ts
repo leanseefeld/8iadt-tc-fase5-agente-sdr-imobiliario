@@ -198,3 +198,17 @@ export function readClosedAnswer(slot: "intent" | "urgency", text: string): stri
   const said = Object.entries(options).filter(([, words]) => words.test(text));
   return said.length === 1 ? said[0][0] : null;
 }
+
+/**
+ * A short reply — at most two words, or three with a number in them, and no
+ * question mark — is an attempt to answer, never a matter for the team.
+ * "inicial", "pelo menos 2": gpt-5.4-nano hands an answer it could not place
+ * back as "what nothing captured", and the offer to have the team check it
+ * made no sense (08/10). If nothing was read from it, the turn says so.
+ */
+export function isShortReply(text: string): boolean {
+  const said = text.trim();
+  if (said === "" || said.includes("?")) return false;
+  const words = said.split(/\s+/).length;
+  return words <= 2 || (words <= 3 && /\d/.test(said));
+}

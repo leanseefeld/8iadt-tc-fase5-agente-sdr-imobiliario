@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { boundaryOffer, offerOutcome, readAct, readRemainder, settleAct } from "../src/agent/turn/boundary.ts";
-import { asksForMoreProperties, readAcknowledgement, readOptionPick } from "../src/agent/lexicon.ts";
+import { asksForMoreProperties, readAcknowledgement, readClosedAnswer, readOptionPick } from "../src/agent/lexicon.ts";
 
 /** Spec 015 — what the agent can't resolve, decided in code. */
 
@@ -86,4 +86,20 @@ test("with times on the table, an ordinal is a pick, read by code", () => {
     ["obrigado", null],
   ];
   for (const [text, expected] of cases) assert.equal(readOptionPick(text), expected, text);
+});
+
+test("the answer to a closed question, read from the words it offered (08/10)", () => {
+  const cases: Array<["intent" | "urgency", string, string | null]> = [
+    ["intent", "alugar", "rental"],
+    ["intent", "quero comprar", "purchase"],
+    ["intent", "investir", "investment"],
+    ["intent", "comprar ou alugar, não sei", null],
+    ["urgency", "só olhando", "exploring"],
+    ["urgency", "inicial", "exploring"],
+    ["urgency", "em breve", "soon"],
+    ["urgency", "preciso me mudar logo", "immediate"],
+    ["urgency", "o quanto antes", "immediate"],
+    ["urgency", "não sei", null],
+  ];
+  for (const [slot, text, expected] of cases) assert.equal(readClosedAnswer(slot, text), expected, `${slot}: ${text}`);
 });

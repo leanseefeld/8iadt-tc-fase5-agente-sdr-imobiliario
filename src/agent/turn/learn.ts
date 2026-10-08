@@ -10,6 +10,7 @@ import {
   type Slots,
 } from "../../domain/slots.ts";
 import type { CommittedToolCall } from "../../services/conversation.ts";
+import { readClosedAnswer } from "../lexicon.ts";
 import { recoverSlot } from "../recovery.ts";
 import { normalizeExtraction } from "../tools/update-slots.ts";
 import { shouldRecover } from "./accounting.ts";
@@ -53,6 +54,18 @@ export async function learn(input: {
   for (const call of extraction.calls) {
     if (call.name !== "updateSlots") continue;
     merged = mergeSlots(merged, normalizeExtraction(call.arguments), { consented });
+  }
+  // The answer to a closed question, read from the words it offered, when the
+  // extraction left the slot empty ("alugar", "só olhando", "inicial"). Code
+  // reads it like it reads "a primeira": a closed vocabulary, never a guess.
+  if (pending !== null && (pending.slot === "intent" || pending.slot === "urgency")) {
+    const empty = pending.slot === "intent" ? merged.intent === "undefined" : merged.slots.urgency === null;
+    const answer = empty ? readClosedAnswer(pending.slot, leadText) : null;
+    if (answer !== null) {
+      const read = { [pending.slot]: answer };
+      calls.push({ name: "readAnswer", arguments: read });
+      merged = mergeSlots(merged, read, { consented });
+    }
   }
 
   const stillPending =

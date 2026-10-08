@@ -116,3 +116,12 @@ test("an acknowledgement attempts nothing, so it is never a misunderstanding", (
   assert.equal(read("ok", { attemptedAnswer: true }).attemptedAnswer, false);
   assert.equal(read("700 mil", { attemptedAnswer: true }).attemptedAnswer, true);
 });
+
+test("a short reply is an answer attempt, never something for the team (Azure, 08/10)", () => {
+  for (const text of ["inicial", "pelo menos 2", "2", "não sei"]) {
+    assert.equal(read(text, { remainder: text, act: "other" }).remainder, null, text);
+  }
+  for (const text of ["meu marido vai junto", "vou levar cachorro", "aceita pet?"]) {
+    assert.notEqual(read(text, { remainder: text, act: "inform" }).remainder, null, text);
+  }
+});

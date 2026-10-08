@@ -1,0 +1,8 @@
+# SC-009: a provider that refuses every connection. Port 9 is the discard
+# protocol, so the connection fails at once instead of hanging.
+base_url: http://127.0.0.1:9/v1
+api_key_env: OMLX_API_KEY
+model: gemma-4-e4b-it-OptiQ-4bit
+max_output_tokens:
+  reply: 600
+  extraction: 1024

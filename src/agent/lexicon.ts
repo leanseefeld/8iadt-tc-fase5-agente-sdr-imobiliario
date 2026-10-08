@@ -173,3 +173,42 @@ export function asksAboutBooking(text: string): boolean {
     text,
   );
 }
+
+/**
+ * The answer to one of the script's closed questions, read from the words the
+ * question offers: "comprar, alugar ou investir?" and "você precisa se mudar em
+ * breve ou ainda é uma pesquisa inicial?". "Alugar", "só olhando", "inicial"
+ * answer them — the model sometimes read nothing, or read only the slot it had
+ * already read before, and two such answers handed the lead off (08/10). Only
+ * an unambiguous answer counts: words of two options read as nothing.
+ */
+export function readClosedAnswer(slot: "intent" | "urgency", text: string): string | null {
+  const options: Record<string, RegExp> =
+    slot === "intent"
+      ? {
+          rental: /alug|loca[çc][ãa]o|locar/iu,
+          purchase: /compr|adquir/iu,
+          investment: /invest/iu,
+        }
+      : {
+          exploring: /olhando|pesquis|inicial|sem pressa|s[óo] vendo|curiosidade|explorando|n[ãa]o tenho pressa/iu,
+          soon: /em breve|pr[óo]xim[oa]s? mes|alguns meses|uns meses|ainda esse ano|ainda este ano/iu,
+          immediate: /urgente|imediat|o quanto antes|(?<!\p{L})logo(?!\p{L})|(?<!\p{L})j[áa](?!\p{L})|agora|esse m[êe]s|este m[êe]s/iu,
+        };
+  const said = Object.entries(options).filter(([, words]) => words.test(text));
+  return said.length === 1 ? said[0][0] : null;
+}
+
+/**
+ * A short reply — at most two words, or three with a number in them, and no
+ * question mark — is an attempt to answer, never a matter for the team.
+ * "inicial", "pelo menos 2": gpt-5.4-nano hands an answer it could not place
+ * back as "what nothing captured", and the offer to have the team check it
+ * made no sense (08/10). If nothing was read from it, the turn says so.
+ */
+export function isShortReply(text: string): boolean {
+  const said = text.trim();
+  if (said === "" || said.includes("?")) return false;
+  const words = said.split(/\s+/).length;
+  return words <= 2 || (words <= 3 && /\d/.test(said));
+}

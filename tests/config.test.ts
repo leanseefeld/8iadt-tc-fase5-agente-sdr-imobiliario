@@ -3,27 +3,29 @@ import assert from "node:assert/strict";
 import { loadConfig, configKeys, REQUIRED_KEYS } from "../src/core/config.ts";
 
 const valid: Record<string, string> = {
-  PROVIDER_BASE_URL: "http://provider.test/v1",
-  PROVIDER_API_KEY: "a-key",
-  MODEL_ID: "gemma4:12b",
+  MODEL_PROFILE: "omlx_gemma4_e4b",
+  OMLX_API_KEY: "a-key",
   DATABASE_URL: "postgresql://sdr:sdr@db:5432/sdr",
   AUTH_SECRET: "a-signing-secret",
 };
 
 test("accepts an environment carrying only the required keys", () => {
   const config = loadConfig(valid);
-  assert.equal(config.MODEL_ID, "gemma4:12b");
+  assert.equal(config.model.name, "omlx_gemma4_e4b");
+  assert.equal(config.model.modelId, "gemma-4-e4b-it-OptiQ-4bit");
+  assert.equal(config.model.apiKey, "a-key");
 });
 
-// The one default that is not a constant: reasoning tokens are spent from the
-// same ceiling, so 600 would leave the answer empty.
-test("MODEL_MAX_OUTPUT_TOKENS defaults higher when thinking is on", () => {
-  assert.equal(loadConfig(valid).MODEL_MAX_OUTPUT_TOKENS, 600);
-  assert.equal(loadConfig({ ...valid, MODEL_THINKING: "true" }).MODEL_MAX_OUTPUT_TOKENS, 2_000);
-  assert.equal(
-    loadConfig({ ...valid, MODEL_THINKING: "true", MODEL_MAX_OUTPUT_TOKENS: "900" })
-      .MODEL_MAX_OUTPUT_TOKENS,
-    900,
+test("the profile's key must be set, and the error names it", () => {
+  const env = { ...valid };
+  delete env.OMLX_API_KEY;
+  assert.throws(() => loadConfig(env), (error: Error) => error.message.includes("OMLX_API_KEY"));
+});
+
+test("an unknown profile stops the process and names it", () => {
+  assert.throws(
+    () => loadConfig({ ...valid, MODEL_PROFILE: "no_such_model" }),
+    (error: Error) => error.message.includes("no_such_model"),
   );
 });
 
@@ -53,7 +55,8 @@ for (const key of REQUIRED_KEYS) {
 }
 
 const malformed: Array<[string, string]> = [
-  ["PROVIDER_BASE_URL", "not-a-url"],
+  ["MODEL_PROFILE", "../etc/passwd"],
+  ["AZURE_OPENAI_BASE_URL", "not-a-url"],
   ["DATABASE_URL", "mysql://host/db"],
   ["APP_PORT", "99999"],
   ["WORKER_SWEEP_INTERVAL_MS", "-1"],
@@ -61,7 +64,6 @@ const malformed: Array<[string, string]> = [
   ["FOLLOWUP_WINDOW_START", "9am"],
   ["CHAT_TYPING_DELAY_MS", "300"],
   ["CHAT_TYPING_DELAY_MS", "800-300"],
-  ["MODEL_MAX_OUTPUT_TOKENS", "0"],
 ];
 
 for (const [key, value] of malformed) {

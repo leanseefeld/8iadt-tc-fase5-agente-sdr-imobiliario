@@ -79,7 +79,7 @@ export async function recoverSlot(input: RecoveryInput): Promise<SlotExtraction>
       // options are `Omit<RequestOptions, 'timeout'>` — so the same bound of
       // FR-014 is applied as an abort signal instead.
       abortSignal: AbortSignal.timeout(config.MODEL_TIMEOUT_MS),
-      maxOutputTokens: config.MODEL_MAX_OUTPUT_TOKENS,
+      maxOutputTokens: config.model.maxOutputTokens.reply,
       schema,
       schemaName: "resposta",
       schemaDescription: SLOT_HINTS[input.slot],

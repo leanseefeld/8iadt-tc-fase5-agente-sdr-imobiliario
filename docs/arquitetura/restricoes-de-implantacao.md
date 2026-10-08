@@ -66,7 +66,8 @@ normalmente. Duas saídas, em ordem de preferência:
    ```bash
    socat TCP-LISTEN:8991,fork,reuseaddr TCP:127.0.0.1:8990
    ```
-   e apontar `PROVIDER_BASE_URL` para `http://host.docker.internal:8991/v1`
+   e apontar o `base_url` dos perfis `omlx_*` (em `config/models/`) para
+   `http://host.docker.internal:8991/v1`
 
 Um provedor hospedado continua sendo a terceira saída, e não é um contorno — é o
 mesmo caminho da nuvem, descrito abaixo.
@@ -78,20 +79,21 @@ $ curl -s http://localhost:8990/v1/models
 {"error":{"message":"API key required","type":"authentication_error"}}
 ```
 
-Verificado novamente em 31/08/2026: continua valendo. `PROVIDER_API_KEY` não é
+Verificado novamente em 31/08/2026: continua valendo. `OMLX_API_KEY` não é
 placeholder — precisa do valor configurado no oMLX, mesmo sendo um servidor local.
 É o único valor que um clone limpo não consegue preencher sozinho.
 
 ### Caminho na nuvem
 
-Trocar `PROVIDER_BASE_URL` e `MODEL_ID` para qualquer endpoint compatível com
-OpenAI. **Nenhuma linha de código muda** — é exatamente o que o princípio VI da
-constituição garante.
+Trocar `MODEL_PROFILE` para um perfil de qualquer endpoint compatível com
+OpenAI (um arquivo YAML em `config/models/`). **Nenhuma linha de código muda** —
+é exatamente o que o princípio VI da constituição garante (emendado em
+08/10/2026, ADR 23).
 
 **Demonstração (decidido em 05/09/2026, ADR 16):** GPT-5 via Azure OpenAI, pelo
-endpoint compatível `https://<recurso>.openai.azure.com/openai/v1`. Se esse
-endpoint exigir cabeçalho de autenticação diferente de `Authorization: Bearer`,
-a chave opcional `PROVIDER_AUTH_HEADER` é a terceira variável permitida. Validar
+endpoint compatível `https://<recurso>.openai.azure.com/openai/v1`, com os perfis
+`azure_*`. O endpoint e a chave ficam no `.env` (`AZURE_OPENAI_BASE_URL`,
+`AZURE_OPENAI_API_KEY`); o cabeçalho `api-key` fica no perfil. Validar
 manualmente antes do pitch; os testes de integração rodam só no modelo local.
 
 ---

@@ -274,6 +274,7 @@ export async function run(turn: LoadedTurn, context: RunContext): Promise<TurnRe
     question,
     filled: learned.filled,
     revised: learned.revised,
+    learnedSomething: learned.learnedSomething,
     proposalOpen: turn.proposalOpen,
     booked,
     offerOutstanding: offerOutstanding(turn),

@@ -40,6 +40,7 @@ export function decideEnding(input: {
   question: Question | null;
   filled: SlotKey[];
   revised: SlotKey[];
+  learnedSomething: boolean;
   proposalOpen: boolean;
   booked: UpcomingMeeting[];
   offerOutstanding: boolean;
@@ -59,7 +60,10 @@ export function decideEnding(input: {
       !input.searched &&
       !reading.askedAboutCriteria &&
       !situation.askingAboutMeetings &&
-      input.revised.length === 0 &&
+      // A turn that learned something answered something: the model also hands
+      // back the answer itself as "what nothing captured" ("2", "uns 6500"),
+      // and an offer to check it with the team made no sense (08/10).
+      !input.learnedSomething &&
       situation.offerTaken === null,
   });
 

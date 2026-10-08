@@ -104,6 +104,8 @@ services:
       APP_PORT: "3200"
       DATABASE_URL: postgresql://sdr:sdr@db:5432/sdr_test
       LANGFUSE_TRACING_ENVIRONMENT: test
+      # Tests run on the local e4b whatever .env names (ADR 16, src/db/test-db.ts).
+      MODEL_PROFILE: omlx_gemma4_e4b
     ports:
       - "3200:3200"
     volumes:

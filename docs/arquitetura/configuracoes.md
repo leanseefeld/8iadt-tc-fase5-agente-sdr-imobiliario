@@ -7,9 +7,9 @@ cria uma chave acrescenta a linha aqui no mesmo commit.
 
 | Chave | Padrão | Escopo | Spec | O que controla |
 |---|---|---|---|---|
-| `MODEL_ID`, `PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `PROVIDER_AUTH_HEADER` | — | global (agência no futuro) | 001/004 | provedor e modelo |
-| `MODEL_THINKING` | `false` | global | 004 | injeta `chat_template_kwargs.enable_thinking` no oMLX; aumenta latência |
-| `MODEL_MAX_OUTPUT_TOKENS` | `600` (`2000` com thinking) | global | 004 | teto de saída por chamada, incluindo raciocínio |
+| `MODEL_PROFILE` | — | global (agência no futuro) | 016 | o perfil do modelo em `config/models/`: endpoint, modelo, cabeçalho de autenticação, raciocínio (`thinking`, `reasoning_effort` até `low`) e tetos de saída da resposta e da extração (ADR 23) |
+| `MODEL_PROFILES_DIR` | `config/models` | global | 016 | onde ficam os perfis; só um teste aponta outro lugar |
+| `OMLX_API_KEY`, `AZURE_OPENAI_BASE_URL`, `AZURE_OPENAI_API_KEY` | — | global | 016 | os segredos que os perfis leem pelo nome |
 | `MODEL_HISTORY_WINDOW` | `12` | agência | 004 | mensagens recentes enviadas ao modelo |
 | `MODEL_TIMEOUT_MS`, `MODEL_MAX_RETRIES` | `30000`, `2` | global | 001 | limite e repetição por chamada |
 | `CHAT_DEBOUNCE_MS` | `3000` | agência | 004 | espera após a última mensagem do lead antes de iniciar o turno |

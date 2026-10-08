@@ -164,7 +164,7 @@ gerenciado. Aplicação e worker escalam de forma independente.
 | Banco saturado | Read replica + pool | Não |
 | RAG entra em cena | `CREATE EXTENSION vector` no mesmo Postgres | Módulo novo, nada existente |
 | Novo canal (WhatsApp, Telegram) | Nova implementação de `ChannelAdapter` | Uma classe |
-| Trocar de modelo ou provedor | `PROVIDER_BASE_URL` + `MODEL_ID` | Nenhuma linha |
+| Trocar de modelo ou provedor | `MODEL_PROFILE` (um perfil YAML em `config/models/`) | Nenhuma linha |
 | Multiagentes | Roteador antes do orquestrador | Camada nova, orquestrador intacto |
 | Voice AI | Middleware de STT no adapter | Orquestrador intacto |
 

@@ -369,6 +369,9 @@ third variable — recorded here so it is not a silent deviation from principle 
 **Consequences.** Every prompt must work on both. Integration tests run against
 the local model only; the hosted swap is validated by hand before the pitch.
 
+*The variable list is superseded by record 23 (2026-10-08): a model is now chosen
+by `MODEL_PROFILE`. The rest of this record stands.*
+
 ## 17. Backlog regrouped into five specs
 
 **Accepted 2026-09-05.**
@@ -596,3 +599,42 @@ orchestration state that stays derived from the data model. Rescheduling and
 cancelling become spec 009, inside the MVP. The working model becomes
 `gemma-4-12B-it-OptiQ-4bit`, for tool-calling reliability; its concurrency is to
 be measured rather than assumed.
+
+## 23. Model profiles in YAML
+
+**Accepted 2026-10-08. Amends principle VI (constitution 1.5.0).**
+
+**Context.** Spec 016 put the demo on Azure with four `.env` values. Trying a
+second hosted model the same day, gpt-6-luna, showed how much belongs to a model
+rather than to the environment: it reasons by default, and the reasoning is paid
+from the same output ceiling as the answer. The extraction's fixed 300-token cap
+went entirely on reasoning in 13 of 15 calls, and the lead got "tive um problema
+técnico". Its fix — a reasoning effort, and ceilings sized for it — is a property
+of that model, and so is gpt-5.4-nano's need for nothing of the kind. Switching
+between them by editing six variables by hand is where mistakes come from.
+
+**Decision.** One YAML file per model in `config/models/`
+(`omlx_gemma4_e4b`, `azure_nano`, `azure_luna_none`, …), loaded by
+`core/model-profile.ts` and validated strictly: endpoint (or the name of the key
+holding it), the name of the key holding the API key, auth header, model id,
+oMLX thinking switch, `reasoning_effort`, and two output ceilings, `reply` and
+`extraction`. `.env` holds `MODEL_PROFILE` and the secrets
+(`OMLX_API_KEY`, `AZURE_OPENAI_BASE_URL`, `AZURE_OPENAI_API_KEY`). A profile may
+read only keys the config schema declares, so the Environment Contract still
+covers every value. `reasoning_effort` stops at `low` (developer): a model that
+needs more to follow the script is the wrong model. Tests run on
+`omlx_gemma4_e4b` whatever `.env` names (`src/db/test-db.ts`, `app-test`);
+`TEST_MODEL_PROFILE` picks another for one run, on purpose. Every model still goes
+through `agent/provider.ts` and the OpenAI-compatible provider.
+
+**Alternatives considered.** A `MODEL_REASONING_EFFORT` variable and an
+extraction-ceiling variable — two more knobs whose right values depend on which
+model the other variables point at, which is the coupling a profile names.
+Per-agency model choice — backlog 16, not needed for one agency.
+
+**Consequences.** `PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_ID`,
+`PROVIDER_AUTH_HEADER`, `MODEL_THINKING` and `MODEL_MAX_OUTPUT_TOKENS` are gone.
+The extraction ceiling rose from 300 to 1024 for models that do not reason
+(developer: 300 was too low), and to 4096 for those that do, since the API has one
+ceiling per call and cannot keep the reasoning apart from the answer.
+

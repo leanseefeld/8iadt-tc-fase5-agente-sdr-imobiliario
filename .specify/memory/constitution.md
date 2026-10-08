@@ -90,9 +90,12 @@ and it is the difference between a qualification flow and a chatbot that loops.
 All model access goes through a single factory in `src/agent/provider.ts`, built on
 the AI SDK's OpenAI-compatible provider. No other module imports a provider SDK.
 
-Swapping the local oMLX server for a hosted endpoint is a change to
-`PROVIDER_BASE_URL` and `MODEL_ID` — and nothing else. Any code that would break
-under that swap violates this principle.
+Swapping models — the local oMLX server for a hosted endpoint, or one model for
+another — is a change to `MODEL_PROFILE`, the name of a profile in
+`config/models/`, and nothing else. A profile is data: the endpoint, the model
+id, the auth header, the reasoning setting and the output ceilings. Secrets stay
+in the environment; a profile names the key it reads. Any code that would break
+under that swap violates this principle (amended 2026-10-08, ADR 23).
 
 ### VII. Observability Without Coupling
 
@@ -209,4 +212,4 @@ concrete second case is speculative generality, with two deliberate exceptions
 recorded in the decision log: `ChannelAdapter` and `JobQueue`, which exist because
 they are the seams the architecture argument rests on.
 
-**Version**: 1.4.0 | **Ratified**: 2026-08-30 | **Last Amended**: 2026-09-22
+**Version**: 1.5.0 | **Ratified**: 2026-08-30 | **Last Amended**: 2026-10-08

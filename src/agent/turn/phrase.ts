@@ -34,7 +34,12 @@ export interface PhrasedReply {
 export function drain(buffer: string, final: boolean): { ready: string[]; rest: string } {
   const sentences = splitSentences(buffer);
   if (sentences.length === 0) return { ready: [], rest: final ? "" : buffer };
-  if (final || /[.!?]["')\]]?\s*$/.test(buffer)) return { ready: sentences, rest: "" };
+  // A chunk that ends on a digit and a separator ("R$ 6.") may be cut inside a
+  // number ("R$ 6.500"): wait for the next chunk. Judged as a sentence, "R$ 6"
+  // is an amount nobody said, and the guard threw away a correct reply — Azure
+  // streams in chunks that end there (08/10/2026); oMLX rarely did.
+  const ended = /[.!?]["')\]]?\s*$/.test(buffer) && !/\d[.,]$/.test(buffer);
+  if (final || ended) return { ready: sentences, rest: "" };
   // The unfinished sentence is carried over verbatim, trailing space included.
   // `splitSentences` trims, and a stream chunk that happened to end on "de "
   // would otherwise have the next chunk's "2 quartos" glued straight onto it —

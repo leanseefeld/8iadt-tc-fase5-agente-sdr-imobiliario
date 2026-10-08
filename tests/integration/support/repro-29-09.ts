@@ -146,6 +146,13 @@ test("replay 29/09", async (t) => {
   ]);
   await replay("9 · 015: thanks with something left over", await booked(), ["obrigado, e meu marido vai junto"]);
 
+  // 12 · The developer's phone test of 07/10, after booking.
+  await replay("12 · 07/10: the dog after booking", await booked(), [
+    "vou levar meu cachorro",
+    "já marcamos, não?",
+    "posso levar meu cachorro?",
+  ]);
+
   // 10–11 · A person takes over and hands back: after the lead took the offer,
   // and by the broker's own initiative. Printed as the whole conversation.
   const [ana] = await query("select id, agency_id from users where email = 'ana@demo.com.br'");

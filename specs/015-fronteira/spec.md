@@ -101,6 +101,17 @@ team check it.
   - A change of purpose must be said: *"isso"* no longer turns a renter into a buyer.
   - Sofia never offers to search: the search runs by itself when the criteria are complete.
 
+## From the developer's phone test of 07/10
+
+- **A fact the model claims must be in the words.** The model is no longer believed when the message doesn't
+  say it:
+  - a property code the message doesn't contain (an echo of the card above);
+  - a refusal with no refusal word (*"posso levar meu cachorro?"*).
+
+  *"Já marcamos, não?"* is read by code as a question about what is booked.
+- **No "typing…" when no reply is coming.** In a paused conversation (after a handoff, or with a broker in
+  charge), the lead's message is stored and the widget doesn't promise an answer.
+
 ## Open questions
 
 None open. Answered on 30/09: the direction (act + remainder + boundary + capability list); a short spec before

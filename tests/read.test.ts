@@ -90,3 +90,22 @@ test("'não vou mais poder' is a cancel unless the message says to move it", () 
   assert.equal(read("não vou poder na sexta, dá pra passar pra segunda?", reschedule).facts.changeRequest, "reschedule");
   assert.equal(read("queria remarcar", reschedule).facts.changeRequest, "reschedule");
 });
+
+test("a fact the model claims must be in the words (the echoes of 07/10)", () => {
+  const echoedCode = { scheduling: { ...NO_SCHEDULING, propertyRef: { code: "MOE-0009" } } };
+  assert.equal(read("vou levar meu cachorro", echoedCode).facts.propertyRef, null, "the card's code, echoed");
+  assert.deepEqual(read("Interessado em MOE-0009", echoedCode).facts.propertyRef, { code: "MOE-0009" });
+  assert.deepEqual(read("e o moe 0009?", echoedCode).facts.propertyRef, { code: "MOE-0009" });
+
+  const refusal = { scheduling: { ...NO_SCHEDULING, outOfScopeRequest: true } };
+  assert.equal(read("posso levar meu cachorro?", refusal).facts.outOfScopeRequest, false);
+  assert.equal(read("vocês me dão carona até lá?", refusal).facts.outOfScopeRequest, true);
+  assert.equal(read("quero ser atendida por uma mulher", refusal).facts.outOfScopeRequest, true);
+
+  for (const text of ["já marcamos, não?", "a visita continua de pé?", "ficou agendado pra terça?"]) {
+    assert.equal(read(text).facts.askedAboutMeetings, true, text);
+  }
+  for (const text of ["podemos marcar uma nova?", "quero marcar uma visita", "obrigado"]) {
+    assert.equal(read(text).facts.askedAboutMeetings, false, text);
+  }
+});

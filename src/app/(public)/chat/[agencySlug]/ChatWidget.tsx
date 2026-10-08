@@ -177,7 +177,8 @@ export default function ChatWidget({
         setBubbles(history.messages.map(toBubble));
         // A transcript ending on the lead's own words means a turn is on its
         // way — the reload landed mid-answer, and the widget should look like it.
-        setTyping(history.messages.at(-1)?.role === "lead");
+        // Not while paused: a person answers that, not the agent's turn.
+        setTyping(history.status === "active" && history.messages.at(-1)?.role === "lead");
       } catch {
         if (!cancelled) setNotice("Não consegui carregar a conversa. Tente recarregar a página.");
       } finally {
@@ -356,6 +357,8 @@ export default function ChatWidget({
 
         const body = (await response.json()) as {
           conversationId?: string;
+          /** A reply is on its way: false when a person, not the agent, will answer. */
+          turn?: boolean;
           text?: string;
           error?: string;
         };
@@ -385,7 +388,7 @@ export default function ChatWidget({
         if (body.conversationId !== undefined) setConversationId(body.conversationId);
         if (consent === true) setConsented(true);
         // FR-049: the turn has started, and it starts by thinking.
-        if (text !== "") setTyping(true);
+        if (text !== "" && body.turn !== false) setTyping(true);
       } catch {
         setBubbles((current) =>
           current.map((bubble) => (bubble.key === key ? { ...bubble, pending: false } : bubble)),

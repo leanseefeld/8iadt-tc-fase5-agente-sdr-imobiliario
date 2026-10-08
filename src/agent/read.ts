@@ -2,9 +2,12 @@ import type { Preference, Weekday } from "../domain/scheduling.ts";
 import type { PropertyRef } from "../services/conversation.ts";
 import { settleAct, type MessageAct } from "./decide/boundary.ts";
 import {
+  asksAboutBooking,
   asksForMoreProperties,
   mentionsCancel,
   mentionsChange,
+  mentionsCode,
+  mentionsOutOfScope,
   readAcknowledgement,
   readOptionPick,
   readYesNo,
@@ -139,26 +142,32 @@ export interface ReadingContext {
 
 export function readTurn(model: ModelReading, context: ReadingContext): Reading {
   const { text } = context;
-  // A bare "valeu!" requests nothing: the model sometimes echoes a refusal or
-  // a request for a person it read one message earlier (spec 015).
+  // A bare "valeu!" says nothing new and requests nothing (spec 015).
   const bare = readAcknowledgement(text) !== null;
   // "Outros imóveis" is the criteria question, never something for the team.
   const moreProperties = asksForMoreProperties(text);
   const changeVerb = mentionsChange(text);
   const cancelVerb = mentionsCancel(text);
-  const echoed = bare
-    ? { ...model.scheduling, unsupportedMeeting: false, outOfScopeRequest: false, askedAboutMeetings: false }
-    : model.scheduling;
-  // "Não vou mais poder" with no word about moving it is a cancel, whatever the
-  // model called it: e4b read it as a reschedule in 2 of 3 eval runs (30/09).
-  const scheduling: SchedulingFacts =
-    echoed.changeRequest === "reschedule" && cancelVerb && !changeVerb ? { ...echoed, changeRequest: "cancel" } : echoed;
+  const said = model.scheduling;
+  // A fact the model claims must be in the words. The 4-bit model echoes what
+  // it read earlier in the conversation — the property code on the card above,
+  // a refusal from the previous turn — and every echo moved the turn: on 07/10
+  // "vou levar meu cachorro" got times again, and "posso levar meu cachorro?" a
+  // refusal and a handoff.
+  const ref = said.propertyRef;
   const facts: SchedulingFacts = {
-    ...scheduling,
+    ...said,
+    propertyRef: ref !== null && "code" in ref && !mentionsCode(text, ref.code) ? null : ref,
+    outOfScopeRequest: said.outOfScopeRequest && !bare && mentionsOutOfScope(text),
+    unsupportedMeeting: said.unsupportedMeeting && !bare,
+    askedAboutMeetings: (said.askedAboutMeetings && !bare) || asksAboutBooking(text),
+    // "Não vou mais poder" with no word about moving it is a cancel, whatever
+    // the model called it (e4b read it as a reschedule in 2 of 3 runs, 30/09).
+    changeRequest: said.changeRequest === "reschedule" && cancelVerb && !changeVerb ? "cancel" : said.changeRequest,
     // What code finds in the text wins over the model's guess (spec 009).
-    preference: { ...scheduling.preference, ...parseWhen(text, context.now, context.timeZone) },
+    preference: { ...said.preference, ...parseWhen(text, context.now, context.timeZone) },
     // With times on the table, "a primeira" is a pick (spec 015).
-    pickedTime: scheduling.pickedTime || (context.optionsOnTable && readOptionPick(text) !== null),
+    pickedTime: said.pickedTime || (context.optionsOnTable && readOptionPick(text) !== null),
   };
   const remainder = moreProperties ? null : model.remainder;
   return {

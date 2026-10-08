@@ -149,3 +149,27 @@ export function mentionsChange(text: string): boolean {
 export function mentionsCancel(text: string): boolean {
   return /cancel|desmarc|n[ãa]o vou (mais )?poder|n[ãa]o posso mais/iu.test(text);
 }
+
+/** "MOE-0009", "moe 0009", "moe0009" — the code as the lead may type it. */
+export function mentionsCode(text: string, code: string): boolean {
+  const squash = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return squash(text).includes(squash(code));
+}
+
+/**
+ * The words a refusal is about (spec 006 FR-005i): a ride, a refund, choosing
+ * who attends by a personal trait. The model's `outOfScopeRequest` stands only
+ * with one of them — "posso levar meu cachorro?" was refused on 07/10.
+ */
+export function mentionsOutOfScope(text: string): boolean {
+  return /carona|transporte|uber|t[áa]xi|reembols|passage|combust[íi]vel|gasolina|g[êe]nero|mulher|homem|gay|l[ée]sbica|lgbt|queer|trans(?!\p{L})|bin[áa]ri|religi|evang[ée]lic|cat[óo]lic|crist[ãa]|negr[oa]|branc[oa]|cor da pele|apar[êe]ncia|bonit|ideolog|pol[íi]tic|esquerda|direita/iu.test(
+    text,
+  );
+}
+
+/** "Já marcamos, não?", "continua de pé?", "ficou agendado?" — a question about what is booked. */
+export function asksAboutBooking(text: string): boolean {
+  return /(?<!\p{L})(marcamos|agendamos)(?!\p{L})|(?<!\p{L})(est[áa]|t[áa]|ficou|continua)\s+(marcad|agendad|confirmad|de\s+p[ée])|(?<!\p{L})de\s+p[ée](?!\p{L})/iu.test(
+    text,
+  );
+}

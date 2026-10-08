@@ -88,16 +88,18 @@ export async function POST(request: Request): Promise<Response> {
   // A duplicate `clientMessageId` wrote nothing (FR-035), so it must not start a
   // second turn either; a paused conversation stores the message and stays quiet
   // (FR-028).
-  if (result.status === "stored" && result.conversationStatus === "active") {
-    scheduleTurn(result.conversationId, result.agencyId);
-  }
+  const turn = result.status === "stored" && result.conversationStatus === "active";
+  if (turn) scheduleTurn(result.conversationId, result.agencyId);
 
   log.info(
     { conversationId: result.conversationId, status: result.status },
     "lead message accepted",
   );
 
-  return json({ conversationId: result.conversationId }, 202, { "set-cookie": cookie });
+  // `turn` tells the widget whether a reply is on its way: a paused conversation
+  // (a handoff, a broker in charge) stores the message and answers nothing, and
+  // "typing…" over it never ended (07/10).
+  return json({ conversationId: result.conversationId, turn }, 202, { "set-cookie": cookie });
 }
 
 export async function GET(request: Request): Promise<Response> {

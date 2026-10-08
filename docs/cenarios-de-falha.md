@@ -27,6 +27,10 @@ verdade é uma decisão de produto ainda não tomada.
 
 | Cenário | Resolvido em | Como |
 |---|---|---|
+| Depois de marcar, *"vou levar meu cachorro"* recebeu horários de novo (o modelo ecoou o código do imóvel do card) | 07/10 (015) | Um código de imóvel só vale se está na mensagem; a frase recebe a oferta de verificar com a equipe |
+| *"Posso levar meu cachorro?"* virou recusa e, somada a um *"não entendi"*, handoff | 07/10 (015) | Uma recusa só vale com palavra da lista fechada (carona, reembolso, gênero…) |
+| *"Já marcamos, não?"* recebeu *"Ainda não consigo te ajudar com isso"* | 07/10 (015) | Lido pelo código como pergunta sobre o que está marcado; respondido a partir do estado |
+| Depois do handoff, *"blz, no aguardo"* deixou os três pontinhos na tela para sempre | 07/10 (015) | O POST diz se vem resposta (`turn`); o widget não mostra *"digitando…"* numa conversa pausada, nem ao recarregar |
 | *"Quero investir em imóveis para renda"* terminava com intenção **compra** (virava em *"Meu nome é Rafael…"*) | 30/09 (015) | Trocar uma intenção já definida exige palavra de finalidade na mensagem; os dois cenários avaliados passaram depois |
 | Depois da devolução, *"a visita de segunda continua de pé?"* recebia *"Ainda não consigo te ajudar com isso"* | 30/09 (015) | Os compromissos marcados estão no estado; a pergunta é respondida a partir dele |
 | *"Quem vai estar na visita?"* logo depois de a corretora se apresentar soava estranho | 30/09 (015) | *"Daqui eu só vejo dia, horário, tipo e imóvel; quem vai, só os corretores confirmam"* + oferta de chamar um |

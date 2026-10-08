@@ -196,6 +196,27 @@ test("spec 015, scripted", { skip: !integration }, async (t) => {
     assert.match(handed.reply, /já estou chamando um corretor/);
   });
 
+  await t.test("the conversation of 07/10: the dog after booking is an offer, not times, nor a refusal", async () => {
+    const leleco = await lead();
+    await bookDirect(leleco, { at: nextLocal("tue", 10), propertyCode: "MOE-0001" });
+    model.push(
+      // The model echoed the card's code: the code was not in the words.
+      { facts: { propertyCode: "MOE-0001", messageAct: "inform", uncovered: "vou levar meu cachorro" } },
+      { facts: { messageAct: "question" }, reply: "Sim, está marcada!" },
+      // The model marked a refusal: no refusal word in the message.
+      { facts: { outOfScopeRequest: true, messageAct: "question", uncovered: "posso levar meu cachorro?" } },
+    );
+    const dog = await leleco.say("vou levar meu cachorro");
+    assert.doesNotMatch(dog.reply, OPTIONS, "no times again");
+    assert.deepEqual((await leleco.lastMetadata()).humanOffer, { about: "vou levar meu cachorro" });
+    const booked = await leleco.say("já marcamos, não?");
+    assert.equal(booked.reply, "Sim, está marcada!", "answered from the state");
+    const asked = await leleco.say("posso levar meu cachorro?");
+    assert.doesNotMatch(asked.reply, /Ainda não consigo/);
+    assert.equal(asked.handoffReason, null);
+    assert.deepEqual((await leleco.lastMetadata()).humanOffer, { about: "posso levar meu cachorro?" });
+  });
+
   await t.test("7 · thanks with something left over is the offer, not the close", async () => {
     const eva = await lead();
     await bookDirect(eva, { at: nextLocal("fri", 10), propertyCode: "MOE-0001" });

@@ -101,7 +101,8 @@ raciocínio e tetos de saída. O `.env` só escolhe o perfil e guarda as chaves 
 | `omlx_gemma4_e4b_thinking` | o mesmo, com o raciocínio do oMLX ligado |
 | `omlx_gemma4_12b` | 12B local — só para separar falha de modelo de falha de código |
 | `azure_nano` | gpt-5.4-nano na Azure OpenAI |
-| `azure_luna_low` | gpt-6-luna na Azure OpenAI, raciocínio baixo |
+| `azure_luna_none` | gpt-6-luna na Azure OpenAI, sem raciocínio |
+| `azure_luna_low` | gpt-6-luna com raciocínio baixo — **sem ferramentas**: a Azure as recusa nesse modo, então busca e agendamento falham |
 
 Para usar a Azure, preencha uma vez no `.env`:
 

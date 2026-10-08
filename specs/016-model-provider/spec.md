@@ -80,9 +80,11 @@ refuses `max_tokens` ("use `max_completion_tokens`"), and the OpenAI-compatible 
 
 ## Open questions
 
-- **gpt-6-luna refuses tools with a reasoning effort** on `/v1/chat/completions` ("use /v1/responses or set
-  reasoning_effort to 'none'"), so on `azure_luna_low` the action loop fails and nothing is searched or booked.
-  The responses API would need another provider package, against principle VI. Waiting on the developer.
+None. Answered on 08/10:
+- gpt-6-luna refuses tools with any reasoning effort on `/v1/chat/completions` ("use /v1/responses or set
+  reasoning_effort to 'none'"), so on `azure_luna_low` nothing is searched or booked; the responses API would need
+  another provider package, against principle VI. The developer chose a second profile, `azure_luna_none`: one
+  replay of 13 and 14 answered every turn, searched, and stayed on the script's questions.
 
 Answered on 07/10:
 - the deployment is `gpt-5.4-nano`;

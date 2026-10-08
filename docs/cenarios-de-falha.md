@@ -24,12 +24,12 @@ verdade é uma decisão de produto ainda não tomada.
 | Duas respostas curtas não entendidas seguidas (*"sim"*, *"quero ver imóveis"*) viram handoff | Teste do desenvolvedor, 30/09 08:40 (e4b) | 004 FR-027 · decisão pendente 6 | Mesma família do *"tanto faz"* (011) |
 | Cenário 1 (compra, avaliado) no e4b: às vezes a busca não roda e nenhum card aparece (SC-004) | Eval de 07/10, 1 em 3 (e4b) | Modelo · **config do provedor** | A demo vai rodar num modelo hospedado; no e4b é oscilação conhecida desde 29/09 |
 | Na Azure, o gpt-5.4-nano às vezes troca a pergunta do roteiro por uma dele (*"qual tipo de imóvel você procura?"*) | Teste de 08/10 (Azure) | Modelo · o desenvolvedor vai trocar o modelo | Proposta de guarda de saída (pergunta fora do assunto do slot pendente) recusada por ora. O gpt-6-luna fez o mesmo uma vez em 9 turnos, no mesmo lugar: depois de *"não precisa"* à pergunta de bairro (*"Prefere apartamento ou casa?"*). Pode ser a linha da pergunta de bairro acima, e não o modelo |
-| No gpt-6-luna com `reasoning_effort`, a Azure recusa ferramentas em `/v1/chat/completions` (*"use /v1/responses or set reasoning_effort to 'none'"*): o laço de ações falha, e nada é buscado nem agendado | Replay 13–14 de 08/10 (`azure_luna_low`) | **Config do provedor** · 016 | O desenvolvedor decide: um perfil com `reasoning_effort: none`, ou outro modelo |
 
 ## Resolvidos
 
 | Cenário | Resolvido em | Como |
 |---|---|---|
+| No gpt-6-luna com `reasoning_effort`, a Azure recusa ferramentas em `/v1/chat/completions`: o laço de ações falhava, e nada era buscado nem agendado | 08/10 (016) | Perfil `azure_luna_none` (sem raciocínio); `azure_luna_low` fica documentado como sem ferramentas |
 | No gpt-6-luna, a extração gastava o teto de 300 tokens só raciocinando e o lead recebia *"tive um problema técnico"* (13 de 15 extrações) | 08/10 (016) | Perfis de modelo (ADR 23): `reasoning_effort: low` e tetos do perfil, 1024 na extração sem raciocínio e 4096 com |
 | Na Azure, uma resposta curta que o modelo não encaixou (*"inicial"*, *"pelo menos 2"*) recebia a oferta de verificar com a equipe | 08/10 (015) | Resposta curta sem "?" é tentativa de resposta: se nada foi lido, o turno diz que não entendeu |
 | Na Azure, *"Boa, entendi que é até R$ 6.500"* foi descartada pelo guard de valores, e uma frase pronta saiu no lugar | 08/10 (016) | O streaming cortava o pedaço em *"R$ 6."* e o guard via *"R$ 6"*; o `drain` agora espera o resto de um número cortado |

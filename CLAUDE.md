@@ -12,20 +12,16 @@ that will not be built — never cite it as a technical requirement.
 
 ## Skills
 
-Spec Kit is installed. The workflow is:
-
-`/speckit-specify` → `/speckit-clarify` → `/speckit-plan` → `/speckit-tasks` →
-`/speckit-analyze` → `/speckit-implement`
-
-`/speckit-analyze` is **required** before implementing. This is a solo project with
-no human review gate, so the automated consistency check is the only gate there is.
+Spec Kit is installed but **optional** since 08/10/2026 (constitution 1.6.0): offer
+a one-page spec before production code and follow the developer's choice. The full
+flow (`/speckit-specify` → … → `/speckit-implement`) is used only when asked.
 
 ## Working here
 
 - Plan mode is worth using for anything touching the orchestrator, the slot machine
   or the data model — those are where a wrong assumption is expensive.
-- Do not write production code without a merged spec in `specs/`. If asked to
-  implement something with no spec, say so and offer to write the spec first.
+- Before writing production code with no spec, offer to write a short one first;
+  if the developer declines, go ahead.
 - When a question is listed as undecided in `docs/decisoes-pendentes.md`, stop and
   ask rather than picking a plausible answer.
 - `npm`, not pnpm or yarn.

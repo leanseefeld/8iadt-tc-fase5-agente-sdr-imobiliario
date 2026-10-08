@@ -183,19 +183,22 @@ expose a health endpoint.
 
 ## Development Workflow
 
-No production code without a merged specification in `specs/`.
+Specifications are **offered, not required** (1.6.0, ADR 24). Before a change to
+production code, an agent offers to write a short specification — a one-page prose
+spec in `specs/NNN-name/` saying what the change covers and what it does not — and
+then follows the developer's choice. A change made without one is not a defect.
 
-This is a solo-developer project, so there is no review gate — which makes the
-automated gates matter more:
+Specs 001–007 were written with the full GitHub Spec Kit flow
+(`/speckit-specify` → `/speckit-clarify` → `/speckit-plan` → `/speckit-tasks` →
+`/speckit-analyze` → `/speckit-implement`). From 009 on, the developer replaced it
+with one-page specs: the full flow produced more invented requirements than the
+project could review. The Spec Kit skills stay installed and may still be used.
 
-1. `/speckit-specify` — write the specification
-2. `/speckit-clarify` — resolve ambiguity before planning
-3. `/speckit-plan` — technical plan against this constitution
-4. `/speckit-tasks` — actionable breakdown
-5. `/speckit-analyze` — **required** before implementing
-6. `/speckit-implement` — execute
+What stays mandatory is what the review gate used to protect: the deterministic
+suite (`npm run test:integration`) passes before a merge, and a change to the turn
+updates `docs/arquitetura/turno-do-agente.md` in the same commit.
 
-One feature branch per specification. Commit messages in English.
+One feature branch per change. Commit messages in English.
 
 ## Governance
 
@@ -203,8 +206,8 @@ This constitution supersedes all other practices. Amendments require editing thi
 file, recording the reasoning in `docs/arquitetura/adr/decisoes.md`, and bumping the
 version below.
 
-Every plan produced by `/speckit-plan` must be checkable against these principles.
-Where a specification needs to deviate, it must say so explicitly and justify it —
+Every specification or plan must be checkable against these principles.
+Where one needs to deviate, it must say so explicitly and justify it —
 silent deviation is a defect.
 
 Complexity must be justified. A pattern with exactly one implementation and no
@@ -212,4 +215,4 @@ concrete second case is speculative generality, with two deliberate exceptions
 recorded in the decision log: `ChannelAdapter` and `JobQueue`, which exist because
 they are the seams the architecture argument rests on.
 
-**Version**: 1.5.0 | **Ratified**: 2026-08-30 | **Last Amended**: 2026-10-08
+**Version**: 1.6.0 | **Ratified**: 2026-08-30 | **Last Amended**: 2026-10-08

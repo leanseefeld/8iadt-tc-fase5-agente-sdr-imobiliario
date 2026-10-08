@@ -1,5 +1,7 @@
 # Exploração: tópicos em vez de slot machine
 
+> **Status (08/10/2026): não implementado.** O código segue escolhendo a próxima pergunta (`nextQuestion`); nada aqui foi construído.
+
 > **Não normativo. Isto é exploração, não decisão.** Nada aqui é requisito, e
 > nenhuma spec deve citar este documento como autoridade. Aberto em 20/09/2026 a
 > pedido do desenvolvedor. A pendência 6 que o originou foi **resolvida em

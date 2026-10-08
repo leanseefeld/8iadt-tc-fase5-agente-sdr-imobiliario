@@ -39,8 +39,9 @@ python3.1 ... TCP *:8990 (LISTEN)
 O contêiner alcança o servidor diretamente em `http://host.docker.internal:8990/v1`.
 Não é necessário encaminhar porta no host.
 
-**Verificado de dentro do contêiner em 01/09/2026.** O item 1 do backlog fechou
-esta questão com evidência, não com suposição:
+**Verificado de dentro do contêiner em 01/09/2026** (antes dos perfis de modelo;
+hoje o modelo vem de `MODEL_PROFILE`). O item 1 do backlog fechou esta questão com
+evidência, não com suposição:
 
 ```console
 $ docker compose exec app npm run doctor
@@ -90,11 +91,14 @@ OpenAI (um arquivo YAML em `config/models/`). **Nenhuma linha de código muda** 
 é exatamente o que o princípio VI da constituição garante (emendado em
 08/10/2026, ADR 23).
 
-**Demonstração (decidido em 05/09/2026, ADR 16):** GPT-5 via Azure OpenAI, pelo
-endpoint compatível `https://<recurso>.openai.azure.com/openai/v1`, com os perfis
-`azure_*`. O endpoint e a chave ficam no `.env` (`AZURE_OPENAI_BASE_URL`,
-`AZURE_OPENAI_API_KEY`); o cabeçalho `api-key` fica no perfil. Validar
-manualmente antes do pitch; os testes de integração rodam só no modelo local.
+**Demonstração (decidido em 05/09/2026, ADR 16; perfis em 08/10/2026, ADR 23):**
+modelo hospedado na Azure OpenAI, pelo endpoint compatível
+`https://<recurso>.openai.azure.com/openai/v1`, com os perfis `azure_nano`
+(gpt-5.4-nano) ou `azure_luna_none` (gpt-6-luna, sem raciocínio). O endpoint e a
+chave ficam no `.env` (`AZURE_OPENAI_BASE_URL`, `AZURE_OPENAI_API_KEY`); o
+cabeçalho `api-key` fica no perfil. Validar manualmente antes de apresentar. Os
+testes rodam fixados no perfil `omlx_gemma4_e4b` (a suíte comum usa um modelo
+roteirizado e não chama modelo nenhum; só `npm run eval` fala com o modelo real).
 
 ---
 
@@ -102,9 +106,9 @@ manualmente antes do pitch; os testes de integração rodam só no modelo local.
 
 **Status:** roda, com ressalva de qualidade.
 
-Os modelos disponíveis no oMLX desta máquina (`gemma-4-e4b`, `gemma-4-12B`,
-`Qwen2.5-Coder-14B`, `Llama-3.2-3B`, `Qwen3.6-27B`) variam bastante em
-confiabilidade de *tool calling* multi-turno em português. Modelos quantizados em
+Os modelos locais testados (`gemma-4-e4b`, com e sem *thinking*, e `gemma-4-12B`,
+que só serve para decidir se uma falha é do modelo ou do código) variam bastante
+em confiabilidade de *tool calling* multi-turno em português. Modelos quantizados em
 4 bits erram argumentos de função, repetem perguntas já respondidas e às vezes
 abandonam o formato estruturado no meio da conversa.
 
@@ -112,8 +116,11 @@ abandonam o formato estruturado no meio da conversa.
 
 - Princípio V — a slot machine é determinística. O modelo extrai; quem decide o que
   perguntar é código. Um modelo esquecido não quebra a qualificação.
-- Princípio VI — trocar para um modelo hospedado na demonstração custa duas
-  variáveis de ambiente.
+- Princípio VI — trocar para um modelo hospedado na demonstração custa trocar
+  `MODEL_PROFILE` e preencher os segredos do provedor no `.env`.
+- O modelo é usado só em três pontos do turno (extrair, agir por ferramentas,
+  redigir), e tudo que precisa ser exato — datas, recusas, avisos — o código
+  escreve. Ver [`turno-do-agente.md`](turno-do-agente.md).
 
 **Consequência prática:** desenvolver com modelo local e **validar a demonstração
 com o modelo que será usado nela**. Não assumir que a qualidade se transfere.
@@ -135,8 +142,12 @@ perder eventos, o que se traduz em hot reload que não dispara.
   (`WATCHPACK_POLLING=true`), aceitando o custo de CPU
 
 Este é o único ponto em que a regra de Docker-first cobra preço real de
-desenvolvimento. Fica registrado para ser tratado no item 1 do backlog, em vez de
-descoberto durante ele.
+desenvolvimento.
+
+**Consequência para a entrega:** o `docker compose up` sobe a aplicação e o worker
+com o alvo `dev` do `Dockerfile` (`npm run dev`, código por bind mount). É o que
+roda hoje, inclusive na demonstração. O alvo `runner` (`next build` + `next start`)
+existe, mas o Compose não o usa; ver §7.
 
 ---
 
@@ -160,10 +171,14 @@ máquina tem 7,7 GiB e ainda precisa acomodar `app`, `worker` e `db`.
 - Latência de consulta na interface do Langfuse é irrelevante; o que importa é
   ingestão sem perda, garantida pelo exportador OTel em lote
 
-A aplicação funciona normalmente com o Langfuse ausente — princípio VII. Os
-valores concretos dos limites vivem no `docker-compose.yml` e são ajustados pela
-spec 004. Se o teto se mostrar apertado, Langfuse Cloud é a saída: duas
-variáveis de ambiente.
+Esses cinco contêineres (`clickhouse`, `redis`, `minio`, `langfuse-web`,
+`langfuse-worker`) pertencem **só** ao perfil `observability`. A aplicação não usa
+Redis: o trabalho assíncrono dela é `followup_jobs` e `events` no Postgres.
+
+A aplicação funciona normalmente com o Langfuse ausente — princípio VII; sem as
+três chaves `LANGFUSE_*` o rastreamento é um no-op. Os valores concretos dos
+limites vivem no `docker-compose.yml`. Se o teto se mostrar apertado, Langfuse
+Cloud é a saída: só as variáveis `LANGFUSE_*` mudam.
 
 **Medido em 09/09/2026** (spec 004, T053), com o profile no ar e uma conversa
 completa gravada, via `docker stats --no-stream`:
@@ -191,7 +206,9 @@ ClickHouse dimensiona os próprios caches pela memória do **host**, ignorando o
 
 ## 5. Webhook do Telegram
 
-**Status:** adiado. Restrição registrada por antecipação.
+**Status:** *não implementado.* Restrição registrada por antecipação; não há
+adapter nem rota de webhook no código (o tipo `Channel` reserva o valor
+`"telegram"` e nada mais).
 
 A Bot API do Telegram entrega mensagens por webhook, o que exige **URL pública com
 HTTPS** — indisponível para um serviço em `localhost`.
@@ -202,29 +219,49 @@ nos dois modos; muda apenas como as mensagens chegam até ela.
 
 **Na nuvem:** webhook de verdade, sem contorno.
 
-Registrado agora porque **molda a interface do adapter**, ainda que a implementação
-esteja adiada (item 13 do backlog).
+Registrado porque **molda a interface do adapter**, ainda que a implementação
+nunca tenha sido feita (item 13 do backlog, abaixo da linha de corte).
 
 ---
 
 ## 6. WhatsApp Cloud API
 
-**Status:** fora de escopo.
+**Status:** *não implementado.* Só o widget web existe.
 
-A API oficial da Meta é paga por conversa e exige verificação de negócio —
-inviável no prazo e no orçamento de uma POC. Alternativas não oficiais
-(Evolution API, Baileys) violam os termos da Meta e expõem a risco de banimento;
-são citáveis como opção conhecida, não usáveis na demonstração.
+A investigação de 27/09/2026 (item 32 do backlog) reavaliou a restrição original:
+a API oficial da Meta, com o **número de teste**, dispensa verificação de negócio e
+não custa nada no volume de uma demonstração (até 5 telefones cadastrados). Exigiria
+um webhook público (túnel com domínio fixo, um passo só do host), e o maior risco
+seria a janela de 24 horas para follow-up fora de uma conversa recente. A estimativa
+foi de cerca de 1,5 dia; ficou abaixo da linha de corte e não foi construído.
+Alternativas não oficiais (Evolution API, Baileys) violam os termos da Meta e
+expõem a risco de banimento; não são opção.
 
-**O que entregamos no lugar:** a interface `ChannelAdapter`. O argumento de
-arquitetura é que o WhatsApp é *uma implementação*, não uma reescrita — e isso
-demonstra mais competência de projeto do que teria demonstrado a integração paga.
+**O que entregamos no lugar:** a interface `ChannelAdapter` (`src/channels/types.ts`)
+e uma implementação, a do widget web. O argumento de arquitetura é que o WhatsApp
+é *uma implementação* a mais — uma classe e a rota do transporte —, não uma
+reescrita. É um argumento de desenho, não de funcionalidade entregue.
+
+---
+
+## 7. Implantação em nuvem
+
+**Status:** *não feita.*
+
+O sistema roda localmente, em `docker compose up`, e só. Não há ambiente na nuvem,
+pipeline de CI/CD nem imagem publicada. O caminho previsto é levar os mesmos
+contêineres (`app` e `worker`, uma imagem, dois comandos) a um runtime gerenciado
+com Postgres gerenciado, usando o alvo `runner` do `Dockerfile`; o provedor de
+modelo já é hospedado por configuração. Esse caminho **nunca foi exercitado**: o
+alvo `runner` existe para que a afirmação "os mesmos contêineres rodam na nuvem"
+seja testável, mas não foi implantado em lugar algum. Detalhes de escala em
+[`visao-geral.md`](visao-geral.md) §4 e §7.
 
 ---
 
 ## Como usar este registro
 
-Ao escrever uma spec que dependa de qualquer componente acima, **leia a entrada
+Ao planejar uma mudança que dependa de qualquer componente acima, **leia a entrada
 correspondente antes de planejar**. Ao descobrir uma nova restrição durante a
 implementação, acrescente uma entrada aqui no mesmo commit — o registro só tem
 valor se estiver completo.

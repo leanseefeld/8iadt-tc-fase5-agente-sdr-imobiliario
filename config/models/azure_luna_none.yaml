@@ -1,7 +1,15 @@
-# gpt-6-luna na Azure OpenAI, sem raciocínio. Com qualquer reasoning_effort, a
-# Azure recusa ferramentas em /v1/chat/completions (08/10/2026), e o laço de
-# ações precisa delas. Sem raciocínio, os tetos são os de um modelo que não
-# raciocina.
+# gpt-6-luna na Azure OpenAI, sem raciocínio.
+#
+# Limitação (medida em 08/10/2026): com qualquer reasoning_effort diferente de
+# none, a Azure recusa ferramentas em /v1/chat/completions — "Function tools with
+# reasoning_effort are not supported for gpt-6-luna in /v1/chat/completions".
+# O laço de ações precisa delas (busca, agendamento), então este modelo só
+# serve sem raciocínio. A saída que a Azure sugere, /v1/responses, exigiria outro
+# pacote de provedor, o que o princípio VI proíbe.
+#
+# Com raciocínio ligado, o raciocínio também sai do teto de saída: a extração
+# chegou a gastar 371 tokens só raciocinando. Sem ele, valem os tetos de um
+# modelo que não raciocina.
 base_url_env: AZURE_OPENAI_BASE_URL
 api_key_env: AZURE_OPENAI_API_KEY
 auth_header: api-key

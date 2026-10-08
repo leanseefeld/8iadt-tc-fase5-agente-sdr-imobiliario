@@ -614,7 +614,7 @@ of that model, and so is gpt-5.4-nano's need for nothing of the kind. Switching
 between them by editing six variables by hand is where mistakes come from.
 
 **Decision.** One YAML file per model in `config/models/`
-(`omlx_gemma4_e4b`, `azure_nano`, `azure_luna_low`, …), loaded by
+(`omlx_gemma4_e4b`, `azure_nano`, `azure_luna_none`, …), loaded by
 `core/model-profile.ts` and validated strictly: endpoint (or the name of the key
 holding it), the name of the key holding the API key, auth header, model id,
 oMLX thinking switch, `reasoning_effort`, and two output ceilings, `reply` and

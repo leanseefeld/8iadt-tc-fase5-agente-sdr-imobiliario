@@ -41,7 +41,7 @@ refuses `max_tokens` ("use `max_completion_tokens`"), and the OpenAI-compatible 
   default and spent the extraction's whole 300-token ceiling on it in 13 of 15 calls. What a model needs —
   reasoning effort, ceilings — is a property of the model, so it lives with the model:
   - one YAML file per model in `config/models/` (`omlx_gemma4_e4b`, `omlx_gemma4_e4b_thinking`,
-    `omlx_gemma4_12b`, `azure_nano`, `azure_luna_low`), validated strictly by `core/model-profile.ts`;
+    `omlx_gemma4_12b`, `azure_nano`, `azure_luna_none`), validated strictly by `core/model-profile.ts`;
   - `.env` holds `MODEL_PROFILE` and the secrets: `OMLX_API_KEY`, `AZURE_OPENAI_BASE_URL`,
     `AZURE_OPENAI_API_KEY`. A profile names the keys it reads, and may read only keys the schema declares;
   - `reasoning_effort` is sent through the same body rewrite, and stops at `low` (developer: above that,
@@ -73,7 +73,7 @@ refuses `max_tokens` ("use `max_completion_tokens`"), and the OpenAI-compatible 
 2. **Azure, happy path.** With the four values above, one conversation turn gets a reply from `gpt-5.4-nano`,
    and its Langfuse trace shows that model.
 3. **Back to local.** `MODEL_PROFILE=omlx_gemma4_e4b` and restart; the next turn runs on e4b.
-4. **A profile that reasons.** Conversations 13 and 14 of the replay on `azure_luna_low` (08/10): every turn is
+4. **A profile that reasons.** Conversations 13 and 14 of the replay on gpt-6-luna with `reasoning_effort: low` (08/10): every turn is
    answered, none with "tive um problema técnico"; extraction used 215–542 tokens, 43–371 of them reasoning.
 5. **A broken profile stops the boot.** An unknown profile, a `reasoning_effort` above `low`, an unknown field, a
    key the profile names that is unset or undeclared: the process refuses to start and names the problem.
@@ -82,8 +82,8 @@ refuses `max_tokens` ("use `max_completion_tokens`"), and the OpenAI-compatible 
 
 None. Answered on 08/10:
 - gpt-6-luna refuses tools with any reasoning effort on `/v1/chat/completions` ("use /v1/responses or set
-  reasoning_effort to 'none'"), so on `azure_luna_low` nothing is searched or booked; the responses API would need
-  another provider package, against principle VI. The developer chose a second profile, `azure_luna_none`: one
+  reasoning_effort to 'none'"), so with `low` nothing is searched or booked; the responses API would need
+  another provider package, against principle VI. The developer chose `azure_luna_none` and had the `low` profile deleted, the limitation written in the profile: one
   replay of 13 and 14 answered every turn, searched, and stayed on the script's questions.
 
 Answered on 07/10:

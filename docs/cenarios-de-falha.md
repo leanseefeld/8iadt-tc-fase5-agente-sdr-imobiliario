@@ -29,8 +29,8 @@ verdade é uma decisão de produto ainda não tomada.
 
 | Cenário | Resolvido em | Como |
 |---|---|---|
-| No gpt-6-luna com `reasoning_effort`, a Azure recusa ferramentas em `/v1/chat/completions`: o laço de ações falhava, e nada era buscado nem agendado | 08/10 (016) | Perfil `azure_luna_none` (sem raciocínio); `azure_luna_low` fica documentado como sem ferramentas |
-| No gpt-6-luna, a extração gastava o teto de 300 tokens só raciocinando e o lead recebia *"tive um problema técnico"* (13 de 15 extrações) | 08/10 (016) | Perfis de modelo (ADR 23): `reasoning_effort: low` e tetos do perfil, 1024 na extração sem raciocínio e 4096 com |
+| No gpt-6-luna com `reasoning_effort`, a Azure recusa ferramentas em `/v1/chat/completions`: o laço de ações falhava, e nada era buscado nem agendado | 08/10 (016) | Perfil `azure_luna_none` (sem raciocínio), com a limitação escrita no próprio perfil; o perfil com `low` foi apagado |
+| No gpt-6-luna, a extração gastava o teto de 300 tokens só raciocinando e o lead recebia *"tive um problema técnico"* (13 de 15 extrações) | 08/10 (016) | Perfis de modelo (ADR 23), com tetos por perfil: 1024 na extração (antes 300). O luna roda sem raciocínio (`azure_luna_none`), porque com raciocínio a Azure recusa as ferramentas |
 | Na Azure, uma resposta curta que o modelo não encaixou (*"inicial"*, *"pelo menos 2"*) recebia a oferta de verificar com a equipe | 08/10 (015) | Resposta curta sem "?" é tentativa de resposta: se nada foi lido, o turno diz que não entendeu |
 | Na Azure, *"Boa, entendi que é até R$ 6.500"* foi descartada pelo guard de valores, e uma frase pronta saiu no lugar | 08/10 (016) | O streaming cortava o pedaço em *"R$ 6."* e o guard via *"R$ 6"*; o `drain` agora espera o resto de um número cortado |
 | Na Azure, respostas ao roteiro (*"2"*, *"uns 6500…"*) recebiam *"não consigo confirmar isso, quer que a equipe verifique?"* | 08/10 (015) | O gpt-5.4-nano devolve a resposta inteira como sobra; um turno que aprendeu algo não recebe a oferta à equipe |

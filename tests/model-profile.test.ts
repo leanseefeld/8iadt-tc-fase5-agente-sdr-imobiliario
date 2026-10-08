@@ -35,11 +35,11 @@ test("every committed profile loads", () => {
 });
 
 test("a hosted profile reads its endpoint and key from the environment", () => {
-  const profile = loadModelProfile("azure_luna_low", PROFILES, ENV, configKeys);
+  const profile = loadModelProfile("azure_luna_none", PROFILES, ENV, configKeys);
   assert.equal(profile.baseUrl, ENV.AZURE_OPENAI_BASE_URL);
   assert.equal(profile.apiKey, "azure-key");
   assert.equal(profile.authHeader, "api-key");
-  assert.equal(profile.reasoningEffort, "low");
+  assert.equal(profile.reasoningEffort, "none");
 });
 
 test("the local profile neither reasons nor thinks, and has its own key", () => {

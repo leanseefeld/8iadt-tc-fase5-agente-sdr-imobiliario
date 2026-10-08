@@ -151,7 +151,10 @@ export function classify(input: SituationInput): Situation {
   // books, and it counts against the handoff streak like any other request the
   // agent can't act on. "Quem vai me atender?" is FR-005e's question, not a
   // request to choose — but "quero que quem me atenda seja uma mulher" is.
-  const refusingFormat = facts.unsupportedMeeting && !declining && !picking;
+  // A broker chosen by a personal trait is not a format: e4b sometimes marks
+  // both for "quero que a visita seja com um corretor gay", and the phone offer
+  // that belongs to a refused format then followed the refusal (eval, 08/10).
+  const refusingFormat = facts.unsupportedMeeting && !facts.outOfScopeRequest && !declining && !picking;
   const askingWho = facts.askedWhoAttends && input.leadText.includes("?");
   const refused = refusingFormat || (facts.outOfScopeRequest && !askingWho && !declining && !picking);
 

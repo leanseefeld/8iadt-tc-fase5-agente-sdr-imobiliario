@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { closePool } from "../../src/db/client.ts";
+import { CANNOT_ACT_REPLY } from "../../src/agent/prompts/fallback.ts";
+import { PHONE_OFFER_SENTENCE } from "../../src/agent/prompts/meeting.ts";
 import { useScriptedModel } from "../support/scripted-model.ts";
 import { bookDirect, nextLocal, OPTIONS, qualifiedLead, query, type Lead } from "./support/meeting.ts";
 
@@ -88,6 +90,20 @@ test("spec 015, scripted", { skip: !integration }, async (t) => {
     model.push({ facts: { outOfScopeRequest: true, messageAct: "request", uncovered: "carona até lá" } });
     await rui.say("vocês me dão carona até lá?");
     assert.equal((await rui.lastMetadata()).humanOffer, undefined);
+  });
+
+  await t.test("4b · a broker chosen by a trait is refused alone, even when the model also calls it a format", async () => {
+    const ana = await lead();
+    model.push({ facts: { outOfScopeRequest: true, unsupportedMeeting: true, messageAct: "request" } });
+    const reply = await ana.say("quero que a visita seja com um corretor gay");
+    assert.equal(reply.reply, CANNOT_ACT_REPLY);
+  });
+
+  await t.test("4c · a refused format still offers the phone", async () => {
+    const edu = await lead();
+    model.push({ facts: { unsupportedMeeting: true, messageAct: "request" } });
+    const reply = await edu.say("dá pra ser por videochamada?");
+    assert.equal(reply.reply, `${CANNOT_ACT_REPLY} ${PHONE_OFFER_SENTENCE}`);
   });
 
   await t.test("5 · a bare thanks closes even when the model calls it information; a second is short", async () => {

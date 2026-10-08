@@ -76,10 +76,15 @@ test("changing what was booked", { skip: !integration }, async (t) => {
 
   await t.test("5 · which one: asks, then acts on the answer", async () => {
     const camila = await lead();
-    await bookDirect(camila, { at: nextLocal("fri", 14), propertyCode: "VMA-0001" });
-    const tue = await bookDirect(camila, { at: nextLocal("tue", 10), propertyCode: "MOE-0008" });
+    const friday = nextLocal("fri", 14);
+    const tuesday = nextLocal("tue", 10);
+    await bookDirect(camila, { at: friday, propertyCode: "VMA-0001" });
+    const tue = await bookDirect(camila, { at: tuesday, propertyCode: "MOE-0008" });
     const which = await camila.say("quero cancelar a visita");
-    assert.match(which.reply, /^Qual delas: .*VMA-0001.* ou .*MOE-0008/, await facts(camila));
+    // Listed by date. Which comes first depends on today's weekday: on a
+    // Thursday, `nextLocal` puts Friday a week out, after Tuesday.
+    const [first, second] = friday < tuesday ? ["VMA-0001", "MOE-0008"] : ["MOE-0008", "VMA-0001"];
+    assert.match(which.reply, new RegExp(`^Qual delas: .*${first}.* ou .*${second}`), await facts(camila));
     const ask = await camila.say("a de terça");
     assert.match(ask.reply, /^Quer mesmo cancelar a visita ao MOE-0008/, await facts(camila));
     assert.equal((await status(tue)).status, "confirmed");

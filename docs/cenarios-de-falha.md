@@ -23,11 +23,18 @@ verdade é uma decisão de produto ainda não tomada.
 | A pergunta de bairro *"Tem algum bairro ou região específica em mente, ou aceita sugestões?"* é de ou-isto-ou-aquilo; um *"não"* (ou *"sim"*) não preenche nada | Teste do desenvolvedor, 30/09 08:39 (e4b) | **Produto** (texto da pergunta) · 004 | Com o bairro vazio, o roteiro não completa e a busca não roda |
 | Duas respostas curtas não entendidas seguidas (*"sim"*, *"quero ver imóveis"*) viram handoff | Teste do desenvolvedor, 30/09 08:40 (e4b) | 004 FR-027 · decisão pendente 6 | Mesma família do *"tanto faz"* (011) |
 | Cenário 1 (compra, avaliado) no e4b: às vezes a busca não roda e nenhum card aparece (SC-004) | Eval de 07/10, 1 em 3 (e4b) | Modelo · **config do provedor** | A demo vai rodar num modelo hospedado; no e4b é oscilação conhecida desde 29/09 |
+| Na Azure, o gpt-5.4-nano às vezes troca a pergunta do roteiro por uma dele (*"qual tipo de imóvel você procura?"*) | Teste de 08/10 (Azure) | Modelo · o desenvolvedor vai trocar o modelo | Proposta de guarda de saída (pergunta fora do assunto do slot pendente) recusada por ora. O gpt-6-luna fez o mesmo uma vez em 9 turnos, no mesmo lugar: depois de *"não precisa"* à pergunta de bairro (*"Prefere apartamento ou casa?"*). Pode ser a linha da pergunta de bairro acima, e não o modelo |
 
 ## Resolvidos
 
 | Cenário | Resolvido em | Como |
 |---|---|---|
+| No gpt-6-luna com `reasoning_effort`, a Azure recusa ferramentas em `/v1/chat/completions`: o laço de ações falhava, e nada era buscado nem agendado | 08/10 (016) | Perfil `azure_luna_none` (sem raciocínio), com a limitação escrita no próprio perfil; o perfil com `low` foi apagado |
+| No gpt-6-luna, a extração gastava o teto de 300 tokens só raciocinando e o lead recebia *"tive um problema técnico"* (13 de 15 extrações) | 08/10 (016) | Perfis de modelo (ADR 23), com tetos por perfil: 1024 na extração (antes 300). O luna roda sem raciocínio (`azure_luna_none`), porque com raciocínio a Azure recusa as ferramentas |
+| Na Azure, uma resposta curta que o modelo não encaixou (*"inicial"*, *"pelo menos 2"*) recebia a oferta de verificar com a equipe | 08/10 (015) | Resposta curta sem "?" é tentativa de resposta: se nada foi lido, o turno diz que não entendeu |
+| Na Azure, *"Boa, entendi que é até R$ 6.500"* foi descartada pelo guard de valores, e uma frase pronta saiu no lugar | 08/10 (016) | O streaming cortava o pedaço em *"R$ 6."* e o guard via *"R$ 6"*; o `drain` agora espera o resto de um número cortado |
+| Na Azure, respostas ao roteiro (*"2"*, *"uns 6500…"*) recebiam *"não consigo confirmar isso, quer que a equipe verifique?"* | 08/10 (015) | O gpt-5.4-nano devolve a resposta inteira como sobra; um turno que aprendeu algo não recebe a oferta à equipe |
+| Na Azure, *"alugar"*, *"só olhando"* e *"inicial"* não preenchiam a finalidade nem o prazo; dois desses viraram handoff | 08/10 (015) | A resposta a uma pergunta de opções fechadas é lida pelo código, quando o modelo não leu nada |
 | *"ok"*, *"beleza"* depois de uma oferta contavam como tentativa não entendida; duas viravam handoff | 07/10 (015) | Mensagem que é só agradecimento ou concordância não é tentativa de resposta (`readTurn`) |
 | A Sofia comentava os próprios limites sem ser perguntada (*"como assistente virtual eu só consigo…, tudo bem?"*) | 07/10 (015) | A lista do que ela pode diz: fale desses limites só quando a pessoa pedir algo fora dela |
 | Depois de marcar, *"vou levar meu cachorro"* recebeu horários de novo (o modelo ecoou o código do imóvel do card) | 07/10 (015) | Um código de imóvel só vale se está na mensagem; a frase recebe a oferta de verificar com a equipe |

@@ -82,13 +82,42 @@ caminho de escala em [`docs/arquitetura/visao-geral.md`](docs/arquitetura/visao-
 cp .env.example .env
 ```
 
-Preencha `PROVIDER_API_KEY` com a chave configurada no oMLX — é o único valor que
+Preencha `OMLX_API_KEY` com a chave configurada no oMLX — é o único valor que
 um clone limpo não consegue preencher sozinho. Todo o resto já vem com padrão
 funcional. Depois:
 
 ```bash
 docker compose up
 ```
+
+### Trocar de modelo (perfis)
+
+Cada modelo tem um perfil em [`config/models/`](config/models/): endpoint, modelo, cabeçalho de autenticação,
+raciocínio e tetos de saída. O `.env` só escolhe o perfil e guarda as chaves (ADR 23):
+
+| Perfil | Modelo |
+|---|---|
+| `omlx_gemma4_e4b` | e4b local — desenvolvimento e testes (padrão) |
+| `omlx_gemma4_e4b_thinking` | o mesmo, com o raciocínio do oMLX ligado |
+| `omlx_gemma4_12b` | 12B local — só para separar falha de modelo de falha de código |
+| `azure_nano` | gpt-5.4-nano na Azure OpenAI |
+| `azure_luna_none` | gpt-6-luna na Azure OpenAI, sem raciocínio (com raciocínio, a Azure recusa as ferramentas) |
+
+Para usar a Azure, preencha uma vez no `.env`:
+
+```bash
+AZURE_OPENAI_BASE_URL=https://<recurso>.openai.azure.com/openai/v1
+AZURE_OPENAI_API_KEY=<a chave do recurso>
+```
+
+A troca é uma linha, `MODEL_PROFILE=azure_nano` (ou outro perfil), e depois reinicie a aplicação e o worker:
+
+```bash
+docker compose up -d app worker
+```
+
+Para voltar ao modelo local, `MODEL_PROFILE=omlx_gemma4_e4b` e reinicie do mesmo jeito. O Langfuse mostra em cada
+turno qual perfil e qual modelo responderam. Os testes rodam sempre no e4b local, seja qual for o perfil do `.env`.
 
 | Serviço | Endereço |
 |---|---|

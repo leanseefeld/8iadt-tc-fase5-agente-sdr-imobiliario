@@ -62,6 +62,7 @@ import { plausiblyAnswers, recoverSlot } from "./recovery.ts";
 import { act } from "./act.ts";
 import { boundaryOffer, offerOutcome, readAct, readRemainder, type MessageAct } from "./decide/boundary.ts";
 import { NO_SCHEDULING, readSchedulingFacts, readTurn, type SchedulingFacts } from "./read.ts";
+import { readClosedAnswer } from "./lexicon.ts";
 import { chooseMeeting, matchAnswer } from "./meeting-change.ts";
 import { actionTools, type SearchOutcome } from "./tools/index.ts";
 import {
@@ -480,10 +481,10 @@ export function accountTurn(
  * here, and let `normalizeExtraction` and `mergeSlots` do the repair they always
  * did.
  *
- * The output cap is its own and small: an object of twelve fields needs a
- * fraction of what a reply needs, and the shared ceiling was paying for prose.
+ * The output cap is the profile's own `extraction` ceiling. It was a fixed 300
+ * until a reasoning model spent all 300 thinking (08/10/2026): the cap counts
+ * reasoning tokens too, so only the profile knows what it must be.
  */
-const EXTRACTION_MAX_TOKENS = 300;
 
 /** One retry, because the failure is detectable and the sampler is the cause. */
 const EXTRACTION_ATTEMPTS = 2;
@@ -562,7 +563,7 @@ async function extract(turn: LoadedTurn, pending: Askable | null): Promise<Extra
         ...modelTelemetry("model.extract"),
         maxRetries: config.MODEL_MAX_RETRIES,
         abortSignal: AbortSignal.timeout(config.MODEL_TIMEOUT_MS),
-        maxOutputTokens: Math.min(config.MODEL_MAX_OUTPUT_TOKENS, EXTRACTION_MAX_TOKENS),
+        maxOutputTokens: config.model.maxOutputTokens.extraction,
         system: extractionSystemPrompt(),
         messages: toModelMessages(turn, 4),
       });
@@ -631,7 +632,12 @@ interface PhrasedReply {
 export function drain(buffer: string, final: boolean): { ready: string[]; rest: string } {
   const sentences = splitSentences(buffer);
   if (sentences.length === 0) return { ready: [], rest: final ? "" : buffer };
-  if (final || /[.!?]["')\]]?\s*$/.test(buffer)) return { ready: sentences, rest: "" };
+  // A chunk that ends on a digit and a separator ("R$ 6.") may be cut inside a
+  // number ("R$ 6.500"): wait for the next chunk. Judged as a sentence, "R$ 6"
+  // is an amount nobody said, and the guard threw away a correct reply — Azure
+  // streams in chunks that end there (08/10/2026); oMLX rarely did.
+  const ended = /[.!?]["')\]]?\s*$/.test(buffer) && !/\d[.,]$/.test(buffer);
+  if (final || ended) return { ready: sentences, rest: "" };
   // The unfinished sentence is carried over verbatim, trailing space included.
   // `splitSentences` trims, and a stream chunk that happened to end on "de "
   // would otherwise have the next chunk's "2 quartos" glued straight onto it —
@@ -1251,6 +1257,18 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     if (call.name !== "updateSlots") continue;
     merged = mergeSlots(merged, normalizeExtraction(call.arguments), { consented });
   }
+  // The answer to a closed question, read from the words it offered, when the
+  // extraction left the slot empty ("alugar", "só olhando", "inicial"). Code
+  // reads it like it reads "a primeira": a closed vocabulary, never a guess.
+  if (pending !== null && (pending.slot === "intent" || pending.slot === "urgency")) {
+    const empty = pending.slot === "intent" ? merged.intent === "undefined" : merged.slots.urgency === null;
+    const answer = empty ? readClosedAnswer(pending.slot, leadText) : null;
+    if (answer !== null) {
+      const read = { [pending.slot]: answer };
+      toolCalls.push({ name: "readAnswer", arguments: read });
+      merged = mergeSlots(merged, read, { consented });
+    }
+  }
 
   // FR-011: one bounded structured call, and only for the slot that was pending.
   const stillPending =
@@ -1843,7 +1861,10 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       !search.searched &&
       !reading.askedAboutCriteria &&
       !askingAboutMeetings &&
-      revisedThisTurn.length === 0 &&
+      // A turn that learned something answered something: the model also hands
+      // back the answer itself as "what nothing captured" ("2", "uns 6500"),
+      // and an offer to check it with the team made no sense (08/10).
+      !learnedSomething &&
       offerTaken === null,
   });
   if (teamOffer !== null) scheduling = { ...scheduling, humanOffer: teamOffer };

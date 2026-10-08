@@ -1,29 +1,37 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
 import { getConfig } from "../core/config.ts";
+import type { ModelProfile } from "../core/model-profile.ts";
 
 /**
  * The only module in the repository that imports a provider SDK.
  *
- * Constitution VI: swapping oMLX for a hosted endpoint must be a change to
- * environment variables and nothing else. ADR 16 allows exactly three provider
- * variables plus the model id, and `PROVIDER_AUTH_HEADER` is the third — some
- * gateways carry the key under their own header instead of `Authorization`.
+ * Constitution VI: swapping models is a change to `MODEL_PROFILE` and nothing
+ * else. The profile (`config/models/*.yaml`, read by `core/model-profile.ts`)
+ * says where the endpoint is, which key and auth header it takes, the model id,
+ * whether and how hard it reasons, and its output ceilings.
  *
  * Nothing here reaches the network at import time; the model is built on first
  * use so that a process without a provider still boots.
  */
 
 /**
- * Extra fields on the request body, for the two things this provider's typed
- * options cannot express.
+ * The request body, as the endpoint wants it, for the things this provider's
+ * typed options cannot express.
  *
  * The OpenAI-compatible provider has a fixed set of `providerOptions` and no
  * generic "extra body fields" escape hatch, so the body is rewritten in the one
  * place the SDK does expose: its `fetch`.
  *
+ * - `max_tokens` becomes `max_completion_tokens`, OpenAI's current name for it.
+ *   Azure's gpt-5 family refuses `max_tokens` outright (spec 016, 07/10/2026),
+ *   and oMLX honours either name the same way — so one body serves both, and
+ *   the swap stays a change to `.env` (constitution VI).
  * - `chat_template_kwargs.enable_thinking` is how oMLX takes the thinking switch,
  *   verified 08/09/2026; the reply then carries `reasoning_content`.
+ * - `reasoning_effort` is OpenAI's: a profile's `reasoning_effort`, when set.
+ *   gpt-6-luna reasons by default and spent a 300-token ceiling on it alone
+ *   (08/10/2026); the provider's typed option for it is not on this provider.
  * - `response_format: { type: "json_object" }` is how the extraction asks for
  *   JSON. Not `json_schema`: oMLX accepts a schema and then fails to constrain
  *   to it — measured over 96 calls, the model answered with a bare
@@ -31,6 +39,11 @@ import { getConfig } from "../core/config.ts";
  *   temperature 0 it did so every single time. Plain JSON mode, with the field
  *   guide in the prompt, parsed 30 out of 30 with no wrong values.
  */
+export function rewriteBody(body: Record<string, unknown>, extra: Record<string, unknown>): Record<string, unknown> {
+  const { max_tokens: ceiling, ...rest } = body;
+  return { ...rest, ...(ceiling === undefined ? {} : { max_completion_tokens: ceiling }), ...extra };
+}
+
 function rewritingFetch(extra: Record<string, unknown>) {
   return async function fetchWithExtras(
     input: Parameters<typeof fetch>[0],
@@ -48,19 +61,26 @@ function rewritingFetch(extra: Record<string, unknown>) {
       return fetch(input, init);
     }
 
-    return fetch(input, { ...init, body: JSON.stringify({ ...body, ...extra }) });
+    return fetch(input, { ...init, body: JSON.stringify(rewriteBody(body as Record<string, unknown>, extra)) });
+  };
+}
+
+/** The body fields a profile adds to every request: its thinking switch and reasoning effort. */
+export function profileExtras(model: ModelProfile): Record<string, unknown> {
+  return {
+    ...(model.thinking ? { chat_template_kwargs: { enable_thinking: true } } : {}),
+    ...(model.reasoningEffort === undefined ? {} : { reasoning_effort: model.reasoningEffort }),
   };
 }
 
 function buildProvider(extra: Record<string, unknown>) {
-  const config = getConfig();
-  const header = config.PROVIDER_AUTH_HEADER;
-  const thinking = config.MODEL_THINKING ? { chat_template_kwargs: { enable_thinking: true } } : {};
-  const rewrites = { ...thinking, ...extra };
+  const { model } = getConfig();
+  const header = model.authHeader;
+  const rewrites = { ...profileExtras(model), ...extra };
 
   return createOpenAICompatible({
     name: "sdr-provider",
-    baseURL: config.PROVIDER_BASE_URL,
+    baseURL: model.baseUrl,
     // Off by default in this provider, and without it `generateObject` sends no
     // `response_format` at all and every structured call fails to parse.
     // `agent/recovery.ts`'s one-field schema is what still relies on it.
@@ -76,9 +96,9 @@ function buildProvider(extra: Record<string, unknown>) {
     // `apiKey` means `Authorization: Bearer`. When a header name is configured
     // the key goes there instead, and only there — never both.
     ...(header === undefined
-      ? { apiKey: config.PROVIDER_API_KEY }
-      : { headers: { [header]: config.PROVIDER_API_KEY } }),
-    ...(Object.keys(rewrites).length === 0 ? {} : { fetch: rewritingFetch(rewrites) }),
+      ? { apiKey: model.apiKey }
+      : { headers: { [header]: model.apiKey } }),
+    fetch: rewritingFetch(rewrites),
   });
 }
 
@@ -106,7 +126,7 @@ export function getModel(modelId?: string): LanguageModel {
   const stand = overridden();
   if (stand !== undefined) return stand;
   provider ??= buildProvider({});
-  return provider.chatModel(modelId ?? getConfig().MODEL_ID);
+  return provider.chatModel(modelId ?? getConfig().model.modelId);
 }
 
 /**
@@ -117,7 +137,7 @@ export function getJsonModel(): LanguageModel {
   const stand = overridden();
   if (stand !== undefined) return stand;
   jsonProvider ??= buildProvider({ response_format: { type: "json_object" } });
-  return jsonProvider.chatModel(getConfig().MODEL_ID);
+  return jsonProvider.chatModel(getConfig().model.modelId);
 }
 
 export interface ModelCall {
@@ -133,15 +153,15 @@ export interface ModelCall {
  *
  *   streamText({ ...modelCall(), messages, tools })
  *
- * A bounded timeout and a bounded retry count are FR-014, and the output
- * ceiling includes reasoning tokens — which is why `MODEL_MAX_OUTPUT_TOKENS`
- * defaults higher when `MODEL_THINKING` is on.
+ * A bounded timeout and a bounded retry count are FR-014. The output ceiling is
+ * the profile's, reasoning tokens included — which is why a profile that
+ * reasons carries larger ones.
  */
 export function modelCall(): ModelCall {
   const config = getConfig();
   return {
     model: getModel(),
-    maxOutputTokens: config.MODEL_MAX_OUTPUT_TOKENS,
+    maxOutputTokens: config.model.maxOutputTokens.reply,
     maxRetries: config.MODEL_MAX_RETRIES,
     timeout: config.MODEL_TIMEOUT_MS,
   };

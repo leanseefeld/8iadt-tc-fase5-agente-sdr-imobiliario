@@ -1,4 +1,7 @@
 import test from "node:test";
+import { randomUUID } from "node:crypto";
+import { collectingSink, runTurn } from "../../../src/agent/orchestrator.ts";
+import { recordLeadMessage } from "../../../src/services/conversation.ts";
 import { closePool } from "../../../src/db/client.ts";
 import { closeNotifier } from "../../../src/core/notifier.ts";
 import { assumeConversation, returnToAgent, sendBrokerReply } from "../../../src/services/handoff.ts";
@@ -11,7 +14,7 @@ import { bookDirect, nextLocal, qualifiedLead, query, type Lead } from "./meetin
  * limit from a code path:
  *
  *   npm run test:integration -- tests/integration/support/repro-29-09.ts
- *   docker compose exec -e MODEL_ID=gemma-4-12B-it-OptiQ-4bit app npm run test:integration -- tests/integration/support/repro-29-09.ts
+ *   docker compose exec -e TEST_MODEL_PROFILE=omlx_gemma4_12b app npm run test:integration -- tests/integration/support/repro-29-09.ts
  *
  * It asserts nothing; the transcript is the output.
  */
@@ -35,7 +38,7 @@ const only = (process.env.REPLAY_ONLY ?? "").split(",").filter((n) => n !== "");
 
 async function replay(name: string, lead: Lead, lines: string[]): Promise<void> {
   if (only.length > 0 && !only.includes(name.split(" ")[0])) return;
-  const out = [`\n=== ${name} (${process.env.MODEL_ID ?? "?"})`];
+  const out = [`\n=== ${name} (${process.env.MODEL_PROFILE ?? "?"})`];
   for (const text of lines) {
     let turn;
     try {
@@ -176,7 +179,7 @@ test("replay 29/09", async (t) => {
       [created.conversationId, since],
     );
     const tag: Record<string, string> = { lead: "L", agent: "A", broker: "Ana" };
-    console.log([`\n=== ${name} (${process.env.MODEL_ID ?? "?"})`, ...rows.map((row) => `  ${tag[row.role as string] ?? row.role}: ${row.content}`)].join("\n"));
+    console.log([`\n=== ${name} (${process.env.MODEL_PROFILE ?? "?"})`, ...rows.map((row) => `  ${tag[row.role as string] ?? row.role}: ${row.content}`)].join("\n"));
   };
   await brokerSteps("10 · 015: offer taken, Ana answers and hands back", await booked(), [
     ["lead", "o condomínio aceita cachorro?"],
@@ -195,5 +198,60 @@ test("replay 29/09", async (t) => {
     ["broker", "Enviei no seu e-mail. Qualquer coisa, me chama!"],
     ["return", ""],
     ["lead", "recebi, obrigada! quem vai estar na visita mesmo?"],
+  ]);
+
+  // 13–14 · The developer's Azure tests of 08/10, from a first message: a
+  // brand-new lead, no script filled, nothing shown.
+  const fresh = async (name: string, lines: string[]) => {
+    if (only.length > 0 && !only.includes(name.split(" ")[0])) return;
+    const sessionId = `test-fresh-${randomUUID()}`;
+    const out = [`\n=== ${name} (${process.env.MODEL_PROFILE ?? "?"})`];
+    let conversationId: string | null = null;
+    for (const text of lines) {
+      const inbound = await recordLeadMessage({
+        agencySlug: "demo",
+        externalId: sessionId,
+        clientMessageId: randomUUID(),
+        text,
+        consent: true,
+      });
+      if (!("conversationId" in inbound)) throw new Error(JSON.stringify(inbound));
+      conversationId = inbound.conversationId;
+      const turn = await runTurn({ conversationId, sink: collectingSink() });
+      const [row] = await query(
+        "select metadata from messages where conversation_id = $1 and role = 'agent' order by created_at desc limit 1",
+        [conversationId],
+      );
+      const calls = ((row?.metadata as Record<string, unknown> | undefined)?.toolCalls ?? []) as { name: string; arguments: Record<string, unknown> }[];
+      const facts = Object.entries(calls[0]?.arguments ?? {})
+        .filter(([key, value]) => value !== false && value !== null && !["optOut", "attemptedAnswer"].includes(key))
+        .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
+        .join(" ");
+      const actions = calls.slice(1).map((call) => call.name).join(",");
+      out.push(`  L: ${text}`, `  A: ${turn.status === "committed" ? turn.reply : `(sem turno: ${turn.status})`}`, `     [${facts}]${actions ? ` → ${actions}` : ""}`);
+      if (turn.status !== "committed") break;
+    }
+    console.log(out.join("\n"));
+    if (conversationId !== null) {
+      for (const table of ["events", "appointments", "messages", "followup_jobs"]) {
+        await query(`delete from ${table} where conversation_id = $1`, [conversationId]);
+      }
+      await query("delete from conversations where id = $1", [conversationId]);
+      await query("delete from leads where external_id = $1", [sessionId]);
+    }
+  };
+  await fresh("13 · 08/10 Azure: 6.5, then 6.5k, then 2", [
+    "opa queria alugar um apê de até uns 6.5",
+    "quis dizer 6.5k",
+    "2",
+  ]);
+  await fresh("14 · 08/10 Azure: alugar, 2, 6500, Moema, só olhando, inicial", [
+    "alugar",
+    "pelo menos 2",
+    "uns 6500, já contando condomínio e taxas",
+    "não precisa",
+    "queria algo em moema",
+    "só olhando",
+    "inicial",
   ]);
 });

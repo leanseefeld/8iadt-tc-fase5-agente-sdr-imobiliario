@@ -15,19 +15,22 @@ import { getConfig } from "../src/core/config.ts";
  */
 
 const config = getConfig();
+const { model } = config;
 
-const base = config.PROVIDER_BASE_URL.endsWith("/")
-  ? config.PROVIDER_BASE_URL
-  : `${config.PROVIDER_BASE_URL}/`;
+const base = model.baseUrl.endsWith("/") ? model.baseUrl : `${model.baseUrl}/`;
 const target = new URL("models", base);
 
 console.log(`provider: ${target.href}`);
-console.log(`model:    ${config.MODEL_ID}`);
+console.log(`profile:  ${model.name}`);
+console.log(`model:    ${model.modelId}`);
 
 let response: Response;
 try {
   response = await fetch(target, {
-    headers: { authorization: `Bearer ${config.PROVIDER_API_KEY}` },
+    headers:
+      model.authHeader === undefined
+        ? { authorization: `Bearer ${model.apiKey}` }
+        : { [model.authHeader]: model.apiKey },
     signal: AbortSignal.timeout(config.MODEL_TIMEOUT_MS),
   });
 } catch (error) {
@@ -45,8 +48,8 @@ try {
 if (response.status === 401 || response.status === 403) {
   console.error(
     `\nAUTHENTICATION FAILED — the provider answered with ${response.status}.\n` +
-      "The route works; the credential does not. Set PROVIDER_API_KEY in .env to the\n" +
-      "key configured in the provider.",
+      "The route works; the credential does not. Set the key the profile names in\n" +
+      "its api_key_env (config/models/" + model.name + ".yaml) in .env.",
   );
   process.exit(3);
 }
@@ -64,9 +67,9 @@ console.log(`\nREACHABLE — ${models.length} model(s) available.`);
 for (const id of models.slice(0, 10)) console.log(`  ${id}`);
 if (models.length > 10) console.log(`  … and ${models.length - 10} more`);
 
-if (models.length > 0 && !models.includes(config.MODEL_ID)) {
+if (models.length > 0 && !models.includes(model.modelId)) {
   console.warn(
-    `\nNote: MODEL_ID "${config.MODEL_ID}" is not in the list above. The route is\n` +
+    `\nNote: model "${model.modelId}" is not in the list above. The route is\n` +
       "fine; the configured model id may not be.",
   );
 }

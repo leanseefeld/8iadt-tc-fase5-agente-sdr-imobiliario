@@ -218,7 +218,7 @@ function safely(what: string, action: () => void): void {
 /** Contract §2 wants the provider host, never the full URL with its key. */
 function providerHost(): string {
   try {
-    return new URL(getConfig().PROVIDER_BASE_URL).host;
+    return new URL(getConfig().model.baseUrl).host;
   } catch {
     return "unknown";
   }
@@ -536,6 +536,7 @@ function aiSdkIntegration(tracing: LangfuseTracing): Telemetry {
               service: state().service,
               "model.id": event.modelId,
               "provider.base_url": providerHost(),
+              "model.profile": getConfig().model.name,
             },
           },
           { asType: "generation" },

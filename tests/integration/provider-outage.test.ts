@@ -15,12 +15,13 @@ import { randomUUID } from "node:crypto";
  */
 const integration = process.env.INTEGRATION === "1";
 
-// Port 9 is the discard protocol: a connection there fails immediately rather
-// than hanging, which keeps the test honest about the fallback and quick.
+// A profile whose endpoint is port 9, the discard protocol: a connection there
+// fails immediately rather than hanging, which keeps the test honest and quick.
 const DEAD_PROVIDER = "http://127.0.0.1:9/v1";
 
 test("a dead provider still answers the lead (SC-009)", { skip: !integration }, async (t) => {
-  process.env.PROVIDER_BASE_URL = DEAD_PROVIDER;
+  process.env.MODEL_PROFILES_DIR = "tests/fixtures/models";
+  process.env.MODEL_PROFILE = "dead_provider";
 
   const { closePool, getPool } = await import("../../src/db/client.ts");
   const { collectingSink, runTurn } = await import("../../src/agent/orchestrator.ts");
@@ -28,7 +29,7 @@ test("a dead provider still answers the lead (SC-009)", { skip: !integration }, 
   const { EXTRACTION_FAILURE_REPLY } = await import("../../src/agent/prompts/fallback.ts");
   const { getConfig } = await import("../../src/core/config.ts");
 
-  assert.equal(getConfig().PROVIDER_BASE_URL, DEAD_PROVIDER, "the dead provider did not take");
+  assert.equal(getConfig().model.baseUrl, DEAD_PROVIDER, "the dead provider did not take");
 
   const query = async (sql: string, params: unknown[] = []) =>
     (await getPool().query(sql, params)).rows as Array<Record<string, unknown>>;

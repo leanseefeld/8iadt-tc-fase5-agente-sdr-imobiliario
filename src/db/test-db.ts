@@ -25,11 +25,18 @@ import pg from "pg";
  * database (`docker compose --profile test up -d app-test`). The run **fails**
  * when it isn't answering, so the HTTP half can't be skipped by forgetting to
  * start it. `SKIP_HTTP_TESTS=1` skips it on purpose, and says so.
+ *
+ * **The model.** Tests run on the local e4b whatever `.env` names (ADR 16): a
+ * hosted model's budget is limited, and the demo's `.env` may point at one.
+ * `TEST_MODEL_PROFILE` picks another profile for one run, on purpose:
+ *
+ *   docker compose exec -e TEST_MODEL_PROFILE=omlx_gemma4_12b app npm run test:integration -- <file>
  */
 
 const DEFAULT_FILES = ["tests/integration/*.test.ts", "tests/*.test.ts"];
 const TEST_APP_URL = process.env.TEST_APP_URL ?? "http://app-test:3200";
 const TEST_APP_WAIT_MS = 120_000;
+const TEST_MODEL_PROFILE = process.env.TEST_MODEL_PROFILE ?? "omlx_gemma4_e4b";
 
 /**
  * Waits for the test app to answer on this database, then warms the routes the
@@ -95,6 +102,7 @@ async function main(): Promise<number> {
     DATABASE_URL: url,
     INTEGRATION: "1",
     TEST_DATABASE: "1",
+    MODEL_PROFILE: TEST_MODEL_PROFILE,
     // A test run's traces are filed apart from the demo's in Langfuse.
     LANGFUSE_TRACING_ENVIRONMENT: "test",
     // Every test process traces its model calls to Langfuse
@@ -106,6 +114,7 @@ async function main(): Promise<number> {
   if (run("node", ["src/db/migrate.ts"], env) !== 0) return 1;
   if (run("node", ["src/db/seed/index.ts"], env) !== 0) return 1;
   console.log(`test database ${name}: migrated and seeded`);
+  console.log(`model profile: ${TEST_MODEL_PROFILE}`);
 
   if (process.env.SKIP_HTTP_TESTS === "1") {
     console.log("SKIP_HTTP_TESTS=1: the HTTP tests are skipped on purpose");

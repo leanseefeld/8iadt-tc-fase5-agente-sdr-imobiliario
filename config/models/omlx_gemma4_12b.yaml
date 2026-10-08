@@ -1,0 +1,7 @@
+# Gemma 4 12B no oMLX local — só para decidir se uma falha é do modelo ou do código.
+base_url: http://host.docker.internal:8990/v1
+api_key_env: OMLX_API_KEY
+model: gemma-4-12B-it-OptiQ-4bit
+max_output_tokens:
+  reply: 600
+  extraction: 1024

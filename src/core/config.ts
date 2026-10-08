@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { loadModelProfile, PROFILE_NAME, type ModelProfile } from "./model-profile.ts";
 
 /**
  * The single configuration contract, mirrored by `.env.example` and
@@ -39,21 +40,17 @@ const millisecondRange = z
   .refine(({ minMs, maxMs }) => minMs <= maxMs, "the low end must not exceed the high end");
 
 export const configSchema = z.object({
-  // Model provider
-  PROVIDER_BASE_URL: z.url(),
-  PROVIDER_API_KEY: z.string().min(1),
-  MODEL_ID: z.string().min(1),
+  // Model — the profile in config/models/ (constitution VI, ADR 23). Every
+  // other model setting lives in that file; `.env` names it and holds secrets.
+  MODEL_PROFILE: z.string().regex(PROFILE_NAME, "a profile name in config/models/, like omlx_gemma4_e4b"),
+  // Where profiles live. Only a test points it elsewhere (a dead provider).
+  MODEL_PROFILES_DIR: z.string().min(1).default("config/models"),
+  // The keys profiles read, by name. A profile may read no key not declared here.
+  OMLX_API_KEY: z.string().min(1).optional(),
+  AZURE_OPENAI_BASE_URL: z.url().optional(),
+  AZURE_OPENAI_API_KEY: z.string().min(1).optional(),
   MODEL_TIMEOUT_MS: positiveInt.default(30_000),
   MODEL_MAX_RETRIES: z.coerce.number().int().min(0).default(2),
-  // Header name carrying the key when the endpoint refuses
-  // `Authorization: Bearer`. Absent means Bearer — the third and last provider
-  // variable ADR 16 permits.
-  PROVIDER_AUTH_HEADER: z.string().min(1).optional(),
-  MODEL_THINKING: flag,
-  // Defaulted after parsing, because the default depends on MODEL_THINKING:
-  // reasoning tokens count against this ceiling, and 600 leaves nothing for
-  // the answer once the model thinks first.
-  MODEL_MAX_OUTPUT_TOKENS: positiveInt.optional(),
   MODEL_HISTORY_WINDOW: positiveInt.default(12),
 
   // Conversation
@@ -132,23 +129,14 @@ export const configSchema = z.object({
   SCHEDULING_PREFERRED_TIMES: timeList.default(["10:00", "14:00", "16:30", "09:00", "11:00"]),
 });
 
-/**
- * `MODEL_MAX_OUTPUT_TOKENS` is optional in the schema and always present after
- * `loadConfig`, which is what this intersection says.
- */
-export type Config = z.infer<typeof configSchema> & { MODEL_MAX_OUTPUT_TOKENS: number };
-
-/** contracts/config.md: 600, or 2000 once reasoning tokens share the budget. */
-const OUTPUT_TOKENS_DEFAULT = 600;
-const OUTPUT_TOKENS_DEFAULT_THINKING = 2_000;
+/** The parsed environment, plus the model profile it names, resolved. */
+export type Config = z.infer<typeof configSchema> & { model: ModelProfile };
 
 export const configKeys: string[] = Object.keys(configSchema.shape);
 
 /** Keys with no default — absence stops the process. */
 export const REQUIRED_KEYS = [
-  "PROVIDER_BASE_URL",
-  "PROVIDER_API_KEY",
-  "MODEL_ID",
+  "MODEL_PROFILE",
   "DATABASE_URL",
   "AUTH_SECRET",
 ] as const;
@@ -169,12 +157,14 @@ function withoutBlanks(env: Record<string, string | undefined>): Record<string, 
 export function loadConfig(env: Record<string, string | undefined>): Config {
   const parsed = configSchema.safeParse(withoutBlanks(env));
   if (parsed.success) {
-    return {
-      ...parsed.data,
-      MODEL_MAX_OUTPUT_TOKENS:
-        parsed.data.MODEL_MAX_OUTPUT_TOKENS ??
-        (parsed.data.MODEL_THINKING ? OUTPUT_TOKENS_DEFAULT_THINKING : OUTPUT_TOKENS_DEFAULT),
-    };
+    const { MODEL_PROFILE, MODEL_PROFILES_DIR } = parsed.data;
+    let model: ModelProfile;
+    try {
+      model = loadModelProfile(MODEL_PROFILE, MODEL_PROFILES_DIR, withoutBlanks(env), configKeys);
+    } catch (error) {
+      throw new Error(`Invalid environment configuration:\n  ${(error as Error).message}`);
+    }
+    return { ...parsed.data, model };
   }
 
   const problems = parsed.error.issues

@@ -481,10 +481,10 @@ export function accountTurn(
  * here, and let `normalizeExtraction` and `mergeSlots` do the repair they always
  * did.
  *
- * The output cap is its own and small: an object of twelve fields needs a
- * fraction of what a reply needs, and the shared ceiling was paying for prose.
+ * The output cap is the profile's own `extraction` ceiling. It was a fixed 300
+ * until a reasoning model spent all 300 thinking (08/10/2026): the cap counts
+ * reasoning tokens too, so only the profile knows what it must be.
  */
-const EXTRACTION_MAX_TOKENS = 300;
 
 /** One retry, because the failure is detectable and the sampler is the cause. */
 const EXTRACTION_ATTEMPTS = 2;
@@ -563,7 +563,7 @@ async function extract(turn: LoadedTurn, pending: Askable | null): Promise<Extra
         ...modelTelemetry("model.extract"),
         maxRetries: config.MODEL_MAX_RETRIES,
         abortSignal: AbortSignal.timeout(config.MODEL_TIMEOUT_MS),
-        maxOutputTokens: Math.min(config.MODEL_MAX_OUTPUT_TOKENS, EXTRACTION_MAX_TOKENS),
+        maxOutputTokens: config.model.maxOutputTokens.extraction,
         system: extractionSystemPrompt(),
         messages: toModelMessages(turn, 4),
       });

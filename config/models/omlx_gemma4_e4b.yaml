@@ -1,0 +1,7 @@
+# Gemma 4 e4b no oMLX local — o modelo de desenvolvimento e dos testes (ADR 16).
+base_url: http://host.docker.internal:8990/v1
+api_key_env: OMLX_API_KEY
+model: gemma-4-e4b-it-OptiQ-4bit
+max_output_tokens:
+  reply: 600
+  extraction: 1024

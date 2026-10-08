@@ -82,7 +82,7 @@ caminho de escala em [`docs/arquitetura/visao-geral.md`](docs/arquitetura/visao-
 cp .env.example .env
 ```
 
-Preencha `PROVIDER_API_KEY` com a chave configurada no oMLX — é o único valor que
+Preencha `OMLX_API_KEY` com a chave configurada no oMLX — é o único valor que
 um clone limpo não consegue preencher sozinho. Todo o resto já vem com padrão
 funcional. Depois:
 
@@ -90,26 +90,34 @@ funcional. Depois:
 docker compose up
 ```
 
-### Trocar para o modelo hospedado (Azure OpenAI)
+### Trocar de modelo (perfis)
 
-O desenvolvimento e os testes usam o modelo local; a demonstração usa o Azure OpenAI. A troca é só no `.env`,
-sem mudar código (ADR 16, spec 016):
+Cada modelo tem um perfil em [`config/models/`](config/models/): endpoint, modelo, cabeçalho de autenticação,
+raciocínio e tetos de saída. O `.env` só escolhe o perfil e guarda as chaves (ADR 23):
+
+| Perfil | Modelo |
+|---|---|
+| `omlx_gemma4_e4b` | e4b local — desenvolvimento e testes (padrão) |
+| `omlx_gemma4_e4b_thinking` | o mesmo, com o raciocínio do oMLX ligado |
+| `omlx_gemma4_12b` | 12B local — só para separar falha de modelo de falha de código |
+| `azure_nano` | gpt-5.4-nano na Azure OpenAI |
+| `azure_luna_low` | gpt-6-luna na Azure OpenAI, raciocínio baixo |
+
+Para usar a Azure, preencha uma vez no `.env`:
 
 ```bash
-PROVIDER_BASE_URL=https://<recurso>.openai.azure.com/openai/v1
-PROVIDER_AUTH_HEADER=api-key
-PROVIDER_API_KEY=<a chave do recurso>
-MODEL_ID=gpt-5.4-nano
+AZURE_OPENAI_BASE_URL=https://<recurso>.openai.azure.com/openai/v1
+AZURE_OPENAI_API_KEY=<a chave do recurso>
 ```
 
-Depois, reinicie a aplicação e o worker:
+A troca é uma linha, `MODEL_PROFILE=azure_nano` (ou outro perfil), e depois reinicie a aplicação e o worker:
 
 ```bash
 docker compose up -d app worker
 ```
 
-Para voltar ao modelo local, restaure os valores do `.env.example` e reinicie do mesmo jeito. O Langfuse mostra
-em cada turno qual modelo respondeu.
+Para voltar ao modelo local, `MODEL_PROFILE=omlx_gemma4_e4b` e reinicie do mesmo jeito. O Langfuse mostra em cada
+turno qual perfil e qual modelo responderam. Os testes rodam sempre no e4b local, seja qual for o perfil do `.env`.
 
 | Serviço | Endereço |
 |---|---|

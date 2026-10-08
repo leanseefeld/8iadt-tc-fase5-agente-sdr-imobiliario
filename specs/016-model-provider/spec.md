@@ -34,12 +34,27 @@ refuses `max_tokens` ("use `max_completion_tokens`"), and the OpenAI-compatible 
 
   Then restart the app and the worker. The smoke call found nothing else the deployment needs: JSON mode works,
   and the model spends no reasoning tokens by default, so the output ceilings stay as they are.
+
+  *Superseded on 08/10 by the profiles below: these four values became `MODEL_PROFILE=azure_nano` plus the two
+  Azure secrets.*
+- **A profile per model (amended 08/10/2026, developer; constitution VI 1.5.0, ADR 23).** gpt-6-luna reasons by
+  default and spent the extraction's whole 300-token ceiling on it in 13 of 15 calls. What a model needs —
+  reasoning effort, ceilings — is a property of the model, so it lives with the model:
+  - one YAML file per model in `config/models/` (`omlx_gemma4_e4b`, `omlx_gemma4_e4b_thinking`,
+    `omlx_gemma4_12b`, `azure_nano`, `azure_luna_low`), validated strictly by `core/model-profile.ts`;
+  - `.env` holds `MODEL_PROFILE` and the secrets: `OMLX_API_KEY`, `AZURE_OPENAI_BASE_URL`,
+    `AZURE_OPENAI_API_KEY`. A profile names the keys it reads, and may read only keys the schema declares;
+  - `reasoning_effort` is sent through the same body rewrite, and stops at `low` (developer: above that,
+    change the model);
+  - two ceilings per profile, `reply` and `extraction`. The extraction's rises from 300 to 1024 for a model that
+    does not reason (developer: 300 was too low), and to 4096 for one that does: `max_completion_tokens` counts
+    reasoning and answer together, and the API offers no separate cap;
+  - tests run on `omlx_gemma4_e4b` whatever `.env` names; `TEST_MODEL_PROFILE` picks another, on purpose.
 - **Docs, in Portuguese:** the README says how to switch to Azure and back, and `.env.example` shows the Azure
   values next to the local ones.
 
 ## What it doesn't cover
 
-- Provider profiles in YAML (backlog 17).
 - A different model per call.
 - Fallback between providers (FR-014's written reply covers a dead one).
 - Cost tracking.
@@ -57,11 +72,19 @@ refuses `max_tokens` ("use `max_completion_tokens`"), and the OpenAI-compatible 
    - the extraction, act and reply calls reach oMLX with `max_completion_tokens`.
 2. **Azure, happy path.** With the four values above, one conversation turn gets a reply from `gpt-5.4-nano`,
    and its Langfuse trace shows that model.
-3. **Back to local.** Restore the local values and restart; the next turn runs on e4b.
+3. **Back to local.** `MODEL_PROFILE=omlx_gemma4_e4b` and restart; the next turn runs on e4b.
+4. **A profile that reasons.** Conversations 13 and 14 of the replay on `azure_luna_low` (08/10): every turn is
+   answered, none with "tive um problema técnico"; extraction used 215–542 tokens, 43–371 of them reasoning.
+5. **A broken profile stops the boot.** An unknown profile, a `reasoning_effort` above `low`, an unknown field, a
+   key the profile names that is unset or undeclared: the process refuses to start and names the problem.
 
 ## Open questions
 
-None. Answered on 07/10:
+- **gpt-6-luna refuses tools with a reasoning effort** on `/v1/chat/completions` ("use /v1/responses or set
+  reasoning_effort to 'none'"), so on `azure_luna_low` the action loop fails and nothing is searched or booked.
+  The responses API would need another provider package, against principle VI. Waiting on the developer.
+
+Answered on 07/10:
 - the deployment is `gpt-5.4-nano`;
 - the developer validates it.
 

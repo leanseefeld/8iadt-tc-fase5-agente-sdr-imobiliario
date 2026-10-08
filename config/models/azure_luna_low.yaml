@@ -1,0 +1,12 @@
+# gpt-6-luna na Azure OpenAI, com raciocínio baixo. Raciocina por padrão, e o
+# raciocínio sai do mesmo teto de saída: em 08/10/2026, com teto 300, gastou
+# os 300 raciocinando em 13 de 15 extrações. A API não separa os dois tetos,
+# então o teto é 4096 nas duas chamadas.
+base_url_env: AZURE_OPENAI_BASE_URL
+api_key_env: AZURE_OPENAI_API_KEY
+auth_header: api-key
+model: gpt-6-luna
+reasoning_effort: low
+max_output_tokens:
+  reply: 4096
+  extraction: 4096

@@ -1,0 +1,9 @@
+# gpt-5.4-nano na Azure OpenAI (spec 016). Não raciocina por padrão: medido em
+# 07/10/2026, zero tokens de raciocínio.
+base_url_env: AZURE_OPENAI_BASE_URL
+api_key_env: AZURE_OPENAI_API_KEY
+auth_header: api-key
+model: gpt-5.4-nano
+max_output_tokens:
+  reply: 600
+  extraction: 1024

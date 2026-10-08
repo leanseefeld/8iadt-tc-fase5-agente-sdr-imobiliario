@@ -16,9 +16,10 @@ default is filled in silently. No value is read from anywhere but the environmen
 
 | Key | Type | Required | Default | Read by | Notes |
 |---|---|---|---|---|---|
-| `PROVIDER_BASE_URL` | URL | yes | — | doctor, item 4 | Container route to the OpenAI-compatible endpoint |
-| `PROVIDER_API_KEY` | string, non-empty | yes | — | doctor, item 4 | The one value a clean clone cannot supply itself |
-| `MODEL_ID` | string | yes | — | item 4 | Model id or alias as the provider exposes it |
+| `MODEL_PROFILE` | profile name | yes | — | doctor, item 4 | A YAML profile in `config/models/` — endpoint, model id, auth header, reasoning, output ceilings (spec 016, ADR 23; replaces `PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_ID`) |
+| `MODEL_PROFILES_DIR` | path | no | `config/models` | item 4 | Only a test points it elsewhere |
+| `OMLX_API_KEY` | string | for `omlx_*` | — | the `omlx_*` profiles | The one value a clean clone cannot supply itself |
+| `AZURE_OPENAI_BASE_URL`, `AZURE_OPENAI_API_KEY` | URL, string | for `azure_*` | — | the `azure_*` profiles | |
 | `MODEL_TIMEOUT_MS` | integer > 0 | no | `30000` | item 4 | |
 | `MODEL_MAX_RETRIES` | integer ≥ 0 | no | `2` | item 4 | |
 | `DATABASE_URL` | Postgres URL | yes | — | `db/client.ts` | Host is the Compose service name |

@@ -1,0 +1,10 @@
+# O mesmo e4b com o raciocínio do oMLX ligado (chat_template_kwargs.enable_thinking).
+# Uns oito segundos a mais por turno; o raciocínio sai do mesmo teto de saída,
+# por isso os tetos maiores.
+base_url: http://host.docker.internal:8990/v1
+api_key_env: OMLX_API_KEY
+model: gemma-4-e4b-it-OptiQ-4bit
+thinking: true
+max_output_tokens:
+  reply: 2000
+  extraction: 4096

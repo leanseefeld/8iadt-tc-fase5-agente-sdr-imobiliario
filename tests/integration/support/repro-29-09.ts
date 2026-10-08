@@ -14,7 +14,7 @@ import { bookDirect, nextLocal, qualifiedLead, query, type Lead } from "./meetin
  * limit from a code path:
  *
  *   npm run test:integration -- tests/integration/support/repro-29-09.ts
- *   docker compose exec -e MODEL_ID=gemma-4-12B-it-OptiQ-4bit app npm run test:integration -- tests/integration/support/repro-29-09.ts
+ *   docker compose exec -e TEST_MODEL_PROFILE=omlx_gemma4_12b app npm run test:integration -- tests/integration/support/repro-29-09.ts
  *
  * It asserts nothing; the transcript is the output.
  */
@@ -38,7 +38,7 @@ const only = (process.env.REPLAY_ONLY ?? "").split(",").filter((n) => n !== "");
 
 async function replay(name: string, lead: Lead, lines: string[]): Promise<void> {
   if (only.length > 0 && !only.includes(name.split(" ")[0])) return;
-  const out = [`\n=== ${name} (${process.env.MODEL_ID ?? "?"})`];
+  const out = [`\n=== ${name} (${process.env.MODEL_PROFILE ?? "?"})`];
   for (const text of lines) {
     let turn;
     try {
@@ -179,7 +179,7 @@ test("replay 29/09", async (t) => {
       [created.conversationId, since],
     );
     const tag: Record<string, string> = { lead: "L", agent: "A", broker: "Ana" };
-    console.log([`\n=== ${name} (${process.env.MODEL_ID ?? "?"})`, ...rows.map((row) => `  ${tag[row.role as string] ?? row.role}: ${row.content}`)].join("\n"));
+    console.log([`\n=== ${name} (${process.env.MODEL_PROFILE ?? "?"})`, ...rows.map((row) => `  ${tag[row.role as string] ?? row.role}: ${row.content}`)].join("\n"));
   };
   await brokerSteps("10 · 015: offer taken, Ana answers and hands back", await booked(), [
     ["lead", "o condomínio aceita cachorro?"],
@@ -205,7 +205,7 @@ test("replay 29/09", async (t) => {
   const fresh = async (name: string, lines: string[]) => {
     if (only.length > 0 && !only.includes(name.split(" ")[0])) return;
     const sessionId = `test-fresh-${randomUUID()}`;
-    const out = [`\n=== ${name} (${process.env.MODEL_ID ?? "?"})`];
+    const out = [`\n=== ${name} (${process.env.MODEL_PROFILE ?? "?"})`];
     let conversationId: string | null = null;
     for (const text of lines) {
       const inbound = await recordLeadMessage({

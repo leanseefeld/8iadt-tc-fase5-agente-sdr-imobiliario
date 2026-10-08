@@ -36,3 +36,12 @@ test("the three glued replies from the replay come out spaced", () => {
 test("a repeated phrase earlier in the buffer does not confuse the carry-over", () => {
   assert.equal(stream(["Oi. Oi ", "de novo."]), "Oi. Oi de novo.");
 });
+
+test("a chunk cut inside a number waits for the rest of it (Azure, 08/10)", () => {
+  assert.equal(
+    stream(["Boa, entendi que é até R$ 6.", "500 🙂 Quantos quartos você precisa?"]),
+    "Boa, entendi que é até R$ 6.500 🙂 Quantos quartos você precisa?",
+  );
+  assert.equal(stream(["Até R$ 1,", "2 milhão. Certo?"]), "Até R$ 1,2 milhão. Certo?");
+  assert.equal(stream(["Te mostrei 3.", " Quer ver mais?"]), "Te mostrei 3. Quer ver mais?");
+});

@@ -336,9 +336,10 @@ export function lastOfferedType(turn: LoadedTurn): "viewing" | "call" | null {
  * a lead who talks about something else has moved on, and nothing is carried
  * over from further back.
  */
-export function pendingChange(
-  turn: LoadedTurn,
-): Pick<SchedulingRecord, "pendingCancel" | "pendingChoice" | "rebook" | "closing" | "humanOffer"> {
+/** What the last reply left waiting for the lead's answer. */
+export type PendingChange = Pick<SchedulingRecord, "pendingCancel" | "pendingChoice" | "rebook" | "closing" | "humanOffer">;
+
+export function pendingChange(turn: LoadedTurn): PendingChange {
   const last = [...turn.history].reverse().find((message) => message.role === "agent");
   const metadata = last?.metadata ?? {};
   const choice = metadata.pendingChoice as { change?: unknown; ids?: unknown } | undefined;

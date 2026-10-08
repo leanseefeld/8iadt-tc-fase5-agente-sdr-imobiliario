@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { drain } from "../src/agent/orchestrator.ts";
+import { drain } from "../src/agent/turn/phrase.ts";
 
 /**
  * A space that ends one stream chunk must survive into the next. Found by

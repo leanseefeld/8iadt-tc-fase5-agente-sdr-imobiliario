@@ -100,7 +100,7 @@ test("FR-033: no search yet, or an intent that never searches, is null", () => {
 // Found by the 27/09 replay (conversations f911e8cd…, 37e9aa71…)
 // ---------------------------------------------------------------------------
 
-import { shouldRecover } from "../src/agent/orchestrator.ts";
+import { shouldRecover } from "../src/agent/turn/accounting.ts";
 import { reconfirmationSentence } from "../src/agent/prompts/reconfirm.ts";
 
 test("US1 scenario 6: a message that attempted nothing is never mined for a slot", () => {
@@ -126,8 +126,9 @@ test("US4: the reconfirmation names what changed before what it puts in doubt", 
 // Spec 006 FR-005g — one reply per turn, and the decline as a prefix (SC-017)
 // ---------------------------------------------------------------------------
 
-import { accountTurn, meetingTarget, replyKind, type ReplyKind } from "../src/agent/orchestrator.ts";
-import { readSchedulingFacts } from "../src/agent/read.ts";
+import { accountTurn, replyKind, type ReplyKind } from "../src/agent/turn/accounting.ts";
+import { meetingTarget } from "../src/agent/turn/offer-times.ts";
+import { readSchedulingFacts } from "../src/agent/turn/read.ts";
 import {
   confirmationSentence,
   optionsSentence,

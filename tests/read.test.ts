@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { NO_SCHEDULING, readTurn, type ModelReading, type ReadingContext } from "../src/agent/read.ts";
+import { NO_SCHEDULING, readTurn, type ModelReading, type ReadingContext } from "../src/agent/turn/read.ts";
 
 /**
  * The turn's first node: the model's reading, settled by what code reads from

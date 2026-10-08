@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { accountTurn } from "../src/agent/orchestrator.ts";
+import { accountTurn } from "../src/agent/turn/accounting.ts";
 import { reconfirmationSentence } from "../src/agent/prompts/reconfirm.ts";
 import {
   DEPENDANTS,

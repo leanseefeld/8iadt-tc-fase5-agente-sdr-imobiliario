@@ -22,11 +22,14 @@ verdade é uma decisão de produto ainda não tomada.
 | O e4b às vezes não devolve a sobra de *"o condomínio aceita cachorro?"*, e a oferta de verificar com a equipe não acontece | Replay de 30/09, conversa 10, 1 em 3 (e4b) | Modelo | Quando a sobra vem, a oferta sai certa (conversas 7 e 10 nas outras rodadas) |
 | A pergunta de bairro *"Tem algum bairro ou região específica em mente, ou aceita sugestões?"* é de ou-isto-ou-aquilo; um *"não"* (ou *"sim"*) não preenche nada | Teste do desenvolvedor, 30/09 08:39 (e4b) | **Produto** (texto da pergunta) · 004 | Com o bairro vazio, o roteiro não completa e a busca não roda |
 | Duas respostas curtas não entendidas seguidas (*"sim"*, *"quero ver imóveis"*) viram handoff | Teste do desenvolvedor, 30/09 08:40 (e4b) | 004 FR-027 · decisão pendente 6 | Mesma família do *"tanto faz"* (011) |
+| Cenário 1 (compra, avaliado) no e4b: às vezes a busca não roda e nenhum card aparece (SC-004) | Eval de 07/10, 1 em 3 (e4b) | Modelo · **config do provedor** | A demo vai rodar num modelo hospedado; no e4b é oscilação conhecida desde 29/09 |
 
 ## Resolvidos
 
 | Cenário | Resolvido em | Como |
 |---|---|---|
+| *"ok"*, *"beleza"* depois de uma oferta contavam como tentativa não entendida; duas viravam handoff | 07/10 (015) | Mensagem que é só agradecimento ou concordância não é tentativa de resposta (`readTurn`) |
+| A Sofia comentava os próprios limites sem ser perguntada (*"como assistente virtual eu só consigo…, tudo bem?"*) | 07/10 (015) | A lista do que ela pode diz: fale desses limites só quando a pessoa pedir algo fora dela |
 | Depois de marcar, *"vou levar meu cachorro"* recebeu horários de novo (o modelo ecoou o código do imóvel do card) | 07/10 (015) | Um código de imóvel só vale se está na mensagem; a frase recebe a oferta de verificar com a equipe |
 | *"Posso levar meu cachorro?"* virou recusa e, somada a um *"não entendi"*, handoff | 07/10 (015) | Uma recusa só vale com palavra da lista fechada (carona, reembolso, gênero…) |
 | *"Já marcamos, não?"* recebeu *"Ainda não consigo te ajudar com isso"* | 07/10 (015) | Lido pelo código como pergunta sobre o que está marcado; respondido a partir do estado |

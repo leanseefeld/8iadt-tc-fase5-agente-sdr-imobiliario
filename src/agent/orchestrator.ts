@@ -1281,7 +1281,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     stillPending,
     pendingIsIntent: pending?.slot === "intent",
     saidSomething: extraction.saidSomething,
-    attemptedAnswer: extraction.attemptedAnswer,
+    attemptedAnswer: reading.attemptedAnswer,
     leadText,
   });
 
@@ -1508,7 +1508,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   const accounted = accountTurn(turn.conversation.fallbackStreak, {
     learnedSomething,
     extractionFailed: false,
-    attemptedAnswer: extraction.attemptedAnswer,
+    attemptedAnswer: reading.attemptedAnswer,
     droppedCount: extraction.dropped.length,
     steering,
     confirming: (lastTurnWasReconfirmation(turn) && !learnedSomething) || justReturned,

@@ -103,6 +103,7 @@ export function readSchedulingFacts(object: Record<string, unknown>): Scheduling
 
 /** What the model read, before code settles it. */
 export interface ModelReading {
+  attemptedAnswer: boolean;
   leadAskedForHuman: boolean;
   optedOut: boolean;
   askedAboutCriteria: boolean;
@@ -112,6 +113,8 @@ export interface ModelReading {
 }
 
 export interface Reading {
+  /** The lead tried to convey something (an attempt nothing uses is a misunderstanding). */
+  attemptedAnswer: boolean;
   leadAskedForHuman: boolean;
   optedOut: boolean;
   askedAboutCriteria: boolean;
@@ -171,6 +174,9 @@ export function readTurn(model: ModelReading, context: ReadingContext): Reading 
   };
   const remainder = moreProperties ? null : model.remainder;
   return {
+    // "ok", "beleza" try to say nothing: e4b sometimes called them attempts, and
+    // two of them after an offer added up to a handoff (eval, 07/10).
+    attemptedAnswer: model.attemptedAnswer && !bare,
     leadAskedForHuman: model.leadAskedForHuman && !bare,
     optedOut: model.optedOut && !bare,
     askedAboutCriteria: model.askedAboutCriteria || moreProperties,

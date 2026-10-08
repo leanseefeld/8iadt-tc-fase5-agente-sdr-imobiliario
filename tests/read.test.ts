@@ -12,6 +12,7 @@ const TZ = "America/Sao_Paulo";
 const NOW = new Date("2026-09-30T00:00:00Z");
 
 const nothing: ModelReading = {
+  attemptedAnswer: false,
   leadAskedForHuman: false,
   optedOut: false,
   askedAboutCriteria: false,
@@ -108,4 +109,10 @@ test("a fact the model claims must be in the words (the echoes of 07/10)", () =>
   for (const text of ["podemos marcar uma nova?", "quero marcar uma visita", "obrigado"]) {
     assert.equal(read(text).facts.askedAboutMeetings, false, text);
   }
+});
+
+test("an acknowledgement attempts nothing, so it is never a misunderstanding", () => {
+  assert.equal(read("beleza", { attemptedAnswer: true }).attemptedAnswer, false);
+  assert.equal(read("ok", { attemptedAnswer: true }).attemptedAnswer, false);
+  assert.equal(read("700 mil", { attemptedAnswer: true }).attemptedAnswer, true);
 });

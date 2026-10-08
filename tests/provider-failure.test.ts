@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { accountTurn } from "../src/agent/orchestrator.ts";
+import { accountTurn } from "../src/agent/turn/accounting.ts";
 import { EXTRACTION_FAILURE_REPLY } from "../src/agent/prompts/fallback.ts";
 import { handoffDecision } from "../src/domain/handoff.ts";
 

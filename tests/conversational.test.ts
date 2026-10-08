@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { accountTurn } from "../src/agent/orchestrator.ts";
+import { accountTurn } from "../src/agent/turn/accounting.ts";
 import { handoffDecision } from "../src/domain/handoff.ts";
 import { EMPTY_SLOTS, mergeSlots, type Intent, type QualificationState, type Slots } from "../src/domain/slots.ts";
 

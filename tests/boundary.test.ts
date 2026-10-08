@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { boundaryOffer, offerOutcome, readAct, readRemainder, settleAct } from "../src/agent/decide/boundary.ts";
+import { boundaryOffer, offerOutcome, readAct, readRemainder, settleAct } from "../src/agent/turn/boundary.ts";
 import { asksForMoreProperties, readAcknowledgement, readClosedAnswer, readOptionPick } from "../src/agent/lexicon.ts";
 
 /** Spec 015 — what the agent can't resolve, decided in code. */

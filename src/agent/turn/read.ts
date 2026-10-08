@@ -1,6 +1,6 @@
-import type { Preference, Weekday } from "../domain/scheduling.ts";
-import type { PropertyRef } from "../services/conversation.ts";
-import { settleAct, type MessageAct } from "./decide/boundary.ts";
+import type { Preference, Weekday } from "../../domain/scheduling.ts";
+import type { PropertyRef } from "../../services/conversation.ts";
+import { settleAct, type MessageAct } from "./boundary.ts";
 import {
   asksAboutBooking,
   asksForMoreProperties,
@@ -12,9 +12,9 @@ import {
   readAcknowledgement,
   readOptionPick,
   readYesNo,
-} from "./lexicon.ts";
-import { parseWhen } from "./meeting-change.ts";
-import { isTrue } from "./tools/update-slots.ts";
+} from "../lexicon.ts";
+import { parseWhen } from "../meeting-change.ts";
+import { isTrue } from "../tools/update-slots.ts";
 
 /**
  * The turn's first node: what the lead's message says, settled.

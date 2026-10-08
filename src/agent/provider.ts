@@ -15,13 +15,17 @@ import { getConfig } from "../core/config.ts";
  */
 
 /**
- * Extra fields on the request body, for the two things this provider's typed
- * options cannot express.
+ * The request body, as the endpoint wants it, for the things this provider's
+ * typed options cannot express.
  *
  * The OpenAI-compatible provider has a fixed set of `providerOptions` and no
  * generic "extra body fields" escape hatch, so the body is rewritten in the one
  * place the SDK does expose: its `fetch`.
  *
+ * - `max_tokens` becomes `max_completion_tokens`, OpenAI's current name for it.
+ *   Azure's gpt-5 family refuses `max_tokens` outright (spec 016, 07/10/2026),
+ *   and oMLX honours either name the same way — so one body serves both, and
+ *   the swap stays a change to `.env` (constitution VI).
  * - `chat_template_kwargs.enable_thinking` is how oMLX takes the thinking switch,
  *   verified 08/09/2026; the reply then carries `reasoning_content`.
  * - `response_format: { type: "json_object" }` is how the extraction asks for
@@ -31,6 +35,11 @@ import { getConfig } from "../core/config.ts";
  *   temperature 0 it did so every single time. Plain JSON mode, with the field
  *   guide in the prompt, parsed 30 out of 30 with no wrong values.
  */
+export function rewriteBody(body: Record<string, unknown>, extra: Record<string, unknown>): Record<string, unknown> {
+  const { max_tokens: ceiling, ...rest } = body;
+  return { ...rest, ...(ceiling === undefined ? {} : { max_completion_tokens: ceiling }), ...extra };
+}
+
 function rewritingFetch(extra: Record<string, unknown>) {
   return async function fetchWithExtras(
     input: Parameters<typeof fetch>[0],
@@ -48,7 +57,7 @@ function rewritingFetch(extra: Record<string, unknown>) {
       return fetch(input, init);
     }
 
-    return fetch(input, { ...init, body: JSON.stringify({ ...body, ...extra }) });
+    return fetch(input, { ...init, body: JSON.stringify(rewriteBody(body as Record<string, unknown>, extra)) });
   };
 }
 
@@ -78,7 +87,7 @@ function buildProvider(extra: Record<string, unknown>) {
     ...(header === undefined
       ? { apiKey: config.PROVIDER_API_KEY }
       : { headers: { [header]: config.PROVIDER_API_KEY } }),
-    ...(Object.keys(rewrites).length === 0 ? {} : { fetch: rewritingFetch(rewrites) }),
+    fetch: rewritingFetch(rewrites),
   });
 }
 

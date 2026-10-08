@@ -90,6 +90,27 @@ funcional. Depois:
 docker compose up
 ```
 
+### Trocar para o modelo hospedado (Azure OpenAI)
+
+O desenvolvimento e os testes usam o modelo local; a demonstração usa o Azure OpenAI. A troca é só no `.env`,
+sem mudar código (ADR 16, spec 016):
+
+```bash
+PROVIDER_BASE_URL=https://<recurso>.openai.azure.com/openai/v1
+PROVIDER_AUTH_HEADER=api-key
+PROVIDER_API_KEY=<a chave do recurso>
+MODEL_ID=gpt-5.4-nano
+```
+
+Depois, reinicie a aplicação e o worker:
+
+```bash
+docker compose up -d app worker
+```
+
+Para voltar ao modelo local, restaure os valores do `.env.example` e reinicie do mesmo jeito. O Langfuse mostra
+em cada turno qual modelo respondeu.
+
 | Serviço | Endereço |
 |---|---|
 | Aplicação | http://localhost:3100 |

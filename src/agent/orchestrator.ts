@@ -56,14 +56,19 @@ import {
   refusalReply,
 } from "./prompts/fallback.ts";
 import { reconfirmationSentence } from "./prompts/reconfirm.ts";
-import { REPLY_SYSTEM_PROMPT, extractionSystemPrompt, turnBriefing } from "./prompts/system.ts";
+import { REPLY_SYSTEM_PROMPT, chooseTask, extractionSystemPrompt, turnBriefing, type TurnPromptInput } from "./prompts/system.ts";
 import { getJsonModel, modelCall } from "./provider.ts";
 import { plausiblyAnswers, recoverSlot } from "./recovery.ts";
 import { act } from "./act.ts";
-import { chooseMeeting, matchAnswer, parseWhen } from "./meeting-change.ts";
+import { boundaryOffer, offerOutcome, readAct, readRemainder, type MessageAct } from "./decide/boundary.ts";
+import { NO_SCHEDULING, readSchedulingFacts, readTurn, type SchedulingFacts } from "./read.ts";
+import { chooseMeeting, matchAnswer } from "./meeting-change.ts";
 import { actionTools, type SearchOutcome } from "./tools/index.ts";
 import {
   closingSentence,
+  describeMeeting,
+  BOUNDARY_FALLBACK_SENTENCE,
+  BOUNDARY_OFFER_QUESTION,
   MEETING_LIMIT_SENTENCE,
   NO_MEETING_TO_CHANGE_SENTENCE,
   cancelQuestion,
@@ -345,78 +350,11 @@ interface Extraction {
   scheduling: SchedulingFacts;
   /** Closed-set slots the evidence gate refused — understood, but not trusted. */
   dropped: SlotKey[];
+  /** Spec 015: what the message does, as the model read it. */
+  act: MessageAct | null;
+  /** Spec 015: the part of the message no other field captured. */
+  remainder: string | null;
   failed: boolean;
-}
-
-interface SchedulingFacts {
-  declinedOffer: boolean;
-  askedForTimes: boolean;
-  pickedTime: boolean;
-  preference: Preference;
-  propertyRef: PropertyRef | null;
-  askedWhoAttends: boolean;
-  /**
-   * Spec 009: cancel or move a meeting already confirmed. `either` is the 4-bit
-   * model writing `true` instead of which one; the turn decides from the text.
-   */
-  changeRequest: "cancel" | "reschedule" | "either" | null;
-  /** Spec 009: a yes or a no to the confirmation question just asked. */
-  answer: "yes" | "no" | null;
-  /** FR-004e/f: the lead asked for a visit or for a phone conversation. */
-  meetingKind: "visit" | "call" | null;
-  /** FR-005h: a meeting in a format the agency doesn't offer (office, video, …). */
-  unsupportedMeeting: boolean;
-  /** FR-005i: something about a visit the agency doesn't do (a ride, choosing the broker by a trait, …). */
-  outOfScopeRequest: boolean;
-}
-
-const NO_SCHEDULING: SchedulingFacts = {
-  declinedOffer: false,
-  askedForTimes: false,
-  pickedTime: false,
-  preference: {},
-  propertyRef: null,
-  askedWhoAttends: false,
-  changeRequest: null,
-  answer: null,
-  meetingKind: null,
-  unsupportedMeeting: false,
-  outOfScopeRequest: false,
-};
-
-const WEEKDAYS: readonly Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-
-/** Read spec 006's facts off the extraction's JSON. Anything malformed is simply absent. */
-export function readSchedulingFacts(object: Record<string, unknown>): SchedulingFacts {
-  const preference: Preference = {};
-  if (typeof object.preferredWeekday === "string" && (WEEKDAYS as readonly string[]).includes(object.preferredWeekday)) {
-    preference.weekday = object.preferredWeekday as Weekday;
-  }
-  if (object.preferredPeriod === "morning" || object.preferredPeriod === "afternoon") {
-    preference.period = object.preferredPeriod;
-  }
-  const code = typeof object.propertyCode === "string" ? object.propertyCode.trim() : "";
-  const position = Number(object.propertyPosition);
-  const propertyRef: PropertyRef | null =
-    code !== "" ? { code } : Number.isInteger(position) && position > 0 ? { position } : null;
-  return {
-    declinedOffer: isTrue(object.declinedOffer),
-    askedForTimes: isTrue(object.askedForTimes),
-    pickedTime: isTrue(object.pickedTime),
-    preference,
-    propertyRef,
-    askedWhoAttends: isTrue(object.askedWhoAttends),
-    changeRequest:
-      object.changeRequest === "cancel" || object.changeRequest === "reschedule"
-        ? object.changeRequest
-        : isTrue(object.changeRequest)
-          ? "either"
-          : null,
-    answer: object.answer === "yes" || object.answer === "no" ? object.answer : null,
-    meetingKind: object.meetingKind === "visit" || object.meetingKind === "call" ? object.meetingKind : null,
-    unsupportedMeeting: isTrue(object.unsupportedMeeting),
-    outOfScopeRequest: isTrue(object.outOfScopeRequest),
-  };
 }
 
 const NOTHING: Extraction = {
@@ -428,6 +366,8 @@ const NOTHING: Extraction = {
   askedAboutCriteria: false,
   scheduling: NO_SCHEDULING,
   dropped: [],
+  act: null,
+  remainder: null,
   failed: true,
 };
 
@@ -576,9 +516,24 @@ function withoutInventedSlots(
   extracted: SlotExtraction,
   leadText: string,
   pending: Askable | null,
+  currentIntent: Intent,
 ): { slots: SlotExtraction; dropped: SlotKey[] } {
   const kept: Record<string, unknown> = { ...extracted };
   const dropped: SlotKey[] = [];
+
+  // The purpose, once known, changes only when the message says so. A first
+  // identification needs no word of its own (a search with no purpose is a
+  // purchase), but "isso" is not a change from renting to buying.
+  if (
+    kept.intent !== undefined &&
+    currentIntent !== "undefined" &&
+    kept.intent !== currentIntent &&
+    pending !== "intent" &&
+    !hasEvidence("intent", leadText)
+  ) {
+    log.info({ from: currentIntent, to: kept.intent }, "dropped an intent change the lead never said");
+    delete kept.intent;
+  }
 
   for (const slot of ["urgency", "investorProfile", "returnExpectation"] as const) {
     if (kept[slot] === undefined) continue;
@@ -618,7 +573,7 @@ async function extract(turn: LoadedTurn, pending: Askable | null): Promise<Extra
         continue;
       }
 
-      const gated = withoutInventedSlots(normalizeExtraction(object), unansweredText(turn), pending);
+      const gated = withoutInventedSlots(normalizeExtraction(object), unansweredText(turn), pending, turn.lead.intent);
       const extracted = gated.slots;
       const askedForHuman = isTrue(object.askedForHuman);
       const optedOut = isTrue(object.optOut);
@@ -643,6 +598,8 @@ async function extract(turn: LoadedTurn, pending: Askable | null): Promise<Extra
         askedAboutCriteria,
         scheduling,
         dropped: gated.dropped,
+        act: readAct(object.messageAct),
+        remainder: readRemainder(object.uncovered),
         failed: false,
       };
     } catch (error) {
@@ -708,6 +665,18 @@ interface PhraseInput {
    * compete with the reply; it precedes whatever wins.
    */
   prefix?: string;
+  /**
+   * The turn's task forbids a question (nothing to ask, a close). A sentence
+   * that asks one anyway is dropped, not sent: the model was told and asked
+   * regardless ("Você gostaria de marcar…?" over options already on screen).
+   */
+  noQuestions?: boolean;
+  /**
+   * Spec 015: a question the reply must end up asking. When the phrased reply
+   * doesn't ask anything, it goes out after it — an offer the lead can't see is
+   * no offer, and a "sim" to nothing would still hand the conversation off.
+   */
+  mustAsk?: string;
   sink: ReplySink;
   startedAt: number;
 }
@@ -757,6 +726,10 @@ async function phrase(input: PhraseInput): Promise<PhrasedReply> {
       const { ready, rest } = drain(buffer, false);
       buffer = rest;
       for (const sentence of ready) {
+        if (input.noQuestions === true && sentence.includes("?")) {
+          log.info("dropped a question the turn's task forbids");
+          continue;
+        }
         const verdict = guard.check(sentence);
         if (!verdict.ok) {
           rejectedBy = verdict.guard;
@@ -769,6 +742,7 @@ async function phrase(input: PhraseInput): Promise<PhrasedReply> {
 
     if (rejectedBy === null && !failed) {
       for (const sentence of drain(buffer, true).ready) {
+        if (input.noQuestions === true && sentence.includes("?")) continue;
         const verdict = guard.check(sentence);
         if (!verdict.ok) {
           rejectedBy = verdict.guard;
@@ -796,6 +770,9 @@ async function phrase(input: PhraseInput): Promise<PhrasedReply> {
   // to move, so the chosen question goes out on its own.
   if (rejectedBy !== null && input.question !== null && !chunks.some((c) => c.includes("?"))) {
     await emit(input.question.question);
+  }
+  if (input.mustAsk !== undefined && !chunks.some((c) => c.includes("?"))) {
+    await emit(input.mustAsk);
   }
 
   return { chunks, guard: rejectedBy, failed };
@@ -1257,6 +1234,17 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     });
   }
 
+  // 1b · settle what the message says: code readings win (agent/read.ts).
+  // Everything below decides from `reading`, not from the raw text.
+  const waiting = pendingChange(turn);
+  const reading = readTurn(extraction, {
+    text: leadText,
+    now: new Date(),
+    timeZone: getConfig().FOLLOWUP_TIMEZONE,
+    optionsOnTable: lastOfferedOptions(turn).length > 0,
+    yesNoPending: waiting.pendingCancel !== undefined || waiting.rebook !== undefined || waiting.humanOffer !== undefined,
+  });
+
   // 2 · merge, in code
   let merged = mergeSlots(before, {}, { consented });
   for (const call of extraction.calls) {
@@ -1293,7 +1281,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     stillPending,
     pendingIsIntent: pending?.slot === "intent",
     saidSomething: extraction.saidSomething,
-    attemptedAnswer: extraction.attemptedAnswer,
+    attemptedAnswer: reading.attemptedAnswer,
     leadText,
   });
 
@@ -1311,7 +1299,7 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   // phrased at by a model and not asked one more question. The sentence is
   // written down (`OPT_OUT_REPLY`), the flag and the closed conversation are
   // `commitTurn`'s, and the turn ends here.
-  if (extraction.optedOut) {
+  if (reading.optedOut) {
     return finish({
       turn,
       context,
@@ -1356,15 +1344,9 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       (message) => message.role === "agent" && message.createdAt > lastHandoverEarly.at,
     );
 
-  // Spec 006: what the lead did about a meeting. Each fact is the model's
-  // reading; what it does is decided here.
-  // The day and period are also read by code from the text — weekday names,
-  // manhã/tarde, hoje/amanhã — and what it finds wins over the model's guess.
-  const when = parseWhen(leadText, new Date(), getConfig().FOLLOWUP_TIMEZONE);
-  const facts: SchedulingFacts = {
-    ...extraction.scheduling,
-    preference: { ...extraction.scheduling.preference, ...when },
-  };
+  // Spec 006: what the lead did about a meeting, as `readTurn` settled it.
+  // What each fact does is decided here.
+  const facts: SchedulingFacts = reading.facts;
   // Open **now** — a row still `proposed` — not "an offer was ever made".
   const proposalOpen = turn.proposalOpen;
   // FR-005a: a decline counts only while a proposal is open — and a message
@@ -1378,28 +1360,18 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   // Spec 009: the lead's meetings still to come, and what the last reply left
   // pending — a cancel to confirm, a choice between meetings, a rebook offer.
   const booked = await listUpcomingMeetings(turn.lead.id);
-  const waiting = pendingChange(turn);
   const reschedulingId = lastReschedulingId(turn);
   // A pick among options offered to move a confirmed meeting.
   const movingPick =
     facts.pickedTime && !proposalOpen && reschedulingId !== null && booked.some((meeting) => meeting.id === reschedulingId);
-  // "Quer mesmo cancelar?" asked: the yes or no is read from the words when the
-  // extraction didn't say — "não, deixa" came back as a decline and a cancel.
-  const answer: "yes" | "no" | null =
-    facts.answer ??
-    (waiting.pendingCancel !== undefined || waiting.rebook !== undefined
-      ? /^\s*(n[ãa]o|melhor n[ãa]o|deixa)(?!\p{L})/iu.test(leadText)
-        ? "no"
-        : /^\s*(sim|pode|isso|quero|claro|confirmo)(?!\p{L})/iu.test(leadText)
-          ? "yes"
-          : null
-      : null);
+  // A yes or no to what the last reply asked ("quer mesmo cancelar?").
+  const answer = reading.answer;
   const confirmingCancel = waiting.pendingCancel !== undefined && answer !== null;
-  const namesADay = facts.preference.weekday !== undefined || facts.preference.period !== undefined;
+  const namesADay = reading.namesADay;
   // With times on the table, "nada na quarta?" is about **them** — unless the
   // message says to move or cancel something ("remarcar a visita").
-  const explicitChange = /remarc|mudar|trocar|passar|cancel|desmarc/iu.test(leadText);
-  const cancelWords = /cancel|desmarc|n[ãa]o vou (mais )?poder|n[ãa]o posso mais/iu.test(leadText);
+  const explicitChange = reading.changeVerb;
+  const cancelWords = reading.cancelVerb;
   const aboutTheOffer = proposalOpen && !picking && !declining && namesADay && !explicitChange;
   // A "no" with nothing open to decline, from a lead with a meeting booked, is
   // a cancel — when it names the day or says so ("não vou mais poder na sexta"),
@@ -1413,7 +1385,13 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
         ? "cancel"
         : "reschedule"
       : (facts.changeRequest ??
-        (explicitChange && !proposalOpen && booked.length > 0 ? (cancelWords ? "cancel" : "reschedule") : null));
+        // "Não vou mais poder na terça" is a cancel even with nothing still to
+        // come (it already passed): the answer is that nothing is booked.
+        ((explicitChange || cancelWords) && !proposalOpen && (booked.length > 0 || cancelWords)
+          ? cancelWords
+            ? "cancel"
+            : "reschedule"
+          : null));
   const asked: "cancel" | "reschedule" | null =
     (aboutTheOffer ? null : requested) ??
     (facts.declinedOffer && !proposalOpen && booked.length > 0 && !confirmingCancel && (namesADay || explicitChange)
@@ -1487,6 +1465,10 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     !askingWhoAttends &&
     !changing &&
     (facts.askedForTimes || facts.meetingKind !== null || interest !== null || aboutTheOffer || newInstead);
+  // Spec 015 (decided 30/09): "a visita continua de pé?" is answered from what
+  // is booked — the state carries it — never with "ainda não consigo".
+  const askingAboutMeetings =
+    facts.askedAboutMeetings && !refused && !picking && !changing && !askingWhoAttends && !wantsOffer;
   // FR-005b: "complete" is shouldProposeMeeting's own check, without its
   // offer-outstanding clause.
   const scriptComplete = shouldProposeMeeting(intent, slots, score, false) !== null;
@@ -1494,8 +1476,30 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   const atLimit = wantsOffer && scriptComplete && booked.length >= MAX_UPCOMING_MEETINGS;
   // A "no" with nothing open to decline was still understood: it is not a
   // misunderstanding to count towards a handoff, only nothing to act on.
+  // Spec 015: what the message does, with a bare "obrigado" read by code; the
+  // lead's answer to an offer to check something with the team; and a request,
+  // question or piece of information left over, which is understood — it may
+  // get the offer — and never a misunderstanding.
+  const messageAct = reading.act;
+  // A message that does something the turn already handles — picks a time,
+  // changes a meeting, asks for times — is that, not a yes to the offer: "pode
+  // ser a primeira opção" after an offer was read as a yes and handed off.
+  const offerTaken =
+    waiting.humanOffer !== undefined && !confirmingCancel && !picking && !movingPick && !changing && !wantsOffer
+      ? offerOutcome(answer)
+      : null;
+  const openRemainder =
+    reading.remainder !== null && (messageAct === "request" || messageAct === "question" || messageAct === "inform");
   const acted =
-    !refused && (facts.declinedOffer || picking || askingWhoAttends || changing || (wantsOffer && !atLimit));
+    !refused &&
+    (facts.declinedOffer ||
+      picking ||
+      askingWhoAttends ||
+      changing ||
+      (wantsOffer && !atLimit) ||
+      offerTaken !== null ||
+      askingAboutMeetings ||
+      openRemainder);
 
   // A misunderstanding is an attempt the system could not use (FR-003a). A
   // reaction, a greeting or a failed extraction holds the streak instead of
@@ -1504,11 +1508,11 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   const accounted = accountTurn(turn.conversation.fallbackStreak, {
     learnedSomething,
     extractionFailed: false,
-    attemptedAnswer: extraction.attemptedAnswer,
+    attemptedAnswer: reading.attemptedAnswer,
     droppedCount: extraction.dropped.length,
     steering,
     confirming: (lastTurnWasReconfirmation(turn) && !learnedSomething) || justReturned,
-    askedAboutCriteria: extraction.askedAboutCriteria,
+    askedAboutCriteria: reading.askedAboutCriteria,
     acted,
     refused,
   });
@@ -1520,9 +1524,10 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
   // The explicit ask still wins on any other message (spec 004 FR-027).
   // A request refused as outside the domain ("uma corretora LGBT pra me
   // atender") names a person too; it is still not a request to leave the agent.
-  const aboutTheMeeting = declining || picking || wantsOffer || askingWhoAttends || refused || changing;
+  const aboutTheMeeting =
+    declining || picking || wantsOffer || askingWhoAttends || askingAboutMeetings || refused || changing;
   const handoffReason = handoffDecision({
-    leadAskedForHuman: extraction.leadAskedForHuman && !aboutTheMeeting,
+    leadAskedForHuman: (reading.leadAskedForHuman && !aboutTheMeeting) || offerTaken === "handoff",
     fallbackStreak,
   });
 
@@ -1557,6 +1562,10 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
       written = refusingFormat && !callBooked ? `${CANNOT_ACT_REPLY} ${PHONE_OFFER_SENTENCE}` : CANNOT_ACT_REPLY;
     } else if (askingWhoAttends) {
       written = ATTENDEE_UNKNOWN_SENTENCE;
+      // The sentence offers to call a broker: a yes hands off, like 015's offer.
+      scheduling = { ...scheduling, humanOffer: { about: "quem vai atender" } };
+    } else if (askingAboutMeetings && booked.length === 0) {
+      written = NO_MEETING_TO_CHANGE_SENTENCE;
     } else if (changing && !movingPick) {
       const change = await decideChange({
         turn,
@@ -1820,10 +1829,34 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     }
   }
 
-  // Spec 009, decided 29/09: nothing pending, nothing asked — close, in code.
-  // A message that asks something ("?"), teaches a criterion, or wants an
-  // action is not a goodbye, and gets the normal turn.
+  // Spec 015: a request, question or piece of information left over that
+  // nothing in this turn answers gets the offer to have someone from the team
+  // check it. Anything that answers the lead itself — a code-written reply, a
+  // search, the criteria, a revision — wins, and the offer waits for a turn
+  // that has nothing better to say (plan 015).
+  const teamOffer = boundaryOffer({
+    act: messageAct,
+    remainder: reading.remainder,
+    phrasedTurn:
+      written === null &&
+      !searchDue &&
+      !search.searched &&
+      !reading.askedAboutCriteria &&
+      !askingAboutMeetings &&
+      revisedThisTurn.length === 0 &&
+      offerTaken === null,
+  });
+  if (teamOffer !== null) scheduling = { ...scheduling, humanOffer: teamOffer };
+
+  // Spec 009, decided 29/09: nothing pending, nothing asked — close. A message
+  // that asks something ("?"), teaches a criterion, wants an action or leaves
+  // something for the team is not a goodbye, and gets the normal turn. Spec 015:
+  // a "no" to the offer closes too, and the close is the code's summary of what
+  // is booked followed by the model's courtesy.
   const nothingPending =
+    teamOffer === null &&
+    messageAct !== "request" &&
+    messageAct !== "question" &&
     written === null &&
     question === null &&
     !searchDue &&
@@ -1831,15 +1864,23 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     !wantsOffer &&
     !changing &&
     !askingWhoAttends &&
-    !extraction.askedAboutCriteria &&
+    !askingAboutMeetings &&
+    !reading.askedAboutCriteria &&
     filledThisTurn.length === 0 &&
     revisedThisTurn.length === 0 &&
     !leadText.includes("?") &&
-    (booked.length > 0 || offerOutstanding(turn));
-  if (nothingPending) {
-    written = closingSentence(booked, leadText, timezone, waiting.closing === true);
-    scheduling = { ...scheduling, closing: true };
-  }
+    (booked.length > 0 || offerOutstanding(turn) || offerTaken === "close");
+  // Decided 30/09: the model restates what is booked and says goodbye; the
+  // code hands it the facts. A second close in a row is the courtesy alone.
+  const closing = nothingPending
+    ? {
+        summary:
+          waiting.closing === true || booked.length === 0
+            ? null
+            : booked.map((meeting) => describeMeeting(meeting, timezone)).join("; "),
+      }
+    : null;
+  if (closing !== null) scheduling = { ...scheduling, closing: true };
 
   if (written !== null) {
     return finish({
@@ -1941,32 +1982,44 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
     });
   }
 
+  // The offer and the close are the turn's whole job: the script's question
+  // waits for the next turn (one question per message).
+  const asking = teamOffer !== null || closing !== null ? null : question;
+  const briefingInput: TurnPromptInput = {
+    intent,
+    slots,
+    filled: [...filledThisTurn, ...revisedThisTurn],
+    question: asking,
+    consented,
+    ...(teamOffer === null ? {} : { boundary: teamOffer }),
+    ...(closing === null ? {} : { closing }),
+    ...(booked.length === 0 ? {} : { booked: booked.map((meeting) => describeMeeting(meeting, timezone)) }),
+    ...(askingAboutMeetings ? { askedAboutMeetings: true } : {}),
+    meeting: null,
+    notUnderstood,
+    ...(declining ? { declinedOffer: true } : {}),
+    // A close answering a close is a goodbye, not a return ("Oi de novo!").
+    ...(waiting.closing === true && closing === null ? { returning: true } : {}),
+    ...(prefix === DETAILS_FIRST_SENTENCE ? { detailsFirst: true } : {}),
+    ...(reading.askedAboutCriteria ? { askedAboutCriteria: true } : {}),
+    ...(reconfirmText === null ? {} : { reconfirmation: reconfirmText }),
+    ...(brokerContext === undefined ? {} : { broker: brokerContext }),
+    ...(search.searched
+      ? { suggestions: { count: search.properties.length, relaxable: search.relaxable } }
+      : lastSearch === null
+        ? {}
+        : { lastSearch }),
+  };
+  // The task the phrasing gets decides whether a question may be asked at all.
+  const taskId = chooseTask(briefingInput).id;
   const phrased = await phrase({
     turn,
-    briefing: turnBriefing({
-      intent,
-      slots,
-      filled: [...filledThisTurn, ...revisedThisTurn],
-      question,
-      consented,
-      meeting: null,
-      notUnderstood,
-      ...(declining ? { declinedOffer: true } : {}),
-      ...(waiting.closing === true ? { returning: true } : {}),
-      ...(prefix === DETAILS_FIRST_SENTENCE ? { detailsFirst: true } : {}),
-      ...(extraction.askedAboutCriteria ? { askedAboutCriteria: true } : {}),
-      ...(reconfirmText === null ? {} : { reconfirmation: reconfirmText }),
-      ...(brokerContext === undefined ? {} : { broker: brokerContext }),
-      ...(search.searched
-        ? { suggestions: { count: search.properties.length, relaxable: search.relaxable } }
-        : lastSearch === null
-          ? {}
-          : { lastSearch }),
-    }),
-    question,
+    briefing: turnBriefing(briefingInput),
+    noQuestions: taskId === "nothingToAsk" || taskId === "closing" || taskId === "meetings.status",
+    question: asking,
     // On a search turn the script's question waits for the next one, but the
     // guard still has to tolerate a sentence that previews it.
-    pendingSlot: search.searched ? (upcoming[0] ?? null) : (question?.slot ?? null),
+    pendingSlot: search.searched ? (upcoming[0] ?? null) : (asking?.slot ?? null),
     nextSlot: upcoming[1] ?? null,
     allowedAmounts: [
       ...lead.amounts,
@@ -1985,8 +2038,13 @@ async function run(turn: LoadedTurn, context: RunContext): Promise<TurnResult> {
         }
       : reconfirmText !== null
         ? { fallbackText: reconfirmText }
-        : {}),
+        : teamOffer !== null
+          ? { fallbackText: BOUNDARY_FALLBACK_SENTENCE }
+          : closing !== null
+            ? { fallbackText: closingSentence(closing.summary === null ? [] : booked, leadText, timezone) }
+            : {}),
     ...(prefix === undefined ? {} : { prefix }),
+    ...(teamOffer === null ? {} : { mustAsk: BOUNDARY_OFFER_QUESTION }),
     sink: context.sink,
     startedAt: context.startedAt,
   });

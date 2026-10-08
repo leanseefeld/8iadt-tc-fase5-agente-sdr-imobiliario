@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { turnBriefing, type TurnPromptInput } from "../src/agent/prompts/system.ts";
+import { chooseTask, turnBriefing, type TurnPromptInput } from "../src/agent/prompts/system.ts";
 import { EMPTY_SLOTS } from "../src/domain/slots.ts";
 
 /**
@@ -8,25 +8,9 @@ import { EMPTY_SLOTS } from "../src/domain/slots.ts";
  * lead assessment, because those fields are not on the type the prompt reads.
  */
 
-const PERMITTED = [
-  "intent",
-  "slots",
-  "filled",
-  "question",
-  "consented",
-  "meeting",
-  "notUnderstood",
-  "broker",
-  "suggestions",
-  "reconfirmation",
-  "askedAboutCriteria",
-  "lastSearch",
-  "declinedOffer",
-  "detailsFirst",
-  "returning",
-] as const;
-
-test("TurnPromptInput carries only the permitted fields", () => {
+// The type the prompt reads is the boundary (TypeScript holds it); what is
+// checked here is what reaches the words: no assessment of the lead.
+test("the briefing carries no assessment of the lead", () => {
   const input: TurnPromptInput = {
     intent: "purchase",
     slots: { ...EMPTY_SLOTS, priceMax: 700_000, bedrooms: 2, neighborhoods: ["Moema"] },
@@ -37,17 +21,12 @@ test("TurnPromptInput carries only the permitted fields", () => {
     notUnderstood: false,
     askedAboutCriteria: true,
   };
-  for (const key of Object.keys(input)) {
-    assert.ok(
-      (PERMITTED as readonly string[]).includes(key),
-      `${key} is not a permitted briefing field`,
-    );
-  }
   const briefing = turnBriefing(input);
   assert.equal(/score|temperatura|fallback|pipeline/i.test(briefing), false);
-  assert.match(briefing, /critérios que já estão no estado/);
+  assert.equal(chooseTask(input).id, "criteria.recite");
 });
 
+// FR-005e is a privacy rule, so its presence in the words is what is tested.
 test("spec 006 FR-005e: after a handback, attendance is neither confirmed nor denied", () => {
   const briefing = turnBriefing({
     intent: "purchase",

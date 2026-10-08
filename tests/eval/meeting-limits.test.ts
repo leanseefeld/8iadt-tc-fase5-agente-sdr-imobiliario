@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { closePool } from "../../src/db/client.ts";
 import { CANNOT_ACT_REPLY } from "../../src/agent/prompts/fallback.ts";
 import { PHONE_OFFER_SENTENCE, VISIT_NEEDS_PROPERTY_SENTENCE } from "../../src/agent/prompts/meeting.ts";
-import { OPTIONS, qualifiedLead, query, type Lead } from "./support/meeting.ts";
+import { OPTIONS, qualifiedLead, query, type Lead } from "../integration/support/meeting.ts";
 
 /**
  * INTEGRATION=1, local e4b — spec 006 FR-004e/f, FR-005h/i, SC-018: what a

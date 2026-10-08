@@ -7,6 +7,7 @@ import { recordLeadMessage } from "../../src/services/conversation.ts";
 import { unansweredTurns } from "../../src/jobs/unanswered-turns.ts";
 import { createLogger } from "../../src/core/logging.ts";
 import { getConfig } from "../../src/core/config.ts";
+import { useScriptedModel } from "../support/scripted-model.ts";
 
 /**
  * INTEGRATION=1 — the turn's durability rules (T056).
@@ -21,6 +22,8 @@ import { getConfig } from "../../src/core/config.ts";
  * process.
  */
 const integration = process.env.INTEGRATION === "1";
+// The pipeline is under test here, not the sampler: the model is scripted.
+if (integration) useScriptedModel();
 
 const AGENCY = "demo";
 

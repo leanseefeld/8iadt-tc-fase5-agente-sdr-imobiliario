@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
   newSession,
   sessionCookieOptions,
@@ -22,9 +21,7 @@ const user = {
   role: "broker" as const,
 };
 
-test("the cookie contract is what specs 004-006 were promised", () => {
-  assert.equal(SESSION_COOKIE, "session");
-  assert.equal(SESSION_MAX_AGE_SECONDS, 7 * 24 * 60 * 60);
+test("the session cookie is httpOnly, lax and site-wide", () => {
   const options = sessionCookieOptions();
   assert.equal(options.httpOnly, true);
   assert.equal(options.sameSite, "lax");

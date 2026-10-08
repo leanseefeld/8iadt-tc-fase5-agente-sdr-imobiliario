@@ -176,10 +176,10 @@ export const EXTRACTION_FIELDS: readonly ExtractionField[] = [
   {
     key: "outOfScopeRequest",
     description:
-      "true se a pessoa pediu algo ligado a uma visita que a imobiliária não faz: carona ou transporte, " +
-      "reembolso de passagem ou combustível, escolher quem atende pela aparência, cor, gênero, identidade de " +
-      "gênero, orientação sexual (gay, LGBT, queer…), religião, ideologia ou outra característica pessoal. " +
-      "Perguntar quem vai atender NÃO é isso. Na dúvida, false.",
+      "true SÓ para estes pedidos, que a imobiliária não faz: carona ou transporte; reembolso de passagem ou " +
+      "combustível; escolher quem atende pela aparência, cor, gênero, identidade de gênero, orientação sexual " +
+      "(gay, LGBT, queer…), religião, ideologia ou outra característica pessoal. Qualquer outra coisa é false, " +
+      "inclusive perguntar quem vai atender.",
   },
   {
     key: "changeRequest",
@@ -197,6 +197,13 @@ export const EXTRACTION_FIELDS: readonly ExtractionField[] = [
     values: ["yes", "no"],
   },
   {
+    key: "askedAboutMeetings",
+    description:
+      "true se a pessoa perguntou sobre uma visita ou conversa JÁ marcada: se continua de pé, quando é, que " +
+      'horas é ("a visita de segunda continua de pé?", "que horas era mesmo?"). Pedir para mudar ou cancelar ' +
+      "NÃO é isso, nem perguntar quem vai atender. Na dúvida, false.",
+  },
+  {
     key: "askedWhoAttends",
     description:
       'true se a pessoa perguntou quem vai atendê-la na visita ou conversa ("quem vai me atender?", ' +
@@ -207,6 +214,26 @@ export const EXTRACTION_FIELDS: readonly ExtractionField[] = [
     description:
       'Se a pessoa citou o código de um imóvel, como "VMA-0005" ou "Interessado em MOE-0003", ' +
       "esse código, exatamente como escrito. Senão, null.",
+  },
+  // Spec 015. Last on purpose: the fields above are read first, and what they
+  // left over is what these two describe.
+  {
+    key: "messageAct",
+    description:
+      "O que a mensagem faz, numa palavra: thanks se agradece ou se despede; agree se só concorda ou confirma " +
+      '("ok", "beleza"); answer se responde a uma pergunta sua; request se pede alguma coisa; question se ' +
+      "pergunta alguma coisa; inform se conta algo sem pedir nem perguntar; other para o resto (risada, " +
+      "cumprimento, emoji).",
+    values: ["thanks", "agree", "answer", "request", "question", "inform", "other"],
+  },
+  {
+    key: "uncovered",
+    description:
+      "O trecho da mensagem que nenhum dos campos acima registrou: um pedido, uma pergunta ou uma informação " +
+      'que ficou sem lugar ("meu marido vai junto", "o condomínio aceita cachorro?", "consegue um desconto?"), ' +
+      "com as palavras da pessoa. Ver imóveis, pedir mais opções, marcar, remarcar ou cancelar visita ou " +
+      "conversa NÃO são sobra: você já trata disso. null se os campos acima já cobrem a mensagem, ou se ela é " +
+      "só agradecimento, concordância, cumprimento ou risada.",
   },
 ];
 
@@ -234,11 +261,14 @@ export interface Extracted {
   propertyPosition: number | null;
   propertyCode: string | null;
   askedWhoAttends: boolean;
+  askedAboutMeetings: boolean;
   changeRequest: string | null;
   answer: string | null;
   meetingKind: string | null;
   unsupportedMeeting: boolean;
   outOfScopeRequest: boolean;
+  messageAct: string | null;
+  uncovered: string | null;
 }
 
 /** The model writes `true`, `"true"` or `"sim"`; all three mean the same thing. */

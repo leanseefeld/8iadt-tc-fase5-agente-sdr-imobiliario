@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { closePool } from "../../src/db/client.ts";
 import { MEETING_LIMIT_SENTENCE } from "../../src/agent/prompts/meeting.ts";
 import { localParts } from "../../src/domain/scheduling.ts";
-import { bookDirect, nextLocal, qualifiedLead, query, type Lead } from "./support/meeting.ts";
+import { bookDirect, nextLocal, qualifiedLead, query, type Lead } from "../integration/support/meeting.ts";
 
 /**
  * INTEGRATION=1, local model — spec 009's seven examples, one each. What the

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { closePool } from "../../src/db/client.ts";
 import { DECLINE_ACKNOWLEDGEMENT } from "../../src/agent/prompts/meeting.ts";
 import { localParts } from "../../src/domain/scheduling.ts";
-import { OPTIONS, qualifiedLead, type Lead } from "./support/meeting.ts";
+import { OPTIONS, qualifiedLead, type Lead } from "../integration/support/meeting.ts";
 
 /**
  * INTEGRATION=1, local e4b — spec 006 T022a, quickstart §1a, SC-013: the three

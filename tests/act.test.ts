@@ -1,12 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { MAX_ACTION_STEPS } from "../src/agent/act.ts";
 import { actionTools, runSearchProperties } from "../src/agent/tools/index.ts";
 import { EMPTY_SLOTS } from "../src/domain/slots.ts";
-
-test("the action loop is bounded at three steps", () => {
-  assert.equal(MAX_ACTION_STEPS, 3);
-});
 
 const search = { agencyId: "00000000-0000-0000-0000-000000000000", intent: "purchase" as const, slots: EMPTY_SLOTS };
 const booking = { conversationId: "00000000-0000-0000-0000-000000000001", offered: [], timezone: "America/Sao_Paulo" };

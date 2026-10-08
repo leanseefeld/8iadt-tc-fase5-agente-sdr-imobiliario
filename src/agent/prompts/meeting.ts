@@ -77,10 +77,13 @@ export const DETAILS_FIRST_SENTENCE = "Claro! Assim que eu tiver seus dados, te 
 
 /**
  * FR-005e: asked who will attend. Neither a name nor a guess — the team
- * calendar is internal and who goes can change at the last minute.
+ * calendar is internal and who goes can change at the last minute. Decided
+ * 30/09 (spec 015): say what the agent can see, that only the brokers confirm
+ * who goes — which leaves a broker who spoke as the authority — and offer to
+ * call one.
  */
 export const ATTENDEE_UNKNOWN_SENTENCE =
-  "Ainda não consigo te dizer o nome de quem vai te atender, mas está tudo registrado no sistema com alguém da nossa equipe.";
+  "Daqui eu só consigo ver o dia, o horário, o tipo e o imóvel do que está marcado; quem vai te atender, só os corretores conseguem confirmar. Quer que eu chame um corretor pra tirar essa ou outra dúvida?";
 
 /**
  * FR-004e: a visit is about a property. With cards on screen and none pointed
@@ -206,10 +209,24 @@ export const NO_MEETING_TO_CHANGE_SENTENCE =
   "Não tenho nenhuma visita ou conversa marcada com você daqui pra frente. Quer marcar uma?";
 
 /**
- * Spec 009, decided 29/09: the reply when nothing is pending — every agent has
- * a way to close. Code-written because, left to the model, "obrigado" got
- * "vou atualizar o seu cadastro" and "vou encaminhar para a equipe": next steps
- * nobody takes. It restates what is booked and leaves the door open.
+ * Spec 015: what is booked, as the close's code-written half. The model writes
+ * the courtesy after it. Restating the meetings is a fact, so it is never left
+ * to a sampler: left alone, "obrigado" got "vou atualizar o seu cadastro" and
+ * "vou encaminhar para a equipe", next steps nobody takes.
+ */
+/** Spec 015: one booked meeting as the state lists it for the phrasing. */
+export function describeMeeting(meeting: MeetingRef, timeZone: string): string {
+  return `${theMeeting(meeting)}: ${slotLabel(meeting.scheduledAt, timeZone)}`;
+}
+
+export function closingSummary(meetings: MeetingRef[], timeZone: string): string {
+  const items = meetings.map((meeting) => `${theMeeting(meeting)} (${slotLabel(meeting.scheduledAt, timeZone)})`);
+  return `Fica marcado: ${items.length === 1 ? items[0] : `${items.slice(0, -1).join(", ")} e ${items.at(-1)}`}.`;
+}
+
+/**
+ * Spec 009: the close, all in code. Spec 015 phrases the courtesy instead, and
+ * this is what goes out when that phrasing fails or a guard throws it away.
  */
 export function closingSentence(
   meetings: MeetingRef[],
@@ -220,9 +237,14 @@ export function closingSentence(
 ): string {
   const thanked = /^\s*(muito\s+)?(obrigad|valeu|agradec)/iu.test(leadText);
   const open = thanked ? "Por nada!" : "Combinado!";
-  if (again) return `${open} Se precisar de algo, é só chamar.`;
-  const items = meetings.map((meeting) => `${theMeeting(meeting)} (${slotLabel(meeting.scheduledAt, timeZone)})`);
-  const booked =
-    items.length === 0 ? "" : ` Fica marcado: ${items.length === 1 ? items[0] : `${items.slice(0, -1).join(", ")} e ${items.at(-1)}`}.`;
-  return `${open}${booked} Se precisar de algo, é só chamar.`;
+  if (again || meetings.length === 0) return `${open} Se precisar de algo, é só chamar.`;
+  return `${open} ${closingSummary(meetings, timeZone)} Se precisar de algo, é só chamar.`;
 }
+
+/**
+ * Spec 015: the offer, when the phrased one fails or a guard throws it away.
+ * It names nothing the lead said, so it is safe for any remainder.
+ */
+export const BOUNDARY_OFFER_QUESTION = "Quer que alguém da nossa equipe verifique isso pra você?";
+
+export const BOUNDARY_FALLBACK_SENTENCE = `Isso eu não consigo garantir por aqui. ${BOUNDARY_OFFER_QUESTION}`;

@@ -113,7 +113,14 @@ export const SLOT_TOPIC_WORDS: Record<Askable, readonly string[]> = {
  * like this over `priceMax` would throw away a perfectly good "até uns 700 mil",
  * which names no topic word at all.
  */
-export const EVIDENCE_WORDS: Record<"urgency" | "investorProfile" | "returnExpectation", readonly string[]> = {
+export const EVIDENCE_WORDS: Record<"intent" | "urgency" | "investorProfile" | "returnExpectation", readonly string[]> = {
+  // A change of purpose must be said: "isso" or "Meu nome é Rafael" flipped a
+  // renter or an investor into a buyer when the model echoed its default (30/09).
+  intent: [
+    ...SLOT_TOPIC_WORDS.intent,
+    "compro", "comprando", "adquirir", "alugo", "alugando", "locacao", "locar",
+    "invisto", "investindo", "renda", "rentabilidade", "retorno", "morar",
+  ],
   urgency: [
     ...SLOT_TOPIC_WORDS.urgency,
     "mes", "meses", "semana", "semanas", "dia", "dias", "ano", "anos",

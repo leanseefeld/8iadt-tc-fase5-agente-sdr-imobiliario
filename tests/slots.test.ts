@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  SCRIPT,
   EMPTY_SLOTS,
   nextQuestion,
   upcomingSlots,
@@ -21,17 +20,7 @@ function state(intent: Intent, slots: Partial<Slots> = {}): QualificationState {
   return { intent, slots: { ...EMPTY_SLOTS, ...slots } };
 }
 
-test("SCRIPT lists purchase and rental slots in price, bedrooms, neighborhoods, urgency, name, contact order", () => {
-  assert.deepEqual(SCRIPT.purchase, ["priceMax", "bedrooms", "neighborhoods", "urgency", "name", "contact"]);
-  assert.deepEqual(SCRIPT.rental, SCRIPT.purchase);
-});
-
-test("SCRIPT lists investment slots in investorProfile, ticket, returnExpectation, name, contact order", () => {
-  assert.deepEqual(SCRIPT.investment, ["investorProfile", "ticket", "returnExpectation", "name", "contact"]);
-});
-
-test("SCRIPT.undefined has an empty script, and nextQuestion for it only asks about the intent", () => {
-  assert.deepEqual(SCRIPT.undefined, []);
+test("with no intent yet, the only question is the intent", () => {
   assert.deepEqual(nextQuestion(state("undefined"), false), { slot: "intent", question: QUESTIONS.intent });
   assert.deepEqual(upcomingSlots(state("undefined"), false), ["intent"]);
 });

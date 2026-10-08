@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { turnBriefing, type TurnPromptInput } from "../src/agent/prompts/system.ts";
+import { chooseTask, turnBriefing, type TurnPromptInput } from "../src/agent/prompts/system.ts";
 import { noMatchReply } from "../src/agent/prompts/fallback.ts";
 import { lastSearchOutcome, type LoadedTurn } from "../src/services/conversation.ts";
 import { EMPTY_SLOTS } from "../src/domain/slots.ts";
@@ -24,25 +24,20 @@ const base: TurnPromptInput = {
 const RECONFIRM = "Só pra confirmar: até R$ 600 mil, 2 quartos, Vila Mariana. Continua assim?";
 
 test("FR-032: a no-match outranks a reconfirmation", () => {
-  const briefing = turnBriefing({
-    ...base,
-    reconfirmation: RECONFIRM,
-    suggestions: { count: 0, relaxable: "neighborhoods" },
-  });
-  assert.match(briefing, /não encontrou nenhum imóvel/);
-  assert.equal(briefing.includes(RECONFIRM), false);
+  const input: TurnPromptInput = { ...base, reconfirmation: RECONFIRM, suggestions: { count: 0, relaxable: "neighborhoods" } };
+  assert.equal(chooseTask(input).id, "search.none");
+  assert.equal(turnBriefing(input).includes(RECONFIRM), false);
 });
 
 test("FR-032: cards outrank a reconfirmation and a criteria question", () => {
-  const briefing = turnBriefing({
+  const input: TurnPromptInput = {
     ...base,
     reconfirmation: RECONFIRM,
     askedAboutCriteria: true,
     suggestions: { count: 1, relaxable: null },
-  });
-  assert.match(briefing, /encontrou um imóvel/);
-  assert.equal(briefing.includes(RECONFIRM), false);
-  assert.doesNotMatch(briefing, /critérios que já estão no estado/);
+  };
+  assert.equal(chooseTask(input).id, "search.one");
+  assert.equal(turnBriefing(input).includes(RECONFIRM), false);
 });
 
 test("FR-032: with no search this turn, the reconfirmation still speaks", () => {
@@ -51,9 +46,9 @@ test("FR-032: with no search this turn, the reconfirmation still speaks", () => 
 });
 
 test("FR-033: a results question after an empty search is answered with the fact", () => {
-  const briefing = turnBriefing({ ...base, askedAboutCriteria: true, lastSearch: { count: 0 } });
-  assert.match(briefing, /não encontrou nenhum imóvel/);
-  assert.match(briefing, /nenhum imóvel encontrado/);
+  const input: TurnPromptInput = { ...base, askedAboutCriteria: true, lastSearch: { count: 0 } };
+  assert.equal(chooseTask(input).id, "criteria.none");
+  assert.match(turnBriefing(input), /Última busca com estes critérios: nenhum/, "the fact is in the state");
 });
 
 test("FR-033: the fact is not repeated on a turn that searched", () => {
@@ -131,7 +126,8 @@ test("US4: the reconfirmation names what changed before what it puts in doubt", 
 // Spec 006 FR-005g — one reply per turn, and the decline as a prefix (SC-017)
 // ---------------------------------------------------------------------------
 
-import { accountTurn, meetingTarget, readSchedulingFacts, replyKind, type ReplyKind } from "../src/agent/orchestrator.ts";
+import { accountTurn, meetingTarget, replyKind, type ReplyKind } from "../src/agent/orchestrator.ts";
+import { readSchedulingFacts } from "../src/agent/read.ts";
 import {
   confirmationSentence,
   optionsSentence,
@@ -163,9 +159,10 @@ test("FR-005g: every pair of reply kinds that can meet — the higher-ranked one
 });
 
 test("FR-005g: after a decline, the briefing forbids offering again and the reconfirmation is not in it", () => {
-  const briefing = turnBriefing({ ...base, declinedOffer: true, suggestions: { count: 2, relaxable: null } });
+  const input: TurnPromptInput = { ...base, declinedOffer: true, suggestions: { count: 2, relaxable: null } };
+  const briefing = turnBriefing(input);
   assert.match(briefing, /Não ofereça horários, visita nem conversa de novo/);
-  assert.match(briefing, /separou 2/, "the search result still wins the phrased part");
+  assert.equal(chooseTask(input).id, "search.many", "the search result still wins the phrased part");
   assert.equal(briefing.includes(RECONFIRM), false);
 });
 
@@ -185,15 +182,15 @@ test("FR-005d/FR-005e: the scheduling sentences are code-written and name no one
 });
 
 test("spec 006: the extraction's meeting facts are read strictly, and anything malformed is absent", () => {
-  assert.deepEqual(
-    readSchedulingFacts({ pickedTime: "sim", preferredWeekday: "thu", preferredPeriod: "morning", propertyCode: " VMA-0005 " }),
-    { declinedOffer: false, askedForTimes: false, pickedTime: true, preference: { weekday: "thu", period: "morning" }, propertyRef: { code: "VMA-0005" }, askedWhoAttends: false, changeRequest: null, answer: null, meetingKind: null, unsupportedMeeting: false, outOfScopeRequest: false },
-  );
+  // What each input field becomes — not the whole shape, which grows with every spec.
+  const read = readSchedulingFacts({ pickedTime: "sim", preferredWeekday: "thu", preferredPeriod: "morning", propertyCode: " VMA-0005 " });
+  assert.equal(read.pickedTime, true, "'sim' is true");
+  assert.deepEqual(read.preference, { weekday: "thu", period: "morning" });
+  assert.deepEqual(read.propertyRef, { code: "VMA-0005" }, "trimmed");
   assert.deepEqual(readSchedulingFacts({ propertyPosition: 2 }).propertyRef, { position: 2 });
-  assert.deepEqual(readSchedulingFacts({ propertyPosition: 0, preferredWeekday: "quinta", preferredPeriod: "noite" }), {
-    declinedOffer: false, askedForTimes: false, pickedTime: false, preference: {}, propertyRef: null, askedWhoAttends: false,
-    changeRequest: null, answer: null, meetingKind: null, unsupportedMeeting: false, outOfScopeRequest: false,
-  });
+  const malformed = readSchedulingFacts({ propertyPosition: 0, preferredWeekday: "quinta", preferredPeriod: "noite" });
+  assert.deepEqual(malformed.preference, {}, "a weekday or period outside the closed set is absent");
+  assert.equal(malformed.propertyRef, null, "position 0 is no position");
 });
 
 test("FR-004e/f: a visit needs a property; the only other meeting is by phone", () => {

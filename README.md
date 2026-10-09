@@ -9,7 +9,6 @@ Se o lead some, ela volta a falar com ele sem perder o contexto. O corretor acom
 resumo, score e agenda.
 
 > **Estado da entrega:** funcional, rodando localmente com Docker Compose. O canal é um chat web (sem
->
 > WhatsApp) e o modelo pode ser local (Gemma 4 via oMLX) ou hospedado (Azure OpenAI), escolhido por
 > configuração.
 

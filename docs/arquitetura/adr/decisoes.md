@@ -8,8 +8,39 @@ eight files to keep in sync. Further decisions append as new sections.
 **Language note:** this file is in English, grouped with the constitution and the
 specs as an agent-facing artifact. The rest of `docs/` is in Portuguese.
 
-**Status: all records below are accepted. Records 1 to 8 were taken on
-2026-08-30; later records carry their own date.**
+**Status.** No record was withdrawn and none was replaced whole; several were
+amended or partly superseded later, and one was accepted but not built. The
+"Status" column says which, and says by what. Records 1 to 8 were taken on
+2026-08-30; later records carry their own date. State of the delivery
+(2026-10-08): specs 008 and 010 to 014 were cut, so ADR 20 stays a decision on
+paper (see its note).
+
+| # | Title | Status |
+|---|---|---|
+| 1 | Next.js + TypeScript + Vercel AI SDK as the runtime stack | Accepted |
+| 2 | Modular monolith, worker as a second entrypoint of the same image | Accepted |
+| 3 | Drizzle over Prisma | Accepted |
+| 4 | Postgres-backed jobs and outbox; no Redis | Accepted. The app uses no Redis; the Redis in `docker-compose.yml` belongs to the `observability` profile (Langfuse) |
+| 5 | Services as the data path; no repository layer, no internal HTTP hop | Accepted |
+| 6 | Brazilian Portuguese only; no i18n framework | Accepted |
+| 7 | GitHub Spec Kit as the spec-driven development framework | Accepted, relaxed: used for specs 001 to 007; 009, 015 and 016 are one-page prose specs |
+| 8 | OpenAI-compatible provider abstraction, oMLX as the local default | Accepted. Selection by `PROVIDER_*` / `MODEL_ID` superseded by 23 |
+| 9 | Node's built-in test runner; ESLint with typescript-eslint | Accepted |
+| 10 | Agency as tenant from the first migration | Accepted |
+| 11 | Deterministic lead score | Accepted and **in force**. Third handoff trigger superseded by 19; weights and cap "amended" by 20, which was never implemented |
+| 12 | Hand-rolled signed session cookie | Accepted |
+| 13 | Langfuse self-hosted under a memory cap | Accepted |
+| 14 | Native tool calling under a deterministic slot machine | Accepted, extended by 22 (the tool loop) |
+| 15 | Follow-up constants and the demo trigger | Accepted |
+| 16 | Local e4b for development, Azure OpenAI for the demo | Accepted. Variable list superseded by 23 |
+| 17 | Backlog regrouped into five specs | Accepted (specs 002 to 006, all built) |
+| 18 | User experience discipline as a constitution principle | Accepted |
+| 19 | Three state axes, agent-owned booking, SSE over Postgres notifications | Accepted. Supersedes the third handoff trigger of 11 |
+| 20 | The lead score is uncapped and compounding | Accepted, **not implemented**: spec 008 was cut; the code still scores as in 11 |
+| 21 | Sofia says what she is | Accepted |
+| 22 | Revisable qualification state, and actions as tool calls | Accepted; implemented by spec 007. Amends constitution principle V |
+| 23 | Model profiles in YAML | Accepted. Supersedes the env-variable half of 8 and 16; amends principle VI |
+| 24 | Specifications offered, not required | Accepted (2026-10-08). Relaxes 7; amends the constitution's Development Workflow (1.6.0) |
 
 > These decisions stand on their own. None of them exists to "override"
 > `reference/`, which is non-normative ideation and was never a competing
@@ -152,6 +183,11 @@ component. That is accepted: it is a deliberate roadmap item, not an oversight.
 
 ## 7. GitHub Spec Kit as the spec-driven development framework
 
+*Note (2026-10-08): Spec Kit carried specs 001 to 007. Specs 009, 015 and 016
+were written as one-page prose specs, by agreement with the developer, and from
+here on a spec is offered, not required. The rest of this record describes the
+original decision.*
+
 **Context.** The project is built almost entirely by coding agents (Claude Code and
 Cursor) directed by one developer. Specification quality determines output quality
 more than any individual prompt does.
@@ -261,6 +297,11 @@ isolation is enforced in services, not in Postgres RLS — a future hardening.
 ## 11. Deterministic lead score
 
 **Accepted 2026-09-05.** Resolves pending decisions 1 and 5.
+
+*Note (2026-10-08): this is the score the code computes (`src/domain/score.ts`,
+capped at 100). ADR 20 amended it on paper; spec 008, which would build that,
+was cut. The "hot with contact details" handoff trigger below was replaced by
+ADR 19: a hot lead with contact is offered a meeting and the agent stays in charge.*
 
 **Context.** The score has two consumers — the "qualified" badge and the handoff
 trigger — and the jury will ask how it is computed.
@@ -445,6 +486,10 @@ which is the cheapest moment. The pitch tells a normal CRM funnel story. The
 scalability limits of NOTIFY are documented honestly in `visao-geral.md`.
 
 ## 20. The lead score is uncapped and compounding
+
+*Status (2026-10-08): accepted, **not implemented**. Spec 008 was cut from the
+delivery, so the code still scores as ADR 11 describes (capped at 100) and the
+weights were never fixed. Kept as the recorded direction for the score.*
 
 **Accepted 2026-09-20.** Resolves pending decision 7 and amends ADR 11, whose
 weight table and cap at 100 no longer hold. `modelo-de-dados.md` §3 is superseded
@@ -637,4 +682,30 @@ Per-agency model choice — backlog 16, not needed for one agency.
 The extraction ceiling rose from 300 to 1024 for models that do not reason
 (developer: 300 was too low), and to 4096 for those that do, since the API has one
 ceiling per call and cannot keep the reasoning apart from the answer.
+
+## 24. Specifications offered, not required
+
+*2026-10-08.*
+
+**Context.** ADR 7 made Spec Kit's six-step flow mandatory: no production code
+without a merged spec. It carried specs 001 to 007 and did its job early, when the
+data model and the turn were unknown. It also produced more requirements than one
+developer could review: the generated spec invented acceptance criteria nobody had
+asked for, and every one of them had to be read, argued and either built or struck
+out. From 009 on the developer wrote short prose specs instead (009, 015, 016),
+each one page: what the change covers, what it does not, and how it is checked.
+
+**Decision.** A spec is **offered, not required**. Before a change to production
+code an agent offers to write a one-page spec and follows the developer's answer.
+The Spec Kit skills stay installed and are used when asked. What stays mandatory is
+what the old gate protected: the deterministic suite passes before a merge, and a
+change to the turn updates `docs/arquitetura/turno-do-agente.md` in the same
+commit. Constitution 1.6.0.
+
+**Alternatives considered.** Keeping Spec Kit with a lighter template — the volume
+came from the clarify and analyze steps, not the template. Dropping specs entirely
+— the one-page specs of 015 and 016 were worth their hour each.
+
+**Consequences.** `specs/` holds two generations: full Spec Kit folders (001–007)
+and one-page specs (009, 015, 016). The README says so.
 

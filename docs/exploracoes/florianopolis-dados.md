@@ -1,5 +1,7 @@
 # Dados de referência — Florianópolis
 
+> **Status (08/10/2026): não implementado.** A spec 011 e a segunda agência "Imóveis da Ilha" foram cortadas da entrega; estes dados não estão na seed nem no código. Ficam como insumo para quem retomar a 011.
+
 > **Não normativo.** Insumo para a spec 011 (segunda agência, "Imóveis da Ilha"),
 > levantado por pesquisa em 27/09/2026. Valores **indicativos**, de portais e
 > imobiliárias locais — o FipeZap publica só o índice da cidade, não por bairro.

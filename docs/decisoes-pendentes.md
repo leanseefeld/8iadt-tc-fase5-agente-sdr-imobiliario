@@ -15,15 +15,26 @@ resolveu.
 
 ## Em aberto
 
-### 8. Pesos do score, faixas e sinal do investidor — ficam com a spec 008
+Nenhuma. Nada que a entrega de 08/10/2026 usa está esperando resposta. O único
+item que ficou sem resposta foi o 8, e ele pertence a uma spec fora do escopo
+(abaixo).
+
+---
+
+## Fora do escopo da entrega
+
+Itens cujas specs (008, 010 a 014) foram **cortadas** em 07/10/2026 para fechar o
+mínimo avaliado. Não estão resolvidos: estão adiados com a spec. Quem retomar a
+spec retoma a pergunta.
+
+### 8. Pesos do score, faixas e sinal do investidor — spec 008, não construída
 
 **Contexto.** O [ADR 20](arquitetura/adr/decisoes.md#20-the-lead-score-is-uncapped-and-compounding)
-fixou as **regras** do score; os números não. Decidido em 20/09/2026 que a 005 sobe
-com os scores de hoje (inclusive os da seed, que não batem com a fórmula) e que a
-spec que implementar o ADR 20 resolve tudo isto de uma vez. Em 22/09/2026 ela
-passou a ser a **008**, e não a 007: a 007 ficou com a orquestração (ADR 22), e
-duas regras do ADR 20 — "agendar aumenta o score" entre elas — não têm como ser
-implementadas antes de a spec 006 criar `appointments`. Os itens:
+fixou as **regras** do score (sem teto, orçamento maior pontua mais, agendar
+aumenta); os números não. A spec 008 implementaria o ADR 20 e resolveria os
+itens abaixo. Ela foi cortada: **o código continua com o score do
+[ADR 11](arquitetura/adr/decisoes.md#11-deterministic-lead-score)** (0 a 100,
+`src/domain/score.ts`; frio < 40, morno 40–69, quente ≥ 70).
 
 1. **Pesos exatos**, e como o orçamento faz o score passar de 100.
 2. **"Quanto mais caro o imóvel, maior"** — lido como o orçamento do próprio lead
@@ -36,8 +47,8 @@ implementadas antes de a spec 006 criar `appointments`. Os itens:
    janela 0.6), ainda **não aceita**.
 6. **Recalcular a seed** e reescrever `tests/score.test.ts`.
 
-**Quem decide:** o desenvolvedor, ao abrir a spec 008 — depois da 006.
-Registrado em 20/09/2026, renumerado em 22/09/2026.
+**Quem decide:** o desenvolvedor, se a spec 008 voltar. Registrado em 20/09/2026,
+renumerado em 22/09/2026, adiado em 07/10/2026.
 
 ---
 
@@ -53,17 +64,17 @@ requisito.
 | 2 | Mecanismo de autenticação | **Cookie de sessão assinado, escrito à mão.** Usuários semeados com senha *hash*, dois papéis (`broker`, `salesManager`). Sem Auth.js. | [12](arquitetura/adr/decisoes.md#12-hand-rolled-signed-session-cookie) | 003 |
 | 3 | Hospedagem do Langfuse na demonstração | **Self-hosted por profile do Compose**, com limites de memória somando **≤ 6 GiB**, reaproveitando o Postgres do projeto. Latência de consulta não importa; captura precisa ser rápida. | [13](arquitetura/adr/decisoes.md#13-langfuse-self-hosted-under-a-memory-cap) | 004 |
 | 4 | Constantes do follow-up | Hipóteses iniciais viram padrão: janela 09:00–20:00 em `America/Sao_Paulo` fixo, 3 tentativas, intervalos crescentes. **Atraso da primeira tentativa em minutos** (não horas) para ser demonstrável, e botão "Disparar follow-up agora" na ficha do lead. | [15](arquitetura/adr/decisoes.md#15-follow-up-constants-and-the-demo-trigger) | 006 |
-| 5 | Gatilho de handoff | **Dois** gatilhos determinísticos: lead pede pessoa; duas respostas seguidas sem entendimento. O terceiro (quente com contato) caiu no ADR 19 — quente com contato **propõe reunião**, o agente segue no comando. | [11](arquitetura/adr/decisoes.md#11-deterministic-lead-score), [19](arquitetura/adr/decisoes.md#19-three-state-axes-agent-owned-booking-sse-over-postgres-notifications) | 004 |
-| 7 | Score: teto, pesos e interesse em imóvel | **Sem teto, sinais somam.** 100 = roteiro de compra completo com urgência imediata; orçamento maior pontua mais. Aluguel com horizonte de ~2 meses é quente com piso 50. Agendar aumenta; pedir humano não altera. Pesos exatos ficam com a spec que implementar. | [20](arquitetura/adr/decisoes.md#20-the-lead-score-is-uncapped-and-compounding) | 008 |
+| 5 | Gatilho de handoff | **Dois** gatilhos determinísticos: lead pede pessoa; duas respostas seguidas sem entendimento. O terceiro (quente com contato) caiu no ADR 19, e `src/domain/handoff.ts` só tem os dois — quente com contato **propõe reunião**, o agente segue no comando. | [11](arquitetura/adr/decisoes.md#11-deterministic-lead-score), [19](arquitetura/adr/decisoes.md#19-three-state-axes-agent-owned-booking-sse-over-postgres-notifications) | 004 |
+| 7 | Score: teto, pesos e interesse em imóvel | **Sem teto, sinais somam.** 100 = roteiro de compra completo com urgência imediata; orçamento maior pontua mais. Aluguel com horizonte de ~2 meses é quente com piso 50. Agendar aumenta; pedir humano não altera. Os pesos exatos ficam com a spec que implementar — a 008, cortada: a regra está decidida, o código ainda não a segue (item 8). | [20](arquitetura/adr/decisoes.md#20-the-lead-score-is-uncapped-and-compounding) | 008 (não construída) |
 
 Decisões novas tomadas na mesma sessão, sem pergunta prévia no registro:
 
 | Tema | Decisão | ADR |
 |---|---|---|
 | Multi-tenancy | `agencyId` em toda tabela de negócio desde a primeira migration; uma agência semeada | [10](arquitetura/adr/decisoes.md#10-agency-as-tenant-from-the-first-migration) |
-| Padrão do orquestrador | *Tool calling* nativo do AI SDK, com a slot machine determinística injetando a próxima pergunta no prompt | [14](arquitetura/adr/decisoes.md#14-native-tool-calling-under-a-deterministic-slot-machine) |
-| Modelo da demonstração | Desenvolvimento e testes de integração no oMLX local (`gemma-4-e4b-it-OptiQ-4bit`); demonstração com GPT-5 via Azure OpenAI, endpoint compatível | [16](arquitetura/adr/decisoes.md#16-local-e4b-for-development-azure-openai-for-the-demo) |
-| Agrupamento do backlog | 11 fatias restantes reagrupadas em 5 specs (002–006) | [17](arquitetura/adr/decisoes.md#17-backlog-regrouped-into-five-specs) |
+| Padrão do orquestrador | *Tool calling* nativo do AI SDK, com a slot machine determinística injetando a próxima pergunta no prompt. Estendido pelo ADR 22 (ferramentas em laço antes da resposta) | [14](arquitetura/adr/decisoes.md#14-native-tool-calling-under-a-deterministic-slot-machine), [22](arquitetura/adr/decisoes.md#22-revisable-qualification-state-and-actions-as-tool-calls) |
+| Modelo da demonstração | Desenvolvimento e testes no oMLX local (`gemma-4-e4b-it-OptiQ-4bit`); demonstração em modelo hospedado na Azure OpenAI. Desde 08/10/2026 o modelo se escolhe por perfil YAML em `config/models/` (`MODEL_PROFILE` no `.env`), conforme o [ADR 23](arquitetura/adr/decisoes.md#23-model-profiles-in-yaml) e a spec 016 | [16](arquitetura/adr/decisoes.md#16-local-e4b-for-development-azure-openai-for-the-demo), [23](arquitetura/adr/decisoes.md#23-model-profiles-in-yaml) |
+| Agrupamento do backlog | 11 fatias restantes reagrupadas em 5 specs (002–006), todas construídas | [17](arquitetura/adr/decisoes.md#17-backlog-regrouped-into-five-specs) |
 
 ---
 
@@ -73,17 +84,30 @@ Decisões novas tomadas na mesma sessão, sem pergunta prévia no registro:
 |---|---|---|---|---|
 | 6 | Orquestração do agente — uma máquina de slots só, ou um roteador na frente que classifica o que a mensagem está fazendo? | **Nenhum dos dois.** Todo critério vira revisável, `intent` inclusive; as ações viram *tool calls* do modelo com ida e volta antes da resposta; o roteiro continua dizendo o que falta perguntar. O título da pendência estava errado — o que bloqueava a 006 era a orquestração, não a multiagência, que volta a ser o item 16 do backlog. | [22](arquitetura/adr/decisoes.md#22-revisable-qualification-state-and-actions-as-tool-calls) | 007 |
 
-**O que a spec 007 herda desta pendência.** Duas coisas foram deixadas
-deliberadamente sem correção em 21/09/2026, à espera desta decisão, e agora são
-dela:
+**O que a spec 007 herdou desta pendência — resolvido.** Duas coisas foram
+deixadas sem correção em 21/09/2026, à espera desta decisão:
 
-1. **Não há isenção de fallback nos turnos logo depois de uma devolução do
-   corretor.** Um remendo pontual teria escondido o tamanho real do defeito.
-2. **Quando o turno é o primeiro depois da devolução *e* a mensagem não foi
-   entendida**, as duas instruções vão juntas no briefing e o modelo escolhe — na
-   prática escolheu o pedido de desculpas, e a frase de reentrada ("Sofia aqui de
-   volta") não apareceu. Quem redesenha a máquina decide qual voz ganha.
+1. **Nenhuma isenção de fallback nos turnos logo depois de uma devolução do
+   corretor.** Resolvido na 007 (US5, FR-022): o primeiro turno depois da
+   devolução não conta como não entendido (`src/agent/turn/run.ts`).
+2. **Primeiro turno depois da devolução *e* mensagem não entendida**: o pedido
+   de desculpas e a frase de reentrada competiam. Resolvido pela mesma regra: o
+   turno cumprimenta em vez de pedir desculpas, e a frase de reentrada é escrita
+   pelo código, sem chamada ao modelo, no momento da devolução
+   (`src/services/handoff.ts`).
 
 A exploração dos tópicos ([`exploracoes/roteiro-por-topicos.md`](exploracoes/roteiro-por-topicos.md))
-**continua aberta** para depois do MVP: ela não foi rejeitada, foi adiada, e o
-ADR 22 registra por quê.
+**não foi construída**: o código ainda escolhe a próxima pergunta. Ela não foi
+rejeitada, foi adiada, e o ADR 22 registra por quê.
+
+### Resolvidas pelas specs 006, 009, 015 e 016
+
+Estas não chegaram a ser itens numerados; nasceram e fecharam dentro das specs.
+Ficam aqui para quem procurar onde foram decididas.
+
+| Tema | Decisão | Onde |
+|---|---|---|
+| Agendamento e follow-up: proposta de horários, confirmação no chat, varredura do worker | Construídos; o corretor da proposta é escolhido por especialização e rodízio (`chooseBroker`) | spec 006 (mergeada em 28/09) |
+| Remarcar e cancelar o que foi marcado, dentro da conversa | Ferramentas sobre o laço da 007; confirmação antes de cancelar | spec 009 (mergeada em 29/09) |
+| O que fazer com o que a Sofia não resolve | Oferecer que a equipe verifique; sim leva ao handoff. Atos de diálogo na extração (`readTurn`) | spec 015 (mergeada em 07/10) |
+| Como escolher o modelo | Um perfil YAML por modelo; `.env` guarda `MODEL_PROFILE` e os segredos | spec 016 e ADR 23 (mergeadas em 08/10) |

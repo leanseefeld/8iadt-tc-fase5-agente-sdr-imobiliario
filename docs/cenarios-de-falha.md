@@ -5,25 +5,34 @@ defeito, indefinição de produto ou limite do modelo. A regra (29/09/2026): doc
 defeito claro; não colar no agente imobiliário o que é de outro agente; e não gastar tempo fechando furo que na
 verdade é uma decisão de produto ainda não tomada.
 
-**Dono** é quem deve resolver: uma spec, uma decisão pendente, ou o modelo.
+**Dono** é quem deve resolver: uma spec, uma decisão pendente, ou o modelo. Dono com a marca *(spec cortada)* é
+uma spec que ficou **fora do escopo da entrega de 08/10/2026** (008, 010 a 014): o cenário está documentado e
+não será corrigido nesta entrega.
 
 ## Abertos
 
 | Cenário | Visto | Dono provável | Observação |
 |---|---|---|---|
-| Resposta genérica (*"tanto faz"*, *"qualquer um"*) a quartos, tamanho etc. às vezes dispara handoff — às vezes numa única resposta | Testes manuais do desenvolvedor | **011** (agente de investimento) + decisão de produto | Indefinição: o roteiro não diz o que *"sem preferência"* vale para cada campo. Adiado, por decisão de 29/09, para quando chegarmos no agente de investimento |
+| Resposta genérica (*"tanto faz"*, *"qualquer um"*) a quartos, tamanho etc. às vezes dispara handoff — às vezes numa única resposta | Testes manuais do desenvolvedor | **011** *(spec cortada)* + decisão de produto | Indefinição: o roteiro não diz o que *"sem preferência"* vale para cada campo. Adiado, por decisão de 29/09, para o agente de investimento; a 015 deixou "tanto faz" de fora de propósito |
 | O nome não é registrado (*"Bia"* → *"Como posso te chamar?"* de novo) | Replay de 29/09 (e4b) | 004 (extração) · modelo | Deslize de leitura; ver se persiste no 12B |
 | Mudar de assunto com uma proposta aberta e escolher depois falha às vezes | `meeting-escapes`, ~2 em 10 (e4b) | Modelo | Os testes mostram os fatos extraídos quando falham |
-| O modelo promete o que nenhuma ação fez: *"vou registrar seu interesse no sistema"*, *"vou verificar as outras opções"* | Conversas de 28 e 29/09 | **012** (guarda de fatos) | Não é do fluxo de agenda: nenhuma ação sustenta a frase · ver proposta *fronteira da Sofia* (manifesto de capacidades) · 30/09: a lista do que a Sofia pode (prompt fixo), a tarefa sem próximos passos e o texto de reserva do guard atacam as fontes |
-| A resposta depois de uma busca numera cards que não são numerados (*"Os imóveis 1, 3 e 5…"*) | Replay de 28/09 | **012** | Mesma família: afirmar o que não está na tela |
-| No celular (390 px), o menu do topo do painel fica apertado e corta *Agenda* | 28/09 | **014** (UX) | Anterior à 006 |
+| O modelo promete o que nenhuma ação fez: *"vou registrar seu interesse no sistema"*, *"vou verificar as outras opções"* | Conversas de 28 e 29/09 | **012** *(spec cortada)* · 015 reduziu | Não é do fluxo de agenda: nenhuma ação sustenta a frase · 30/09 (015): a lista do que a Sofia pode (prompt fixo), a tarefa sem próximos passos e o texto de reserva do guard atacam as fontes, mas não há guarda de fatos |
+| A resposta depois de uma busca numera cards que não são numerados (*"Os imóveis 1, 3 e 5…"*) | Replay de 28/09 | **012** *(spec cortada)* | Mesma família: afirmar o que não está na tela |
+| No celular (390 px), o menu do topo do painel fica apertado e corta *Agenda* | 28/09 | **014** *(spec cortada)* | Anterior à 006; nenhum commit mexeu no menu desde então |
 | Cenário 1 da compra: um guard reescreve uma resposta com duas perguntas (*"…pelo menos 2 quartos, sendo um deles usado como escritório, certo?"*) | Suíte de 29/09 (e4b) | Modelo | O guard fez o trabalho dele; o teste falha porque exige nenhuma reescrita |
 | *"obrigado!"* com horários na mesa repete a mesma lista de horários | Replay de 29/09, conversa 5 (e4b) | Modelo (ecoa o imóvel) | Não fecha, como decidido; só soa robótico |
 | O e4b às vezes não devolve a sobra de *"o condomínio aceita cachorro?"*, e a oferta de verificar com a equipe não acontece | Replay de 30/09, conversa 10, 1 em 3 (e4b) | Modelo | Quando a sobra vem, a oferta sai certa (conversas 7 e 10 nas outras rodadas) |
 | A pergunta de bairro *"Tem algum bairro ou região específica em mente, ou aceita sugestões?"* é de ou-isto-ou-aquilo; um *"não"* (ou *"sim"*) não preenche nada | Teste do desenvolvedor, 30/09 08:39 (e4b) | **Produto** (texto da pergunta) · 004 | Com o bairro vazio, o roteiro não completa e a busca não roda |
-| Duas respostas curtas não entendidas seguidas (*"sim"*, *"quero ver imóveis"*) viram handoff | Teste do desenvolvedor, 30/09 08:40 (e4b) | 004 FR-027 · decisão pendente 6 | Mesma família do *"tanto faz"* (011) |
+| Duas respostas curtas não entendidas seguidas (*"sim"*, *"quero ver imóveis"*) viram handoff | Teste do desenvolvedor, 30/09 08:40 (e4b) | 004 FR-027 · [ADR 22](arquitetura/adr/decisoes.md#22-revisable-qualification-state-and-actions-as-tool-calls) | Mesma família do *"tanto faz"* (011, spec cortada). A 015 (07/10) separou *"não entendi"* de agradecimento e de resposta curta, mas duas leituras vazias seguidas ainda levam ao handoff (duas tentativas não entendidas seguidas) |
 | Cenário 1 (compra, avaliado) no e4b: às vezes a busca não roda e nenhum card aparece (SC-004) | Eval de 07/10, 1 em 3 (e4b) | Modelo · **config do provedor** | A demo vai rodar num modelo hospedado; no e4b é oscilação conhecida desde 29/09 |
 | Na Azure, o gpt-5.4-nano às vezes troca a pergunta do roteiro por uma dele (*"qual tipo de imóvel você procura?"*) | Teste de 08/10 (Azure) | Modelo · o desenvolvedor vai trocar o modelo | Proposta de guarda de saída (pergunta fora do assunto do slot pendente) recusada por ora. O gpt-6-luna fez o mesmo uma vez em 9 turnos, no mesmo lugar: depois de *"não precisa"* à pergunta de bairro (*"Prefere apartamento ou casa?"*). Pode ser a linha da pergunta de bairro acima, e não o modelo |
+| Compra — a pergunta *"ele tem varanda?"* junto com a escolha de um imóvel (*"Gostei do segundo, ele tem varanda?"*) foi ignorada: Sofia ofereceu horários de visita sem responder | Teste de 08/10 (e4b) | Modelo / fronteira 015 | Sem causa investigada; documentado para quem retomar a fronteira |
+| Investimento — a ligação é encaminhada a um corretor com especialização em investimento, mas a frase diz *"alguém da nossa equipe"*, nunca *"especialista"* | 08/10 | Produto — documentado, não corrigido para a entrega | O corretor é escolhido por `chooseBroker` (`src/services/scheduling.ts`); a frase vem de `src/agent/prompts/meeting.ts`. O lead não sabe que fala com um especialista |
+| Investimento — *"Renda mensal mesmo, quero complementar minha aposentadoria"* (só repetia o objetivo) recebeu a oferta de verificar com a equipe, como se fosse um pedido que a Sofia não atende | Conversas de exemplo, 08/10 (12B) | Modelo · 015 (sobra da extração) | [`exemplos/conversas.md`](exemplos/conversas.md#2-investimento). O lead seguiu a conversa e o roteiro não foi afetado |
+| Remarcar *"para outro dia"* oferece horários no mesmo dia do compromisso marcado | Conversas de exemplo, 08/10 (12B) | 009 (remarcação) | A preferência "outro dia" não vira restrição de data; só dia da semana e período viram |
+| *"Quero falar com um corretor de verdade"*: o 12B devolveu JSON inválido duas vezes e o lead recebeu *"Tive um problema técnico…"*; o pedido repetido funcionou | Conversas de exemplo, 08/10 (12B) | Modelo | O caminho de falha fez o que devia: resposta honesta, sem passo inventado. Duas falhas seguidas levariam ao humano de qualquer forma |
+| A recusa fixa de *prompt injection* diz *"…e desconto quem decide é o corretor"*, que não tem relação com a mensagem | Conversas de exemplo, 08/10 | 004 (texto em `src/agent/prompts/fallback.ts`) | Texto escrito pelo código; correção de uma linha, deixada para depois da entrega |
+| Os três leads semeados têm score fixo (85 / 55 / 15) que `scoreLead` não produziria a partir dos campos deles | Revisão da documentação, 08/10 | 002 (seed) | Caem na mesma faixa de temperatura; o score é recalculado no primeiro turno real |
 
 ## Resolvidos
 

@@ -12,8 +12,9 @@ deterministic slot-filling flow, searches a seeded property catalog, proposes a
 viewing, summarizes the conversation for a broker, and follows up automatically if
 the lead goes quiet.
 
-Solo developer. Spec-driven: **no production code without a merged spec in
-`specs/`.**
+Solo developer. Specs are **offered, not enforced**: before changing production
+code, offer to write a short one-page spec in `specs/`, then follow the
+developer's choice (constitution 1.6.0, ADR 24).
 
 ## Document authority
 
@@ -41,7 +42,8 @@ instead of inventing an answer.
   message. Every criterion is revisable, `intent` included, and re-asking a
   filled slot is discouraged in the prompt, not forbidden in code (ADR 22).
 - **Only `src/agent/provider.ts` imports a provider SDK.** Swapping oMLX for a
-  hosted endpoint must be a change to two env vars and nothing else.
+  hosted endpoint is one line, `MODEL_PROFILE` in `.env`, choosing a YAML profile
+  in `config/models/` (ADR 23).
 - **Every LLM call is traced to Langfuse, fire-and-forget.** Telemetry never blocks
   or fails a reply.
 - **`docker compose up` is the only supported way to run this.** Host-only steps
@@ -57,7 +59,7 @@ instead of inventing an answer.
   [`docs/arquitetura/turno-do-agente.md`](docs/arquitetura/turno-do-agente.md)
   maps what the model reads, what code decides, which tools the model may call
   and what enables each of them per turn, plus the state kept between turns. Any
-  change to one of those — `run()` or `runTurn()` in `agent/orchestrator.ts`, an
+  change to one of those — a node of the turn pipeline in `agent/turn/`, an
   extraction fact, a tool or its gating, `task()`'s precedence, a written reply,
   an appointment or follow-up state — updates the diagrams and the table in that
   same commit. A step marked *planejado* loses the mark when it's built. Re-render
@@ -75,11 +77,11 @@ src/
 │   ├── login/
 │   └── api/{webhooks/[channel],chat,health}/
 ├── channels/         # ChannelAdapter interface + web adapter
-├── agent/            # orchestrator (stateless) · slots · prompts · tools · provider
+├── agent/            # turn/ (the turn as typed nodes) · prompts · tools · provider
 ├── domain/           # pure entities and rules, no I/O
 ├── services/         # use cases + their Drizzle queries — the ONLY entry for UI and API
 ├── db/               # schema · migrations · seed
-├── jobs/             # JobQueue interface · followup · summarize · outbox
+├── jobs/             # sweep consumers: followup · summarize · unanswered turns
 ├── worker/           # worker entrypoint (same image, different command)
 └── core/             # config · logging · langfuse · auth · security
 ```
@@ -117,8 +119,15 @@ table; never transliterate, never leave Portuguese in an identifier.
 
 ## Workflow
 
-`/speckit-specify` → `/speckit-clarify` → `/speckit-plan` → `/speckit-tasks` →
-`/speckit-analyze` (required) → `/speckit-implement`.
+Before a change to production code, **offer** a short spec — one page of prose in
+`specs/NNN-name/spec.md`: what it covers, what it doesn't, how it will be checked —
+and follow the developer's answer. Don't refuse or stall without one.
 
-One feature branch per spec. `specs/BACKLOG.md` holds the ordered slices and what
-challenge requirement each one satisfies.
+History: specs 001–007 used the full Spec Kit flow (`/speckit-specify` →
+`/speckit-clarify` → `/speckit-plan` → `/speckit-tasks` → `/speckit-analyze` →
+`/speckit-implement`); from 009 on, short prose specs replaced it. The skills are still
+installed if the developer asks for them.
+
+Still required: the deterministic suite (`npm run test:integration`) passes before
+a merge, and the turn map is updated with the turn's code. One branch per change.
+`specs/BACKLOG.md` holds the slices and which challenge requirement each satisfies.

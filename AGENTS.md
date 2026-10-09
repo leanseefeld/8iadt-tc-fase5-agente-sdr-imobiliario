@@ -81,7 +81,7 @@ src/
 ├── domain/           # pure entities and rules, no I/O
 ├── services/         # use cases + their Drizzle queries — the ONLY entry for UI and API
 ├── db/               # schema · migrations · seed
-├── jobs/             # JobQueue interface · followup · summarize · outbox
+├── jobs/             # sweep consumers: followup · summarize · unanswered turns
 ├── worker/           # worker entrypoint (same image, different command)
 └── core/             # config · logging · langfuse · auth · security
 ```

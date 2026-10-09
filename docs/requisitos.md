@@ -47,7 +47,7 @@ Conversa real: [Compra](exemplos/conversas.md#1-compra).
 | Entender perfil investidor | ✅ | `investorProfile`: primeira aplicação ou já investe |
 | Identificar ticket | ✅ | `ticket` |
 | Identificar expectativa de retorno | ✅ | `returnExpectation`: renda, valorização, ambos ou indefinido |
-| Direcionar para especialista | 🟡 | A ligação é marcada com um corretor cuja especialização inclui `investment` (`chooseBroker` em `src/services/scheduling.ts`; no seed, Bruno Castro). O lead **não** consulta o catálogo (FR-024). **Limitação conhecida:** a frase que o lead lê diz "com alguém da nossa equipe", não "com um especialista em investimentos". O encaminhamento acontece, mas o lead não o vê. |
+| Direcionar para especialista | 🟡 | A ligação é marcada com um corretor cuja especialização inclui `investment` (`chooseBroker` em `src/services/scheduling.ts`). Na [conversa de exemplo](exemplos/conversas.md#2-investimento), a ligação foi para Bruno Castro, o corretor do seed especializado em investimento ([agenda](imagens/agenda.png)). O lead **não** consulta o catálogo (FR-024). **Limitação conhecida:** a frase que o lead lê diz "com alguém da nossa equipe", não "com um especialista em investimentos". O encaminhamento acontece, mas o lead não o vê. |
 
 Verificado ponta a ponta por `tests/eval/scenario-investment.test.ts`. Conversa real:
 [Investimento](exemplos/conversas.md#2-investimento).
@@ -60,7 +60,7 @@ Verificado ponta a ponta por `tests/eval/scenario-investment.test.ts`. Conversa 
 | Manter contexto da conversa | ✅ | A mensagem de retomada é escrita a partir do estado da qualificação e termina na pergunta que ficou pendente (SC-006). |
 | Reengajar o lead | ✅ | Quando o lead volta, o turno segue do ponto em que parou. Nada do que já foi respondido é perguntado de novo. |
 
-Conversa real: [Follow-up](exemplos/conversas.md#3-follow-up).
+Conversa real: [Follow-up](exemplos/conversas.md#3-follow-up) ([tela](imagens/chat-followup.png)).
 
 ## 3. Requisitos funcionais
 

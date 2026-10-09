@@ -9,6 +9,7 @@ Se o lead some, ela volta a falar com ele sem perder o contexto. O corretor acom
 resumo, score e agenda.
 
 > **Estado da entrega:** funcional, rodando localmente com Docker Compose. O canal é um chat web (sem
+>
 > WhatsApp) e o modelo pode ser local (Gemma 4 via oMLX) ou hospedado (Azure OpenAI), escolhido por
 > configuração.
 
@@ -62,7 +63,11 @@ Um **SDR digital** que atende 24 horas por dia em conversa natural:
 | **Painel do lead: resumo e qualificação** | **Agenda da imobiliária** |
 | ![Painel do lead com resumo, qualificação e ações](docs/imagens/painel-lead.png) | ![Agenda com visitas e ligações marcadas](docs/imagens/agenda.png) |
 
-Mais telas, incluindo investimento, follow-up e o *trace* no Langfuse, estão em [`docs/imagens/`](docs/imagens/).
+Mais telas: [chat de investimento](docs/imagens/chat-investimento.png) ·
+[follow-up](docs/imagens/chat-followup.png) · [guardrails](docs/imagens/chat-guardrails.png) ·
+[cartões de imóveis](docs/imagens/chat-compra-cartoes.png) ·
+[painel do lead investidor](docs/imagens/painel-lead-investimento.png) ·
+[catálogo](docs/imagens/catalogo.jpg) · [*trace* de um turno no Langfuse](docs/imagens/langfuse-trace.png).
 
 ---
 
@@ -115,7 +120,7 @@ flowchart TD
 |---|---|
 | Aplicação | Next.js 16 (App Router) + TypeScript `strict` |
 | IA | Vercel AI SDK (`ai` 7) com provedor compatível com OpenAI; um perfil YAML por modelo |
-| Banco | PostgreSQL 16 + Drizzle ORM |
+| Banco | PostgreSQL 17 + Drizzle ORM |
 | Assíncrono | `followup_jobs` + *outbox* `events` no próprio Postgres (`FOR UPDATE SKIP LOCKED`); tempo real por `LISTEN/NOTIFY` → SSE. Sem Redis na aplicação |
 | Observabilidade | Langfuse self-hosted (perfil `observability` do Compose), logs JSON com pino, *health checks* |
 | Execução | Docker Compose: `db`, `migrate`, `app`, `worker` |
@@ -159,7 +164,65 @@ Resumo abaixo; a matriz completa, com arquivo e teste para cada item, está em
 **Os três cenários do enunciado**, com as mensagens do próprio enunciado, rodando de verdade (trechos; a
 íntegra está em [`docs/exemplos/conversas.md`](docs/exemplos/conversas.md)):
 
-<!-- EXEMPLOS -->
+**Exemplo 1: compra.** Roteiro completo, imóveis reais e visita marcada
+([conversa completa](docs/exemplos/conversas.md#1-compra) · [tela](docs/imagens/chat-compra.png)).
+
+> **Lead:** Estou procurando apartamento na zona sul
+>
+> **Sofia:** Entendi que você busca um apartamento na zona sul. Qual faixa de preço você tem em mente?
+>
+> **Lead:** Até uns 700 mil
+>
+> **Sofia:** Entendi, então o seu limite é de até R$ 700 mil. Quantos quartos você precisa no apartamento?
+>
+> *… quartos, bairros e prazo …*
+>
+> **Sofia:** Entendi que você precisa se mudar em até 2 meses. Separei 3 opções que combinam com o que você me contou […] *(3 cartões do catálogo)*
+>
+> *… nome e telefone …*
+>
+> **Lead:** Gostei do segundo
+>
+> **Sofia:** Tenho estes horários para uma visita ao VMA-0001 com alguém da nossa equipe: 1) sex 09/10 às 10h · 2) sex 09/10 às 14h · 3) sex 09/10 às 16h30. Qual fica melhor?
+>
+> **Lead:** Pode ser o primeiro horário
+>
+> **Sofia:** Pronto! Sua visita ao VMA-0001 está confirmada para sex 09/10 às 10h, com alguém da nossa equipe.
+
+**Exemplo 2: investimento.** Perfil, ticket e retorno, sem catálogo, e uma ligação com o corretor
+especializado em investimento ([conversa completa](docs/exemplos/conversas.md#2-investimento) ·
+[tela](docs/imagens/chat-investimento.png)).
+
+> **Lead:** Quero investir em imóveis para renda
+>
+> **Sofia:** Entendi, você busca um investimento focado em renda mensal com aluguel. Essa seria sua primeira aplicação em imóveis ou você já investe no setor?
+>
+> **Lead:** Seria o primeiro, hoje só tenho tesouro direto e ações
+>
+> **Sofia:** […] Qual valor você pretende destinar para esse investimento em imóveis?
+>
+> **Lead:** Algo em torno de 350 mil
+>
+> *… nome e e-mail …*
+>
+> **Sofia:** Tenho estes horários para uma conversa por telefone com alguém da nossa equipe: 1) sex 09/10 às 10h · 2) sex 09/10 às 14h · 3) sex 09/10 às 16h30. Qual fica melhor?
+
+**Exemplo 3: follow-up.** O lead parou de responder; o worker retomou com o contexto, e o lead voltou
+([conversa completa](docs/exemplos/conversas.md#3-follow-up) · [tela](docs/imagens/chat-followup.png)).
+
+> **Sofia:** Entendi, você busca algo até R$ 4.000 por mês. Quantos quartos você precisa no apartamento?
+>
+> *(silêncio)*
+>
+> **Sofia:** Oi! Passando para retomar sua busca por um apartamento de aluguel com orçamento de até R$ 4.000. 🏠 Quantos quartos você precisa?
+>
+> **Lead:** Oi! Desculpa a demora, foi uma semana corrida. 2 quartos
+>
+> **Sofia:** Sem problemas, eu entendo como as semanas podem ser corridas! Já anotei aqui que você precisa de 2 quartos. Você tem algum bairro ou região específica em mente ou aceita sugestões?
+
+As conversas completas também mostram uma mudança de ideia (de aluguel para compra) e os guardrails: tentativa
+de *prompt injection*, pergunta fora do escopo, pedido de desconto e pedido de corretor. Todas foram geradas
+com o Gemma 4 12B local e estão sem edição, inclusive nos pontos em que o modelo errou, que estão comentados.
 
 **Limitação conhecida (investimento):** a ligação é marcada com um corretor especializado em investimento,
 mas a frase que o lead lê diz "com alguém da nossa equipe", e não "com um especialista em investimentos". O

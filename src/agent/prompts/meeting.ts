@@ -21,6 +21,16 @@ const WEEKDAY: Record<Weekday, string> = {
 
 const WHO = "alguém da nossa equipe";
 
+/**
+ * Who the lead is told they will meet. Still no name (FR-005e): an investor whose
+ * broker really specializes in investment hears that, because "direcionar para
+ * especialista" is the challenge's own words for scenario 2, and the routing
+ * already happened in `chooseBroker`. Anyone else hears the team.
+ */
+export function meetingHost(investmentSpecialist: boolean): string {
+  return investmentSpecialist ? "nosso especialista em investimentos" : WHO;
+}
+
 /** "qui 02/10 às 10h", "sex 03/10 às 16h30" — in the agency's timezone. */
 export function slotLabel(at: Date, timeZone: string): string {
   const local = localParts(at, timeZone);
@@ -41,10 +51,11 @@ export function optionsSentence(
   type: MeetingType,
   propertyCode: string | null,
   timeZone: string,
+  who: string = WHO,
 ): string {
   const list = options.map((at, index) => `${index + 1}) ${slotLabel(at, timeZone)}`).join(" · ");
   const pick = options.length === 1 ? "Esse horário fica bom?" : "Qual fica melhor?";
-  return `Tenho estes horários para ${what(type, propertyCode)} com ${WHO}: ${list}. ${pick}`;
+  return `Tenho estes horários para ${what(type, propertyCode)} com ${who}: ${list}. ${pick}`;
 }
 
 /** FR-006: the booking, confirmed. The widget also renders it as a card. */
@@ -53,10 +64,11 @@ export function confirmationSentence(
   type: MeetingType,
   propertyCode: string | null,
   timeZone: string,
+  who: string = WHO,
 ): string {
   const kind =
     type === "call" ? "Sua conversa por telefone" : propertyCode === null ? "Sua visita" : `Sua visita ao ${propertyCode}`;
-  return `Pronto! ${kind} está confirmada para ${slotLabel(at, timeZone)}, com ${WHO}.`;
+  return `Pronto! ${kind} está confirmada para ${slotLabel(at, timeZone)}, com ${who}.`;
 }
 
 /**
@@ -183,10 +195,16 @@ export function keptSentence(meeting: MeetingRef, timeZone: string): string {
   return `Tudo certo, ${theMeeting(meeting)} de ${slotLabel(meeting.scheduledAt, timeZone)} continua marcada.`;
 }
 
-export function rescheduledSentence(at: Date, type: MeetingType, propertyCode: string | null, timeZone: string): string {
+export function rescheduledSentence(
+  at: Date,
+  type: MeetingType,
+  propertyCode: string | null,
+  timeZone: string,
+  who: string = WHO,
+): string {
   const kind =
     type === "call" ? "Sua conversa por telefone" : propertyCode === null ? "Sua visita" : `Sua visita ao ${propertyCode}`;
-  return `Pronto! ${kind} foi remarcada para ${slotLabel(at, timeZone)}, com alguém da nossa equipe.`;
+  return `Pronto! ${kind} foi remarcada para ${slotLabel(at, timeZone)}, com ${who}.`;
 }
 
 /** "Qual delas: a visita ao VMA-0001 (sex 02/10 às 14h) ou a conversa por telefone (ter 29/09 às 10h)?" */

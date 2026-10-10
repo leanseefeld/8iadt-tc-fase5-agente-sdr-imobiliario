@@ -114,6 +114,9 @@ test("Cenário 2 runs end to end (SC-002, SC-003)", { skip: !integration }, asyn
   await t.test("the meeting offered is a call with a specialist (FR-041)", async () => {
     assert.equal(last.meeting, "call", `meeting was ${String(last.meeting)}`);
     assert.equal(last.handoffReason, null, "proposing a call is not a handoff (ADR 19)");
+    // "Direcionar para especialista": the seeded investment broker gets the call,
+    // and the lead is told it is a specialist (08/10).
+    assert.match(last.reply, /com nosso especialista em investimentos/, last.reply);
 
     const [row] = await query("select status from conversations where id = $1", [conversationId]);
     assert.equal(row.status, "active");

@@ -75,7 +75,9 @@ Leitura do diagrama:
 - **O modelo faz três coisas no turno** — `extract`, `act` e `phrase` — e duas
   fora dele, no worker: resumo para o corretor e mensagem de follow-up. Quem decide
   o que perguntar, quando propor visita e quando passar para um corretor é código.
-- **Langfuse é opcional.** Só sobe com `docker compose --profile observability up`.
+- **Langfuse é opcional.** Só sobe com `docker compose --profile observability up`. Uma chamada ao modelo que falha fica
+  marcada como `ERROR` (a geração, se a chamada lançou erro; um evento `<nome>.failed`, se a resposta veio mas
+  não serviu), então um nó que tentou duas vezes aparece com a tentativa falha ao lado da que valeu.
   Redis, ClickHouse e MinIO existem **só para ele**; a aplicação não usa Redis. Sem
   as chaves `LANGFUSE_*`, o app e o worker rodam idênticos, sem traces.
 - **Um único canal implementado: o widget web.** O tipo `Channel` reserva o valor

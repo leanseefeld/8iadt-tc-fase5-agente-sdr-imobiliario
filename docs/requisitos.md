@@ -47,9 +47,9 @@ Conversa real: [Compra](exemplos/conversas.md#1-compra).
 | Entender perfil investidor | ✅ | `investorProfile`: primeira aplicação ou já investe |
 | Identificar ticket | ✅ | `ticket` |
 | Identificar expectativa de retorno | ✅ | `returnExpectation`: renda, valorização, ambos ou indefinido |
-| Direcionar para especialista | 🟡 | A ligação é marcada com um corretor cuja especialização inclui `investment` (`chooseBroker` em `src/services/scheduling.ts`). Na [conversa de exemplo](exemplos/conversas.md#2-investimento), a ligação foi para Bruno Castro, o corretor do seed especializado em investimento ([agenda](imagens/agenda.png)). O lead **não** consulta o catálogo (FR-024). **Limitação conhecida:** a frase que o lead lê diz "com alguém da nossa equipe", não "com um especialista em investimentos". O encaminhamento acontece, mas o lead não o vê. |
+| Direcionar para especialista | ✅ | A ligação é marcada com um corretor cuja especialização inclui `investment` (`chooseBroker` em `src/services/scheduling.ts`), e a Sofia diz isso ao lead: *"…conversa por telefone com nosso especialista em investimentos"* (`meetingHostFor`, que confere o corretor de fato atribuído). Na [conversa de exemplo](exemplos/conversas.md#2-investimento), a ligação foi para Bruno Castro, o corretor do seed especializado em investimento ([agenda](imagens/agenda.png)). O lead **não** consulta o catálogo (FR-024). |
 
-Verificado ponta a ponta por `tests/eval/scenario-investment.test.ts`. Conversa real:
+Verificado ponta a ponta por `tests/eval/scenario-investment.test.ts`, inclusive a frase do especialista; a frase também tem teste de unidade em `tests/meeting-host.test.ts`. Conversa real:
 [Investimento](exemplos/conversas.md#2-investimento).
 
 ### Exemplo 3 — Follow-up (o lead some)
@@ -85,7 +85,7 @@ Conversa real: [Follow-up](exemplos/conversas.md#3-follow-up) ([tela](imagens/ch
 | Multiagentes | 🟡 | Não há agentes autônomos conversando entre si. O turno usa **papéis de modelo separados**, cada um com prompt e saída próprios: leitura e extração (`turn/read.ts`, `turn/extract.ts`), resposta (`turn/speak.ts`), resumo (`summarizer.ts`) e escrita do follow-up (`followup-writer.ts`). O "especialista em investimento" (spec 011) foi cortado. |
 | Voice AI | ❌ | Não implementado. |
 | Integração com CRM | ❌ | Sem CRM externo. O painel próprio cobre funil, etapas, responsável e histórico. |
-| Observabilidade | ✅ | Cada chamada ao modelo vai para o Langfuse (self-hosted), sem bloquear a resposta, com perfil e modelo em cada *trace* e dados pessoais mascarados (`src/core/langfuse.ts`, `src/core/security.ts`). Logs JSON (pino) e *health checks* do app e do worker. |
+| Observabilidade | ✅ | Cada chamada ao modelo vai para o Langfuse (self-hosted), sem bloquear a resposta, com perfil e modelo em cada *trace*, dados pessoais mascarados e tentativas que falharam marcadas como `ERROR` (`src/core/langfuse.ts`, `src/core/security.ts`). Logs JSON (pino) e *health checks* do app e do worker. |
 | Segurança | ✅ | Login com senha bcrypt e cookie de sessão assinado. Escopo por imobiliária e por corretor em toda consulta. Três defesas contra *prompt injection*: o estado decide, não o texto; detecção no texto; guardas na saída. Também: consentimento antes de qualquer dado, orçamento de mensagens por sessão, limite de tamanho e mascaramento de PII nos *traces*. Testes: `injection.test.ts`, `masking.test.ts`, `span-mask.test.ts`, `auth-*.test.ts`, `leads-scope.test.ts`. |
 | Deploy em cloud | ❌ | Roda localmente com Docker Compose. O que é cloud-ready: a imagem de produção (`Dockerfile`, alvo `runner`), app sem estado, configuração só por ambiente e *health checks*. Só o modelo pode estar na nuvem: Azure OpenAI por perfil (ADR 23). |
 

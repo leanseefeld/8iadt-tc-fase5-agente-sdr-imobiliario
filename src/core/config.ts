@@ -112,8 +112,8 @@ export const configSchema = z.object({
   LEADS_PAGE_SIZE: positiveInt.default(25),
   DASHBOARD_LIVE_WINDOW_MINUTES: positiveInt.default(10),
 
-  FOLLOWUP_WINDOW_START: time.default("09:00"),
-  FOLLOWUP_WINDOW_END: time.default("20:00"),
+  // The agency's time zone: visits, the agenda, the chat and the follow-up
+  // window all read it. The window itself lives on the agency row (spec 017).
   FOLLOWUP_TIMEZONE: z.string().min(1).default("America/Sao_Paulo"),
   // Spec 006. Minutes, not hours, so a demonstration shows the sweep working
   // in a few minutes (ADR 15); the production-shaped default is four hours.

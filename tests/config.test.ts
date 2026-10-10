@@ -61,7 +61,7 @@ const malformed: Array<[string, string]> = [
   ["APP_PORT", "99999"],
   ["WORKER_SWEEP_INTERVAL_MS", "-1"],
   ["LOG_LEVEL", "chatty"],
-  ["FOLLOWUP_WINDOW_START", "9am"],
+  ["SCHEDULING_PREFERRED_TIMES", "9am"],
   ["CHAT_TYPING_DELAY_MS", "300"],
   ["CHAT_TYPING_DELAY_MS", "800-300"],
 ];

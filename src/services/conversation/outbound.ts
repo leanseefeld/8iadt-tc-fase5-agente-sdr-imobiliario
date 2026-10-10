@@ -20,6 +20,12 @@ export interface OutboundRecord {
   paused?: boolean;
   /** Spec 006 FR-015: a follow-up, marked so the dashboard and the metrics can tell. */
   isFollowUp?: boolean;
+  /**
+   * Spec 017: the meeting reminder, for this appointment. The next turn reads
+   * it as a message that already said what is booked, so a thank-you is
+   * answered with courtesy, not with the schedule again.
+   */
+  reminderFor?: string;
   now?: Date;
 }
 
@@ -74,6 +80,7 @@ export async function recordOutboundMessage(
             : {}),
           ...(input.userId !== undefined ? { userId: input.userId } : {}),
           ...(input.isFollowUp === true ? { isFollowUp: true } : {}),
+          ...(input.reminderFor !== undefined ? { reminder: { appointmentId: input.reminderFor } } : {}),
         },
         createdAt: now,
       })

@@ -42,6 +42,8 @@ export interface OutboundMessage {
   paused?: boolean;
   /** Spec 006 FR-015: written by the follow-up worker, not in reply to anything. */
   isFollowUp?: boolean;
+  /** Spec 017: the meeting reminder, and the appointment it announces. */
+  reminderFor?: string;
 }
 
 export interface ChannelAdapter {

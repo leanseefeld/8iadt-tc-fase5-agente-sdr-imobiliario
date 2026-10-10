@@ -16,6 +16,8 @@ export interface AppointmentRowData {
   neighborhood: string | null;
   status: "confirmed" | "done" | "cancelled";
   brokerName: string | null;
+  /** Spec 017: no reminder will reach this lead — the broker should know before the meeting. */
+  leadOptedOut: boolean;
 }
 
 const STATUS_LABEL: Record<AppointmentRowData["status"], string> = {
@@ -58,6 +60,9 @@ export function AppointmentRow({ row }: { row: AppointmentRowData }) {
         </Link>
         <span className={styles.what}>{what}</span>
         {row.brokerName !== null && <span className={styles.broker}>{row.brokerName}</span>}
+        {row.leadOptedOut && row.status === "confirmed" && (
+          <span className={styles.optedOut}>Lead pediu para não receber mensagens</span>
+        )}
       </div>
       <div className={styles.side}>
         <span className={styles.status} data-status={row.status}>

@@ -31,7 +31,11 @@ export type SlotRules = {
   type: MeetingType;
 };
 
-export type WindowRules = { windowStart: string; windowEnd: string; timezone: string };
+/** Spec 017: the agency's sending window — the same hours on every day it opens. */
+export type WindowRules = { windowStart: string; windowEnd: string; timezone: string; days: Weekday[] };
+
+/** Monday first, the order a week is shown in. */
+export const WEEK: Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 
 /** How long a meeting holds the broker. Busy intervals and collisions both use it. */
 export const MEETING_MINUTES = 60;
@@ -226,21 +230,26 @@ export function nextBrokerInRotation(brokerIds: string[], assignmentCounts: Reco
 // Follow-up window
 // ---------------------------------------------------------------------------
 
-/** Inside the daily window, in its own timezone? End is exclusive. */
+/** Inside the window, in its own timezone: an open weekday, between start and end (exclusive). */
 export function isWithinWindow(instant: Date, rules: WindowRules): boolean {
-  const { minutes } = localParts(instant, rules.timezone);
+  const { minutes, weekday } = localParts(instant, rules.timezone);
+  if (!rules.days.includes(weekday)) return false;
   return minutes >= toMinutes(rules.windowStart) && minutes < toMinutes(rules.windowEnd);
 }
 
 /**
  * The first instant at or after `instant` inside the window (FR-013): the
- * instant itself when already inside, today's opening when before it, and
- * tomorrow's opening when after it. An attempt due at 03:00 moves, never skips.
+ * instant itself when already inside, today's opening when before it, and the
+ * next open day's opening otherwise — a closed weekday is skipped (spec 017).
+ * An attempt due at 03:00 moves, never skips. A window with no open day has no
+ * next opening; the settings screen refuses to save one, so this throws.
  */
 export function nextWindowOpening(instant: Date, rules: WindowRules): Date {
   if (isWithinWindow(instant, rules)) return instant;
+  if (rules.days.length === 0) throw new Error("The follow-up window has no open weekday.");
   const local = localParts(instant, rules.timezone);
   const start = toMinutes(rules.windowStart);
-  const day = local.minutes < start ? local : nextDay(local);
+  let day: { year: number; month: number; day: number } = local.minutes < start ? local : nextDay(local);
+  while (!rules.days.includes(weekdayOf(day))) day = nextDay(day);
   return zonedInstant(day.year, day.month, day.day, start, rules.timezone);
 }

@@ -257,6 +257,12 @@ alvo `runner` existe para que a afirmação "os mesmos contêineres rodam na nuv
 seja testável, mas não foi implantado em lugar algum. Detalhes de escala em
 [`visao-geral.md`](visao-geral.md) §4 e §7.
 
+**Exploração de 10/10/2026:** [`../exploracoes/hospedagem-azure.md`](../exploracoes/hospedagem-azure.md)
+avalia a Azure (Container Apps escalando a zero, worker como job agendado, Postgres
+Flexible Server). A imagem `runner` foi construída e exercitada num contêiner, com
+migrations, seed, `next start`, uma conversa por SSE e uma varredura do worker.
+Continua sem implantação.
+
 ---
 
 ## Como usar este registro

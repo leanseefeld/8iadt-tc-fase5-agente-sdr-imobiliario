@@ -65,6 +65,33 @@ instead of inventing an answer.
   same commit. A step marked *planejado* loses the mark when it's built. Re-render
   the Mermaid before committing: a diagram that doesn't parse counts as not updated.
 
+## Keeping the docs true
+
+The repository was delivered for evaluation: teachers read the README and `docs/` and look at the
+screenshots, and assume they describe the code. A change that makes any of them false is not done. In
+the **same branch** as the change, before calling it finished:
+
+1. **Find what describes it.** Grep `README.md`, `docs/` and `scripts/sample-conversations/` for the
+   strings, sentences, labels and file names you changed (an old reply text, a UI label, a function
+   name). Every hit is a candidate to update.
+2. **Screenshots.** Read the "Refazer quando muda" column of
+   [`docs/imagens/README.md`](docs/imagens/README.md). If your change touches anything listed there, a
+   UI element, a sentence Sofia says, a flow, retake that image with `scripts/screenshots/` and look at
+   it before committing. Nobody will ask for this explicitly; the manifest is the request.
+3. **Sample conversations.** If Sofia would now answer a line of
+   [`docs/exemplos/conversas.md`](docs/exemplos/conversas.md) differently, regenerate that conversation
+   (`scripts/sample-conversations/`, a new session id), replace the transcript and its comments, and
+   retake its screenshot. Never hand-edit a transcript: they are quoted as unedited.
+4. **Requirements and limits.** If the change affects a challenge item, update its row in
+   [`docs/requisitos.md`](docs/requisitos.md) (status and evidence) and the README's
+   requirement, differentiator and *Limitações conhecidas* sections.
+5. **Failures.** A fixed entry in [`docs/cenarios-de-falha.md`](docs/cenarios-de-falha.md) moves to
+   *Resolvidos* with how; a new failure you saw gets logged with its owner.
+6. **Architecture.** The turn map rule below, plus `modelo-de-dados.md` for schema or event changes and
+   `visao-geral.md` for components, seams and deployment.
+
+Docs stay in pt-BR. Keep the existing tone: plain, concrete, honest about what does not work.
+
 ## Structure
 
 ```

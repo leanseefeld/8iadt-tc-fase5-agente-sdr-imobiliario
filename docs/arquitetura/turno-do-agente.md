@@ -122,7 +122,7 @@ flowchart TD
     ACT --> OUTC["actions.ts — applyActionOutcomes<br/>reservou → confirmação · recusada → motivo e novas opções<br/>escolheu e nada reservou → as mesmas opções"]:::codigo
     OUTC --> ENDING["ending.ts — decideEnding<br/>015: sobrou pedido, pergunta ou informação que nada respondeu → oferta<br/>009: nada pendente, nada perguntado → fechamento"]:::codigo
     ENDING --> AGENDA{"o código já escreveu a resposta?<br/>opções · confirmação · recusa da reserva"}:::codigo
-    AGENDA -- "sim" --> W_MEET["frase escrita pelo código<br/>datas, horários e 'alguém da nossa equipe'"]:::escrita
+    AGENDA -- "sim" --> W_MEET["frase escrita pelo código<br/>datas, horários e quem atende<br/>(equipe ou especialista), sem nome"]:::escrita
     AGENDA -- "não" --> CANT{"speak.ts — tentou algo que não dá<br/>para usar e fez uma pergunta?"}:::codigo
     CANT -- "sim" --> W_CANT["ainda não consigo te ajudar com isso"]:::escrita
     CANT -- "não" --> TASK["speak.ts — briefing e chooseTask()<br/>reconfirmação · último resultado de busca<br/>escolhe UMA instrução por precedência"]:::codigo
@@ -198,11 +198,11 @@ stateDiagram-v2
   Pedido de encontro no escritório, por Meet, Zoom, FaceTime ou outro formato: *"ainda não consigo te ajudar com
   isso"* e o telefone, se nenhum já estiver marcado. Pedido fora do domínio numa visita (carona, reembolso, escolher
   quem atende por uma característica pessoal): só *"ainda não consigo"*. Os dois avançam o streak.
-- **Nenhum nome de corretor chega ao modelo por causa da agenda** (006): opções e confirmação dizem *"alguém da
-  nossa equipe"*, escritas pelo código; depois de uma devolução, o modelo não confirma nem nega quem atende.
-  *Lacuna conhecida, não corrigida:* o corretor de um lead de investimento é escolhido entre os que têm
-  `investment` em `specializations` (`chooseBroker`, `services/scheduling.ts`), mas a frase que o lead lê diz
-  *"alguém da nossa equipe"*, nunca *"especialista"*.
+- **Nenhum nome de corretor chega ao modelo por causa da agenda** (006): opções, confirmação e remarcação são
+  escritas pelo código e dizem *"alguém da nossa equipe"*. A exceção é o investidor cujo corretor tem
+  `investment` em `specializations` (`chooseBroker` o prefere), que ouve *"nosso especialista em investimentos"*
+  (`meetingHostFor` em `turn/offer-times.ts`, que confere o corretor de fato atribuído). Nome, nunca. Depois de
+  uma devolução, o modelo não confirma nem nega quem atende.
 - **Uma proposta aberta não sequestra a conversa**: o lead pode mudar de assunto e voltar a ela depois.
 - **O streak de não compreensão** é um número em `conversations.fallbackStreak`: zera quando o turno aprende
   algo, **mantém** em conversa fiada ou falha técnica, **avança** quando o lead tentou algo inutilizável. Em 2,
@@ -219,7 +219,7 @@ Caminhos abaixo relativos a `src/`. *Turno* = `agent/turn/`.
 | botão **Interessado** no card *(006)* | 🟩 widget envia | `app/(public)/chat/[agencySlug]/PropertyCard.tsx` | clique ou toque: posta *"Interessado em VMA-0005"* em nome do lead, como mensagem dele, e um turno normal começa; a resposta depende de onde a conversa está (FR-004d) |
 | debounce · `claimTurn` | 🟦 código | `channels/web.ts` · `jobs/unanswered-turns.ts` · `services/conversation/claim.ts` | toda mensagem; um turno por conversa, depois de `CHAT_DEBOUNCE_MS` de silêncio |
 | `looksLikeInjection` | 🟦 código | `domain/injection.ts`, chamado por `turn/run.ts` | todo turno; três frases fixas de tentativa de manipulação |
-| `extract()` | 🟨 modelo lê | `turn/extract.ts` | todo turno que passou do portão. Devolve slots e os fatos `askedForHuman`, `optOut`, `attemptedAnswer`, `askedAboutCriteria`; **006:** `declinedOffer`, `askedForTimes`, `pickedTime`, `preferredWeekday`, `preferredPeriod`, `propertyPosition`, `propertyCode`, `askedWhoAttends`, **009:** `changeRequest`, `answer`, `meetingKind`, `unsupportedMeeting`, `outOfScopeRequest`; **015:** `askedAboutMeetings`, `messageAct` (agradece, concorda, responde, pede, pergunta, informa, outro) e `uncovered` (a sobra: o que nenhum campo registrou) |
+| `extract()` | 🟨 modelo lê | `turn/extract.ts` | todo turno que passou do portão. Devolve slots e os fatos `askedForHuman`, `optOut`, `attemptedAnswer`, `askedAboutCriteria`; **006:** `declinedOffer`, `askedForTimes`, `pickedTime`, `preferredWeekday`, `preferredPeriod`, `propertyPosition`, `propertyCode`, `askedWhoAttends`, **009:** `changeRequest`, `answer`, `meetingKind`, `unsupportedMeeting`, `outOfScopeRequest`; **015:** `askedAboutMeetings`, `messageAct` (agradece, concorda, responde, pede, pergunta, informa, outro) e `uncovered` (a sobra: o que nenhum campo registrou). **Duas tentativas:** uma chamada que falha ou uma resposta que não é JSON tenta de novo uma vez; na segunda falha, o turno segue sem nada aprendido (resposta honesta, e o streak decide o humano). Cada tentativa falha fica no Langfuse como `ERROR` |
 | `readTurn` — leituras do código *(009, 015)* | 🟦 código | `turn/read.ts` · `agent/lexicon.ts` | o nó que assenta o que a mensagem diz: tudo o que vem depois decide a partir dele, nunca do texto cru. **Um fato que o modelo afirma precisa estar nas palavras**: um código de imóvel que a mensagem não contém, uma recusa sem palavra de recusa ou uma troca de intenção sem palavra de finalidade são descartados (o modelo ecoa o que leu antes). Todo turno, depois da extração: dia e período (`parseWhen`), sim/não a uma pergunta pendente, verbos de remarcar e cancelar, *"já marcamos?"*; uma mensagem que é **só** agradecimento ou concordância (*obrigado, valeu, ok, beleza, 👍*) vale como tal, seja lá o que o modelo leu, e não carrega pedido (recusa, humano, opt-out); *"outros imóveis"* / *"mais opções"* é a pergunta sobre os critérios; com horários na mesa, *"a primeira"*, *"2"*, *"opção 3"* é uma escolha. Vocabulário fechado, como o `parseWhen` |
 | `boundaryOffer` *(015)* | 🟦 código | `turn/boundary.ts` · `turn/ending.ts` | a mensagem pede, pergunta ou informa algo que sobrou, **e** o turno não tem nada melhor a dizer (nenhuma frase escrita, busca, critérios, pergunta sobre o marcado, nada aprendido). O modelo escreve a oferta (reconhece, diz que não consegue confirmar, oferece que alguém da equipe verifique); se esquecer a pergunta, o código a acrescenta (`mustAsk`). A oferta fica pendente (`humanOffer`): **sim** → handoff normal; **não** → fechamento; outra coisa → turno normal. A pergunta do roteiro espera um turno |
 | `recoverSlot()` | 🟨 modelo lê | `agent/recovery.ts`, chamado por `turn/learn.ts` | slot pendente ficou vazio, a extração não disse nada dele (`shouldRecover`), **e** o lead tentou responder |

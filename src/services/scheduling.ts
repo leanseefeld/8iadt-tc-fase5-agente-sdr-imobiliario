@@ -264,6 +264,21 @@ export async function proposeAppointment(
   return { ok: true, ...recorded };
 }
 
+/**
+ * Whether the broker assigned to the lead lists `intent` among their
+ * specializations. `chooseBroker` prefers a specialist but falls back to anyone,
+ * and a lead keeps the broker of an earlier intent — so a sentence that says
+ * "especialista" asks this instead of assuming it.
+ */
+export async function assignedBrokerSpecializes(leadId: string, intent: Intent, runner: Runner = getDb()): Promise<boolean> {
+  const [row] = await runner
+    .select({ specializations: users.specializations })
+    .from(leads)
+    .innerJoin(users, eq(users.id, leads.assignedBrokerId))
+    .where(eq(leads.id, leadId));
+  return row?.specializations.includes(intent) ?? false;
+}
+
 /** FR-005a: close the open proposal. False when there was none to close. */
 export async function declineProposal(conversationId: string): Promise<boolean> {
   return getDb().transaction(async (tx) => {

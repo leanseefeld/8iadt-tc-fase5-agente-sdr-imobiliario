@@ -56,6 +56,9 @@ Um **SDR digital** que atende 24 horas por dia em conversa natural:
 
 ## Em imagens
 
+<!-- Capturas da aplicação real. O que cada uma mostra, e que mudança obriga a refazê-la, está em
+     docs/imagens/README.md; scripts/screenshots/ refaz todas com o mesmo enquadramento. -->
+
 | Chat do lead (compra) | Painel do corretor |
 |---|---|
 | ![Chat do lead: qualificação de compra com cartões de imóveis](docs/imagens/chat-compra.png) | ![Lista de leads com indicadores, temperatura e prévia](docs/imagens/painel-leads.png) |
@@ -188,23 +191,27 @@ Resumo abaixo; a matriz completa, com arquivo e teste para cada item, está em
 >
 > **Sofia:** Pronto! Sua visita ao VMA-0001 está confirmada para sex 09/10 às 10h, com alguém da nossa equipe.
 
-**Exemplo 2: investimento.** Perfil, ticket e retorno, sem catálogo, e uma ligação com o corretor
-especializado em investimento ([conversa completa](docs/exemplos/conversas.md#2-investimento) ·
+**Exemplo 2: investimento.** Perfil, ticket e retorno, sem catálogo, e uma ligação com o especialista em
+investimentos, o corretor do seed com essa especialização ([conversa completa](docs/exemplos/conversas.md#2-investimento) ·
 [tela](docs/imagens/chat-investimento.png)).
 
 > **Lead:** Quero investir em imóveis para renda
 >
-> **Sofia:** Entendi, você busca um investimento focado em renda mensal com aluguel. Essa seria sua primeira aplicação em imóveis ou você já investe no setor?
+> **Sofia:** Entendi perfeitamente, seu foco é garantir uma boa renda mensal com aluguel. Essa seria sua primeira vez investindo em imóveis ou você já atua no setor?
 >
 > **Lead:** Seria o primeiro, hoje só tenho tesouro direto e ações
 >
-> **Sofia:** […] Qual valor você pretende destinar para esse investimento em imóveis?
+> **Sofia:** […] Qual valor você pensa em destinar para esse investimento?
 >
 > **Lead:** Algo em torno de 350 mil
 >
 > *… nome e e-mail …*
 >
-> **Sofia:** Tenho estes horários para uma conversa por telefone com alguém da nossa equipe: 1) sex 09/10 às 10h · 2) sex 09/10 às 14h · 3) sex 09/10 às 16h30. Qual fica melhor?
+> **Sofia:** Tenho estes horários para uma conversa por telefone com nosso especialista em investimentos: 1) seg 12/10 às 10h · 2) seg 12/10 às 14h · 3) seg 12/10 às 16h30. Qual fica melhor?
+>
+> **Lead:** Pode ser a segunda opção
+>
+> **Sofia:** Pronto! Sua conversa por telefone está confirmada para seg 12/10 às 14h, com nosso especialista em investimentos.
 
 **Exemplo 3: follow-up.** O lead parou de responder; o worker retomou com o contexto, e o lead voltou
 ([conversa completa](docs/exemplos/conversas.md#3-follow-up) · [tela](docs/imagens/chat-followup.png)).
@@ -222,10 +229,6 @@ especializado em investimento ([conversa completa](docs/exemplos/conversas.md#2-
 As conversas completas também mostram uma mudança de ideia (de aluguel para compra) e os guardrails: tentativa
 de *prompt injection*, pergunta fora do escopo, pedido de desconto e pedido de corretor. Todas foram geradas
 com o Gemma 4 12B local e estão sem edição, inclusive nos pontos em que o modelo errou, que estão comentados.
-
-**Limitação conhecida (investimento):** a ligação é marcada com um corretor especializado em investimento,
-mas a frase que o lead lê diz "com alguém da nossa equipe", e não "com um especialista em investimentos". O
-encaminhamento acontece; o lead só não fica sabendo dele.
 
 ---
 
@@ -252,7 +255,10 @@ atendimento comercial se não decidir nada que custe caro. Por isso:
 Cada turno faz duas ou três chamadas ao modelo, e cada uma é conferida pelo código:
 
 - **Extração:** o JSON passa por schema, por regras de *merge* e por uma trava de evidência que descarta
-  valores sobre assuntos que o lead nem mencionou.
+  valores sobre assuntos que o lead nem mencionou. Uma resposta que não vem em JSON, ou uma chamada que
+  falha, ganha uma segunda tentativa (o resumo também). Se as duas falharem, o lead recebe uma resposta
+  honesta, e duas falhas seguidas passam a conversa para um humano. Cada tentativa falha aparece como
+  `ERROR` no Langfuse.
 - **Ferramentas:** só as que o código liberou naquele turno; os argumentos que importam (imobiliária,
   intenção) vêm do estado, não do modelo.
 - **Resposta:** sai em *streaming* frase a frase, passando por guardas que retêm sintaxe vazada, outro
@@ -307,7 +313,7 @@ As falhas encontradas pelo caminho, inclusive as que ficaram abertas, estão reg
 | Diferencial | Estado | Evidência |
 |---|---|---|
 | Memória conversacional | ✅ | Histórico, qualificação revisável e resumo persistidos por conversa; follow-up e retorno do lead partem desse estado |
-| Observabilidade | ✅ | Langfuse self-hosted com *trace* de cada chamada (perfil e modelo inclusos, dados pessoais mascarados), logs JSON e *health checks* do app e do worker |
+| Observabilidade | ✅ | Langfuse self-hosted com *trace* de cada chamada (perfil e modelo inclusos, dados pessoais mascarados, tentativas que falharam marcadas como `ERROR`), logs JSON e *health checks* do app e do worker |
 | Segurança | ✅ | Login e sessão assinada, escopo por imobiliária e corretor, três camadas contra *prompt injection*, consentimento (LGPD), orçamento de mensagens, mascaramento de PII |
 | Multiagentes | 🟡 | Papéis de modelo separados (leitura, resposta, resumo, follow-up), não agentes autônomos. O agente especialista em investimento foi cortado |
 | Uso de RAG | ❌ | O catálogo é consultado por ferramenta estruturada, o que garante que todo imóvel citado existe. Não há busca semântica |
@@ -457,7 +463,6 @@ entrega.
 
 ## Limitações conhecidas
 
-- **Investimento:** o encaminhamento ao especialista não aparece na frase da Sofia (ver acima).
 - **Modelo local pequeno:** o e4b às vezes ignora uma pergunta lateral ("ele tem varanda?") quando o lead
   também escolhe um imóvel. Os casos conhecidos estão em [`docs/cenarios-de-falha.md`](docs/cenarios-de-falha.md).
 - **Latência local:** no 12B, um turno leva dezenas de segundos numa máquina de desenvolvimento; um modelo
@@ -477,6 +482,7 @@ entrega.
 | `docs/` | arquitetura, requisitos, exemplos, decisões e falhas conhecidas |
 | `specs/` | especificações por funcionalidade |
 | `tests/`, `evals/` | suíte determinística, evals com modelo real e eval de extração |
+| `scripts/` | diagnóstico (`doctor`), [conversas de exemplo](scripts/sample-conversations/README.md) e [capturas de tela](scripts/screenshots/README.md) |
 | `reference/` | ideação inicial, **não normativa** ([`reference/README.md`](reference/README.md)) |
 
 **Convenções:** código, identificadores e commits em inglês; documentação, interface e conversa em pt-BR.

@@ -1,8 +1,9 @@
 import type { Preference, MeetingType } from "../../domain/scheduling.ts";
 import type { Intent } from "../../domain/slots.ts";
 import { lastOfferedOptions, type CommittedToolCall, type LoadedTurn } from "../../services/conversation.ts";
-import { proposeAppointment } from "../../services/scheduling.ts";
+import { assignedBrokerSpecializes, proposeAppointment } from "../../services/scheduling.ts";
 import {
+  meetingHost,
   NO_OPTIONS_FOR_CONSTRAINT_SENTENCE,
   NO_OPTIONS_SENTENCE,
   optionsSentence,
@@ -10,6 +11,15 @@ import {
 } from "../prompts/meeting.ts";
 
 /** A meeting offer: what it is for, and the times with the sentence that presents them. */
+
+/**
+ * Who the lead will meet, as the sentences say it: the investment specialist when
+ * the lead invests and their broker really is one, the team otherwise. Asked only
+ * for investors, so every other offer costs no query.
+ */
+export async function meetingHostFor(leadId: string, intent: Intent): Promise<string> {
+  return meetingHost(intent === "investment" && (await assignedBrokerSpecializes(leadId, intent)));
+}
 
 /**
  * Spec 006 FR-004e/f: what a meeting offer is for. An investor always gets a
@@ -61,7 +71,7 @@ export async function offerTimes(input: {
     const times = result.options.map((option) => option.scheduledAt);
     const code = type === "viewing" ? (input.property?.code ?? null) : null;
     return {
-      reply: optionsSentence(times, type, code, input.timezone),
+      reply: optionsSentence(times, type, code, input.timezone, await meetingHostFor(input.turn.lead.id, input.intent)),
       options: times,
       type,
       call: { name: "proposeMeeting", arguments: { kind: type, options: times.length } },

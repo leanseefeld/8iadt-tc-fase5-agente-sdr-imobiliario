@@ -1,0 +1,13 @@
+[
+  { "file": "chat-compra.png", "kind": "chat", "session": "amostra2-compra-camila", "height": 1500 },
+  { "file": "chat-compra-cartoes.png", "kind": "chat", "session": "amostra2-compra-camila", "height": 1500, "scrollTop": 0 },
+  { "file": "chat-investimento.png", "kind": "chat", "session": "amostra3-investimento-rafael", "height": 1500 },
+  { "file": "chat-followup.png", "kind": "chat", "session": "amostra2-followup-marina", "height": 1300 },
+  { "file": "chat-guardrails.png", "kind": "chat", "session": "amostra3-guardrails-pedro", "height": 1400 },
+  { "file": "painel-leads.png", "kind": "panel", "url": "/leads" },
+  { "file": "painel-lead.png", "kind": "panel", "url": "/leads?q=Camila%20Duarte", "openFirstLead": true },
+  { "file": "painel-lead-investimento.png", "kind": "panel", "url": "/leads?q=Rafael%20Souza", "openFirstLead": true },
+  { "file": "agenda.png", "kind": "panel", "url": "/agenda" },
+  { "file": "catalogo.jpg", "kind": "panel", "url": "/catalogo" },
+  { "file": "langfuse-trace.png", "kind": "langfuse", "trace": "conversation.turn", "nth": 2 }
+]

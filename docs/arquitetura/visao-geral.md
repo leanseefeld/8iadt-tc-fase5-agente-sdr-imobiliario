@@ -180,6 +180,9 @@ como processo separado desde o primeiro dia** (ADR 2).
   O turno em si é protegido por `claimTurn`, uma coluna na própria conversa.
 - **Tempo real sem polling**: `LISTEN/NOTIFY` com **uma conexão por réplica**, não
   por cliente (§8).
+- **Custo do modelo por turno**: os prompts são montados para o cache de prefixo do servidor (system prompt
+  constante, o que muda no fim). Nas conversas de exemplo, 68% a 87% dos *tokens* de entrada vieram do cache.
+  Ver [turno do agente §5](turno-do-agente.md#5--o-cache-de-prefixo-o-que-muda-fica-no-fim).
 
 **Não feito**
 

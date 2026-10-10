@@ -9,5 +9,7 @@
   { "file": "painel-lead-investimento.png", "kind": "panel", "url": "/leads?q=Rafael%20Souza", "openFirstLead": true },
   { "file": "agenda.png", "kind": "panel", "url": "/agenda" },
   { "file": "catalogo.jpg", "kind": "panel", "url": "/catalogo" },
+  { "file": "followups.png", "kind": "panel", "url": "/followups?mine=0" },
+  { "file": "configuracoes.png", "kind": "panel", "url": "/configuracoes" },
   { "file": "langfuse-trace.png", "kind": "langfuse", "trace": "conversation.turn", "nth": 2 }
 ]

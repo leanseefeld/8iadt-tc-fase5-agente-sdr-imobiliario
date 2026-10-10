@@ -139,6 +139,7 @@
   background: var(--surface);
   color: var(--text);
   max-width: 100%;
+  align-self: flex-start;
 }
 
 .hint {

@@ -20,7 +20,11 @@ Chaves primárias são `uuid` geradas no banco. Toda tabela de negócio carrega 
 | id | uuid | |
 | name | text | "Imobiliária Demo" na seed |
 | slug | text, único | usado na rota pública do widget: `/chat/[agencySlug]` |
-| followupEnabled | boolean, padrão `true` | chave do follow-up automático da agência (006 FR-019); só a gerência muda; lida **na hora de enviar**, nunca ao agendar |
+| followupEnabled | boolean, padrão `true` | chave do follow-up automático da agência (006 FR-019); só a gerência muda, em `/configuracoes` (017); lida **na hora de enviar**, nunca ao agendar |
+| followupWindowStart, followupWindowEnd | text `HH:MM`, padrão `09:00` e `20:00` | janela de envio do follow-up (017); antes vinha do `.env`. O fuso continua no `.env` (`FOLLOWUP_TIMEZONE`): visitas, agenda e chat também o leem |
+| followupWindowDays | jsonb, padrão os sete dias | dias da semana em que a janela abre (`mon`…`sun`), pelo menos um (017) |
+| remindersEnabled | boolean, padrão `true` | chave do lembrete antes do compromisso (017), independente da do follow-up |
+| reminderLeadMinutes | int, padrão `120` | antecedência do lembrete; a tela oferece 30 min, 1, 2, 3, 4 e 24 h (017) |
 
 ### users
 
@@ -79,7 +83,7 @@ A **temperatura** (`cold` · `warm` · `hot`) não é coluna: deriva do score em
 | role | enum `lead` · `agent` · `broker` · `system` | |
 | content | text | |
 | repliesToMessageId | uuid, nulo | mensagens `agent`: a última mensagem do lead que o turno leu. Se houver mensagens do lead posteriores, o widget cita a primeira linha dela no topo do balão |
-| metadata | jsonb | o que cada mensagem carrega além do texto. **Lead:** `clientMessageId` (idempotência: índice único parcial por conversa, migração `0001`). **Corretor:** `userId`. **Follow-up:** `isFollowUp`. **Agente, gravado pelo `commitTurn`:** `propertyIds` (os cards exibidos), `guard` (guarda de código que reescreveu a resposta), `meeting` (`viewing`/`call` ofertado), `reconfirmation`, `toolCalls` (nome e argumentos, com PII mascarada); e o estado que o turno seguinte lê (ADR 22) — `meetingOptions`, `offerDeclined`, `interestedProperty`, `booking`, `pendingCancel`, `pendingChoice`, `reschedulingId`, `rebook`, `closing` (009), `humanOffer` (015). Ver [`turno-do-agente.md`](turno-do-agente.md) §3 |
+| metadata | jsonb | o que cada mensagem carrega além do texto. **Lead:** `clientMessageId` (idempotência: índice único parcial por conversa, migração `0001`). **Lembrete (017):** `reminder: { appointmentId }`, que o turno seguinte lê como um fechamento já feito. **Corretor:** `userId`. **Follow-up:** `isFollowUp`. **Agente, gravado pelo `commitTurn`:** `propertyIds` (os cards exibidos), `guard` (guarda de código que reescreveu a resposta), `meeting` (`viewing`/`call` ofertado), `reconfirmation`, `toolCalls` (nome e argumentos, com PII mascarada); e o estado que o turno seguinte lê (ADR 22) — `meetingOptions`, `offerDeclined`, `interestedProperty`, `booking`, `pendingCancel`, `pendingChoice`, `reschedulingId`, `rebook`, `closing` (009), `humanOffer` (015). Ver [`turno-do-agente.md`](turno-do-agente.md) §3 |
 | createdAt | timestamptz | índice `(conversationId, createdAt)` |
 
 ### properties
@@ -132,9 +136,12 @@ A **temperatura** (`cold` · `warm` · `hot`) não é coluna: deriva do score em
 | Coluna | Tipo | Notas |
 |---|---|---|
 | id, agencyId, conversationId | uuid | |
-| attempt | int | 1..N |
+| kind | enum `followup` · `reminder`, padrão `followup` | **017:** um follow-up retoma uma conversa parada; um lembrete anuncia um compromisso confirmado. Dividem a fila, a varredura e a tela `/followups` |
+| appointmentId | uuid, nulo, `on delete cascade` | **017:** só no lembrete — o compromisso que ele anuncia |
+| attempt | int | 1..N; `0` num lembrete, que não é tentativa |
 | scheduledFor | timestamptz | |
 | status | enum `pending` · `running` · `sent` · `cancelled` · `failed` | |
+| bypassWindow | boolean, padrão `false` | **017:** *Enviar agora* — este envio ignora a janela da agência, e só ela |
 | lockedAt | timestamptz, nulo | quando o worker reivindicou a tentativa; uma linha `running` parada há mais de dez minutos é reivindicada de novo |
 | sentAt | timestamptz, nulo | |
 
@@ -155,8 +162,10 @@ Consulta do worker: `update … where status = 'pending' and scheduledFor <= now
 | `leads` | índice `(agencyId, assignedBrokerId, score desc, updatedAt desc)` | fila de leads por escopo e score | `0002` (à mão) |
 | `appointments` | parcial `(brokerId, scheduledAt)` onde `status = 'confirmed'` | horários ocupados e colisão na reserva | `0003` |
 | `followup_jobs` | índices `(status, scheduledFor)` e parcial, onde `status = 'pending'` | reivindicação do worker | `0000`, `0003` |
+| `followup_jobs` | único parcial `appointmentId` onde `status = 'pending' and kind = 'reminder'` | um lembrete pendente por compromisso; remarcar move, não duplica | `0004` |
 
-A migração `0003` também acrescenta `agencies.followupEnabled`.
+A migração `0003` também acrescenta `agencies.followupEnabled`; a `0004`, as colunas da janela e do lembrete em
+`agencies`, e enfileira o lembrete dos compromissos já confirmados.
 
 ---
 
@@ -266,7 +275,13 @@ Só aparece aqui o que o código grava. `append-only`; `processedAt` nulo é a f
 | `followup.scheduled` | `{ attempt, scheduledFor }` | `services/followup.ts` |
 | `followup.sent` | `{ attempt, opening, exhausted }` — `actorType: worker` e o `traceId` do `followup.send` | `jobs/followup.ts` |
 | `followup.recovered` | `{ attemptsSent }` — lead respondeu depois de um follow-up enviado | `services/followup.ts` |
-| `followup.enabled` / `followup.disabled` | `{}` — a gerência mudou a chave da agência | `services/followup.ts` |
+| `followup.enabled` / `followup.disabled` | `{}` — a gerência mudou a chave da agência | `services/agency-settings.ts` (017) |
+| `followup.sent` *(017)* | o mesmo, mais `sentNow: true` quando veio de *Enviar agora*; com *Eu escrevo*, `writtenBy: 'broker'` e `actorType: user` | `jobs/followup.ts` · `services/followup-queue.ts` |
+| `followup.sent_now` / `reminder.sent_now` | `{ jobId }` — `actorType: user`: alguém apertou *Enviar agora* na fila | `services/followup-queue.ts` (017) |
+| `followup.cancelled` / `reminder.cancelled` | `{ jobId, appointmentId? }` — `actorType: user`, pela fila | `services/followup-queue.ts` (017) |
+| `reminder.sent` | `{ appointmentId, held }` — `actorType: worker`; sem `traceId`: a frase é do código | `jobs/followup.ts` (017) |
+| `reminder.skipped` | `{ appointmentId, reason: 'switch_off' · 'opted_out' · 'not_active' · 'meeting_changed' }` | `jobs/followup.ts` (017) |
+| `settings.updated` | a janela e o lembrete como ficaram | `services/agency-settings.ts` (017) |
 
 `lead.qualified` (`{ score }`) **não é emitido**: aparece nos dados da seed e a linha do tempo sabe mostrá-lo, mas
 nada no código o grava. O estágio `qualified` do lead é o que vale (o ADR 20 e a spec 008 é que redefiniriam o
@@ -351,11 +366,27 @@ a conversa ao agente reinicia o relógio. Visita concluída ou cancelada **não*
 reativa follow-up automático: é decisão do corretor, pela agenda.
 
 Na hora de enviar, somam-se duas condições: a chave `agencies.followupEnabled`
-ligada e o instante dentro da janela (`FOLLOWUP_WINDOW_START`–`_END`, no fuso
-`FOLLOWUP_TIMEZONE`). Fora da janela, a tentativa é **movida** para a próxima
-abertura, sem consumir contagem; qualquer outra condição falhando **cancela** a
-tentativa e devolve `followupState` a `none` (a não ser `exhausted`), para o
-painel nunca mostrar um follow-up sem tentativa por trás (006 FR-013a).
+ligada e o instante dentro da janela da agência (`followupWindowStart`–`End`, nos
+dias de `followupWindowDays`, no fuso `FOLLOWUP_TIMEZONE`; 017). Fora da janela, a
+tentativa é **movida** para a próxima abertura — um dia fechado é pulado —, sem
+consumir contagem; qualquer outra condição falhando **cancela** a tentativa e
+devolve `followupState` a `none` (a não ser `exhausted`), para o painel nunca
+mostrar um follow-up sem tentativa por trás (006 FR-013a).
+
+Na fila (`/followups`, 017), *Enviar agora* marca a tentativa com `bypassWindow` e
+a torna devida já; a chave, o opt-out e um corretor na conversa continuam
+barrando. *Cancelar* encerra a sequência até o lead escrever de novo.
+
+### Regras do lembrete (017)
+
+Um lembrete por compromisso confirmado, em `scheduledAt − reminderLeadMinutes`,
+mantido por `transitionAppointment`: confirmar cria, remarcar move, cancelar ou
+concluir cancela; marcado com menos antecedência que isso, não há lembrete. Na
+hora de enviar, passa por cima da janela, da chave do follow-up e do limite de
+tentativas, e exige: `remindersEnabled`, `doNotContact = false`, conversa não
+`closed` e o compromisso ainda `confirmed` e por vir. A mensagem do lead não o
+cancela. Uma conversa `paused` recebe o lembrete com a Sofia se anunciando, e a
+resposta vai para o corretor.
 
 ### Turnos coalescidos
 

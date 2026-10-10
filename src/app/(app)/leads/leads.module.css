@@ -855,3 +855,8 @@
   color: var(--muted);
 }
 
+.followupSwitch a {
+  color: var(--accent);
+  font-weight: 600;
+}
+

@@ -49,7 +49,9 @@ Um **SDR digital** que atende 24 horas por dia em conversa natural:
 4. **Agenda** visita ou ligação em horários reais da agenda do corretor. Também remarca e cancela.
 5. **Calcula um score** de 0 a 100 (frio, morno ou quente), visível no painel.
 6. **Resume a conversa** para o corretor.
-7. **Faz follow-up** sozinho quando o lead some, retomando do ponto em que parou.
+7. **Faz follow-up** sozinho quando o lead some, retomando do ponto em que parou, e **lembra o lead** antes de
+   cada visita ou ligação. A gerente decide quando essas mensagens podem sair; o corretor vê a fila e pode
+   enviar na hora, escrever a mensagem ele mesmo ou cancelar.
 8. **Passa para um humano** quando o lead pede, ou quando não consegue entender.
 
 **A IA não fecha venda.** Ela protege o tempo do corretor e evita que o lead esfrie.
@@ -69,7 +71,9 @@ Mais telas: [chat de investimento](docs/imagens/chat-investimento.png) ·
 [follow-up](docs/imagens/chat-followup.png) · [guardrails](docs/imagens/chat-guardrails.png) ·
 [cartões de imóveis](docs/imagens/chat-compra-cartoes.png) ·
 [painel do lead investidor](docs/imagens/painel-lead-investimento.png) ·
-[catálogo](docs/imagens/catalogo.jpg) · [*trace* de um turno no Langfuse](docs/imagens/langfuse-trace.png).
+[catálogo](docs/imagens/catalogo.jpg) · [fila de follow-ups](docs/imagens/followups.png) ·
+[configurações da gerente](docs/imagens/configuracoes.png) ·
+[*trace* de um turno no Langfuse](docs/imagens/langfuse-trace.png).
 
 ---
 
@@ -161,7 +165,7 @@ Resumo abaixo; a matriz completa, com arquivo e teste para cada item, está em
 | Qualificação de leads | Roteiro por intenção, score de 0 a 100 e temperatura, recalculados a cada turno |
 | Agendamento de reuniões | Horários reais por corretor e especialização; propor, confirmar, remarcar e cancelar |
 | Resumo inteligente | O worker resume cada conversa para o corretor, com uma linha de prévia na lista |
-| Dashboard mínimo | Leads ao vivo, indicadores do funil, painel do lead (assumir, devolver, transferir), agenda e catálogo |
+| Dashboard mínimo | Leads ao vivo, indicadores do funil, painel do lead (assumir, devolver, transferir), fila de follow-ups e lembretes, agenda, catálogo e as configurações da gerente |
 
 **Os três cenários do enunciado**, com as mensagens do próprio enunciado, rodando de verdade (trechos; a
 íntegra está em [`docs/exemplos/conversas.md`](docs/exemplos/conversas.md)):
@@ -363,7 +367,7 @@ semeada.
 
 | E-mail | Papel | O que vê |
 |---|---|---|
-| `carla@demo.com.br` | gerente comercial (Carla Nunes) | todos os leads e a agenda da imobiliária; liga e desliga o follow-up automático |
+| `carla@demo.com.br` | gerente comercial (Carla Nunes) | todos os leads, a fila e a agenda da imobiliária; em **Configurações**, quando o follow-up e os lembretes podem sair |
 | `ana@demo.com.br` | corretora (Ana Ribeiro) · compra e aluguel | *Meus leads* e as próprias visitas |
 | `bruno@demo.com.br` | corretor (Bruno Castro) · investimento e compra | idem |
 
@@ -458,7 +462,7 @@ valioso no começo, quando o modelo de dados e o turno ainda eram incertos.
 **Depois, um processo mais leve.** O Spec Kit gerava mais requisitos inventados do que um desenvolvedor sozinho
 conseguia revisar. A partir da spec 009, cada mudança passou a ter uma **spec de uma página em prosa**: o que
 cobre, o que não cobre e como se verifica (009, [015](specs/015-fronteira/spec.md),
-[016](specs/016-model-provider/spec.md)). Hoje a spec é oferecida, não exigida (ADR 24). O que continua
+[016](specs/016-model-provider/spec.md), [017](specs/017-followup-queue/spec.md)). Hoje a spec é oferecida, não exigida (ADR 24). O que continua
 obrigatório é a suíte determinística passando antes de cada *merge* e o mapa do turno atualizado junto com o
 código do turno.
 
@@ -475,6 +479,8 @@ entrega.
 - **Latência local:** no 12B, um turno leva dezenas de segundos numa máquina de desenvolvimento; um modelo
   hospedado responde em poucos segundos.
 - **Canal único e sem deploy:** só chat web, só local.
+- **Fuso por instalação:** a janela de follow-up e os lembretes já são por imobiliária, mas o fuso
+  (`FOLLOWUP_TIMEZONE`) ainda vem do `.env`, porque visitas, agenda e chat também o usam.
 
 ## Estrutura do repositório
 

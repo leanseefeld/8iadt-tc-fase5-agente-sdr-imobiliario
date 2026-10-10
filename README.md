@@ -268,6 +268,13 @@ Os detalhes estão no [turno do agente](docs/arquitetura/turno-do-agente.md). O 
 esse desenho (formato da chamada, redação do prompt, a trava de evidência) está em
 [`evals/README.md`](evals/README.md).
 
+**Cache de prefixo.** Num modelo local, reler o prompt a cada turno é a maior parte da espera. Os prompts
+foram organizados para o cache do servidor: o system prompt de cada chamada é constante, e o que muda a cada
+turno (estado, tarefa) vai no fim, logo antes da mensagem do lead. Medido no e4b, isso levou o cache de 9% para
+84% numa conversa de três turnos. Nas conversas de exemplo, no 12B, 68% a 87% dos *tokens* de entrada vieram
+do cache, conforme o tipo de chamada. Cada geração no Langfuse mostra quanto veio do cache (`cache_read`).
+Detalhes, e o que ficou de fora de propósito, no [turno do agente §5](docs/arquitetura/turno-do-agente.md#5--o-cache-de-prefixo-o-que-muda-fica-no-fim).
+
 **Por que não LangGraph nem multiagentes autônomos?** O fluxo de um SDR é curto e regrado, e cada decisão
 movida do modelo para o código foi um defeito a menos nos testes com o modelo de 4 bits. O registro está nas
 [ADRs 14 e 22](docs/arquitetura/adr/decisoes.md).

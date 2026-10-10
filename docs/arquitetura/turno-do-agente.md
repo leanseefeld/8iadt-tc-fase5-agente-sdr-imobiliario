@@ -253,6 +253,41 @@ Caminhos abaixo relativos a `src/`. *Turno* = `agent/turn/`.
 | `cancelFollowup` *(006)* | 🟦 código | `services/followup.ts` · chamado por `recordLeadMessage` (`services/conversation/inbound.ts`) | toda mensagem do lead: cancela tentativas pendentes, zera contagem e estado; se um follow-up já tinha saído, `followup.recovered` uma vez |
 | varredura de follow-up *(006)* | 🟦 código + 🟪 modelo escreve | `jobs/followup.ts` · `agent/followup-writer.ts` | worker, a cada varredura; claim com `SKIP LOCKED`; elegibilidade checada duas vezes (depois do claim e antes do envio), incluindo a chave da agência; o modelo escreve só a frase de abertura, conferida (sem pergunta, data, hora ou nome da equipe) e trocada por uma escrita pelo código se reprovar; a pergunta pendente é do código |
 
+## 5 · O cache de prefixo: o que muda fica no fim
+
+Num modelo local, reler o prompt inteiro a cada turno é a maior parte da latência. O servidor (oMLX, e também a
+Azure OpenAI) guarda um **cache de prefixo**: o trecho inicial idêntico ao da chamada anterior não é processado
+de novo. Mas um prefixo é um prefixo: o primeiro byte diferente invalida tudo o que vem depois. Por isso:
+
+- **O system prompt de cada chamada é constante.** `REPLY_SYSTEM_PROMPT` (persona, o que a Sofia pode, regras) e
+  `extractionSystemPrompt()` não recebem nenhum dado do turno (`agent/prompts/system.ts`).
+- **O que muda a cada turno vai no fim.** O estado da qualificação, o que acabou de ser aprendido e a tarefa do
+  turno (`turnBriefing`) entram na última mensagem, cercados e rotulados, logo antes das palavras do lead
+  (`briefed` em `turn/messages.ts`).
+- **A conversa é montada sempre do mesmo jeito** (`toModelMessages`), para que o que já foi dito chegue com os
+  mesmos bytes a cada turno. As passagens de humano para agente e vice-versa entram na própria transcrição, no
+  ponto em que aconteceram, e não num resumo que mudaria a cada chamada. A resposta lê a conversa inteira (até
+  `MODEL_HISTORY_WINDOW`, 12 mensagens), então o prefixo dela cresce com a conversa até lá. A extração lê só as quatro últimas
+  mensagens, uma janela que anda, então o que fica em cache para ela é o system prompt, que é a maior parte da
+  entrada.
+- **Medido, não suposto.** Cada geração no Langfuse carrega `cache_read` (`prompt_tokens_details.cached_tokens`),
+  ligado em `agent/provider.ts` (`includeUsage`) e registrado em `core/langfuse.ts`.
+
+**O que as medições mostraram** (detalhes em `specs/004-conversation/implementation-log.md`, 15/09/2026):
+
+| Medição | Cache |
+|---|---|
+| e4b, três turnos, estado do turno **dentro** do system prompt (desenho antigo) | 0% → 10,2% → 9,4%: o cache ficava preso nos primeiros 512 *tokens* e a taxa **caía** conforme a conversa crescia |
+| e4b, mesmos turnos, system prompt constante e estado no fim (desenho atual) | 11,1% → 81,4% → 84,4%: o cache cresce com a conversa |
+| 12B, conversas de exemplo de 10/10 (média por tipo de chamada, no Langfuse) | extração 75% · resposta 68% · ações 78% · resumo 87% |
+
+**O que ficou de fora, de propósito.** O oMLX guarda um cache por vez, e a extração e a resposta têm system
+prompts diferentes, então uma desaloja a outra dentro do mesmo turno. Por isso, nas conversas de 10/10, o
+trecho em cache fica no tamanho do system prompt e não cresce com a conversa. Um prefixo único para as duas
+chamadas foi medido e levaria a segunda chamada do turno a 88–98% de cache, mas não foi adotado: a resposta
+passaria a carregar as ferramentas e o guia de campos da extração, e o modelo leria ferramentas que não pode
+chamar. Com um modelo hospedado, que guarda vários prefixos, a questão desaparece.
+
 ## Ver também
 
 - [`visao-geral.md`](visao-geral.md) §5 (fluxos) e §9 (defesas contra manipulação)

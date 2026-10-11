@@ -16,6 +16,13 @@ const allowedDevOrigins = [
 
 const nextConfig: NextConfig = {
   allowedDevOrigins,
+  // The production image (`runner` in the Dockerfile) ships only what the
+  // server traces to: `server.js` and a pruned node_modules, not the full
+  // install. `next dev` ignores this.
+  output: "standalone",
+  // sharp is only for `next/image` optimisation, which the app doesn't use
+  // (plain <img>), and it is the largest thing the trace would pull in.
+  outputFileTracingExcludes: { "*": ["node_modules/@img/**", "node_modules/sharp/**"] },
   // pino, pg and drizzle are Node-only and must not be bundled into the
   // server build. Left to the bundler they are evaluated in Next's prerender
   // worker, which breaks the build.

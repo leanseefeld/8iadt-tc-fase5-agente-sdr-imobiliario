@@ -259,7 +259,7 @@ seja testável, mas não foi implantado em lugar algum. Detalhes de escala em
 [`visao-geral.md`](visao-geral.md) §4 e §7.
 
 **Exploração de 10 e 11/10/2026:** [`../exploracoes/hospedagem.md`](../exploracoes/hospedagem.md)
-compara a Azure (Container Apps escalando a zero, worker como job agendado, Postgres
+compara a Azure (app no Container Apps escalando a zero, worker sempre ligado, Postgres
 Flexible Server) com uma VPS abaixo de R$ 50/mês. A imagem `runner` foi reduzida de
 479 MB para 68 MB (comprimida) e exercitada: migrations, seed, login, uma conversa por
 SSE e a varredura do worker. [`deploy/vps/`](../../deploy/vps/) traz um Compose de

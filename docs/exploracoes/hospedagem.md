@@ -30,13 +30,13 @@ reconstruída para levar só o que roda (§3) e exercitada nos dois formatos:
 
 | | Azure (Container Apps) | VPS (Docker Compose) |
 |---|---|---|
-| Custo por mês | ~US$ 21–27, pago com crédito (§4.4) | R$ 30–45, pago em reais (§5.2) |
-| Parada quando ninguém usa | sim, a aplicação escala a zero | não, e não precisa |
+| Custo por mês | ~US$ 27–33, pago com crédito (§4.4) | R$ 30–45, pago em reais (§5.2) |
+| Parada quando ninguém usa | o app escala a zero; worker e banco ficam ligados | não, e não precisa |
 | Partida a frio | sim, segundos (imagem de 68 MB) | não |
 | SSE | corte a cada 240 s, reconexão invisível (§4.3) | sem corte |
-| Worker | job agendado: precisa do modo "uma varredura" (§6) | o processo de hoje, sem mudança |
+| Worker | Container App sempre ligado, o processo de hoje (§4.1) | o processo de hoje |
 | Banco | gerenciado, com backup | nosso, backup por cron (`deploy/vps/README.md`) |
-| Mudança de código para subir | ~20 linhas no worker | nenhuma |
+| Mudança de código para subir | nenhuma | nenhuma |
 | Pronto em `deploy/` | não, roteiro em §4.5 | `deploy/vps/` (Compose + Caddy), testado localmente |
 
 **Recomendação:** para o primeiro cliente, **a VPS**. É o mesmo `docker compose up`
@@ -67,9 +67,12 @@ dois destinos:
 3. **"Proteger contra varreduras sobrepostas."** Já está protegido. Os consumidores
    reivindicam linhas com `FOR UPDATE SKIP LOCKED`, o turno é guardado por `claimTurn`,
    e há teste de integração com dois *claimers* (`tests/followup-claim.test.ts`).
-4. **Rota interna `POST /api/internal/worker/sweep` acionada por Function Timer.** Na
-   Azure, o job agendado é melhor (§4.1). Na VPS, o worker continua sendo o processo
-   de hoje.
+4. **Rota interna `POST /api/internal/worker/sweep` acionada por Function Timer.**
+   Desde a spec 017, o worker não é só um timer: ele mantém um `LISTEN followup_due`
+   (`src/worker/wake.ts`) e varre na hora quando alguém usa *Enviar agora* na fila de
+   follow-ups. Qualquer agendamento externo, seja Function ou job, perde isso: o botão
+   esperaria até 15 minutos. Nos dois destinos, o worker continua sendo o processo de
+   hoje, sempre ligado.
 5. **Key Vault.** Os *secrets* do Container Apps, ou o `.env` com `chmod 600` na VPS,
    bastam para duas imobiliárias.
 
@@ -135,7 +138,7 @@ de comportamento.
 | Proposta | Recomendado | Por quê |
 |---|---|---|
 | App Service (Docker) | **Container Apps**, plano Consumption, `min-replicas 0` | O App Service cobra o plano 24 h por dia, mesmo parado. O Container Apps escala a zero e não cobra nada nesse estado |
-| Function Timer → `POST /api/internal/worker/sweep` | **Job agendado do Container Apps**, mesma imagem, outro comando | O ping HTTP a cada 15 min **acorda a aplicação** e a mantém ativa pelo *cooldown* (300 s), cerca de um terço do dia. O job roda o worker direto no banco, sem rota interna nem autenticação a inventar |
+| Function Timer → `POST /api/internal/worker/sweep` | **Worker como um segundo Container App**, sem ingress, `min = max = 1`, 0,25 vCPU / 0,5 GiB, com `node dist/worker/index.js` | O ping HTTP a cada 15 min **acorda a aplicação** e a mantém ativa pelo *cooldown* (300 s), cerca de um terço do dia. E o worker precisa ficar ligado para ouvir o *Enviar agora* (§2.4). Ligado, ele custa ~US$ 6/mês em tarifa ociosa e não exige nenhuma mudança de código. Um job agendado custaria quase nada, mas perderia a campainha |
 | Migrations rodando no GitHub Actions | **Job manual** com `node dist/db/migrate.js` | O runner do GitHub tem IP variável e não alcança um Postgres com firewall. O job roda dentro da Azure |
 | Key Vault | *Secrets* do próprio Container Apps | Chegam como variável de ambiente, que é o que `core/config.ts` lê |
 
@@ -145,7 +148,7 @@ perfil `azure_*`, ACR Basic, Langfuse Cloud e o domínio no Route 53.
 ```text
  Route 53 (CNAME app.<domínio>) → Container Apps Environment (Consumption)
      sdr-app      ingress externo, porta 3100, min 0 / max 1, 0,25 vCPU / 0,5 GiB
-     sdr-sweep    job agendado */15, node dist/worker/once.js (§6)
+     sdr-worker   sem ingress, min 1 / max 1, node dist/worker/index.js
      sdr-migrate  job manual, node dist/db/migrate.js
          │ SQL + LISTEN/NOTIFY (5432, TLS)          │ HTTPS
          ▼                                          ▼
@@ -168,8 +171,9 @@ em repouso. É a menor combinação do Container Apps, e metade do custo de 0,5 
 - **O debounce do turno é seguro.** O `POST` que arma o timer é uma requisição, e o
   widget mantém o SSE aberto. Se a réplica sair mesmo assim, `unanswered-turns` refaz o
   turno na próxima varredura (comportamento verificado em §3).
-- **O worker não depende da aplicação.** O job grava e dá o `NOTIFY`. Se houver widget
-  aberto, a réplica do app está de pé e entrega.
+- **O worker não depende da aplicação.** Ele grava e dá o `NOTIFY`. Se houver widget
+  aberto, a réplica do app está de pé e entrega. O *Enviar agora* faz o caminho
+  contrário: o app dá o `NOTIFY` e o worker, sempre ligado, acorda.
 
 ### 4.3 O corte de 240 s do ingress
 
@@ -195,22 +199,24 @@ Preços de tabela em USD da API de varejo da Azure (`prices.azure.com`), consult
 | Container Apps, memória (ativa ou ociosa) | US$ 0,000003 por GiB·s | igual |
 | Cota gratuita mensal do Container Apps | 180.000 vCPU·s, 360.000 GiB·s | igual |
 
-**Cenários (East US 2, app em 0,25 vCPU / 0,5 GiB):**
+**Cenários (East US 2, app e worker em 0,25 vCPU / 0,5 GiB cada):**
 
 | Cenário | Mês |
 |---|---|
-| Parado, escalando a zero | **~US$ 21**: Postgres 16,09 + ACR 5,07. App e job ficam dentro da cota |
-| Uso real: duas imobiliárias, painel aberto 10 h × 22 dias | **~US$ 22**: o uso ativo passa da cota em ~US$ 1 |
-| Sempre quente (`min-replicas 1`), sem partida a frio | **~US$ 27**: os de cima **mais** ~US$ 6 de tarifa ociosa |
-| Pior caso: uma aba de `/leads` aberta 24 h por dia | ~US$ 35 (o app ativo o mês inteiro, ~US$ 14 depois da cota) |
-| "Hibernado": Postgres parado | ~US$ 9. A Azure religa o Postgres sozinha em 7 dias |
+| Parado: app escalando a zero, worker ligado | **~US$ 27**: Postgres 16,09 + ACR 5,07 + worker ocioso ~5,90 |
+| Uso real: duas imobiliárias, painel aberto 10 h × 22 dias | **~US$ 28**: o uso ativo do app passa da cota em ~US$ 1 |
+| Sempre quente (app com `min-replicas 1`), sem partida a frio | **~US$ 33**: os de cima **mais** ~US$ 6 de tarifa ociosa do app |
+| Pior caso: uma aba de `/leads` aberta 24 h por dia | ~US$ 41 (o app ativo o mês inteiro, ~US$ 14 depois da cota) |
+| "Hibernado": Postgres parado, worker com `min-replicas 0` | ~US$ 9. A Azure religa o Postgres sozinha em 7 dias |
 | *A proposta original* (App Service B1 + Function + ACR + Postgres) | ~US$ 34 fixos, usando ou não |
 
 **Sobre o "manter quente":** sim, é **somado** à estimativa base. A primeira versão
 desta exploração dizia ~US$ 12 por mês porque considerava o app com 0,5 vCPU e 1 GiB
 (US$ 0,0000045 por segundo ocioso × 2.628.000 s). Com a imagem nova, 0,25 vCPU / 0,5 GiB
-basta, e a tarifa ociosa cai para ~US$ 5,90. Não confirmei se a cota gratuita também
-desconta segundos ociosos; os números acima não a aplicam.
+basta, e a tarifa ociosa cai para ~US$ 5,90 (US$ 0,00000225 por segundo). O worker
+paga a mesma tarifa, porque fica sempre ligado. Não confirmei se a cota gratuita também
+desconta segundos ociosos; os números acima não a aplicam. Com ela, o custo do
+Container Apps cai, e o que sobra é Postgres e ACR.
 
 **Duas alavancas:**
 
@@ -263,10 +269,10 @@ az containerapp create -g $RG -n sdr-app --environment $ENV $IMG \
   --cpu 0.25 --memory 0.5Gi --min-replicas 0 --max-replicas 1 \
   --secrets $SECRETS --env-vars $ENVV
 
-az containerapp job create -g $RG -n sdr-sweep --environment $ENV $IMG \
-  --trigger-type Schedule --cron-expression "*/15 * * * *" \
-  --replica-timeout 600 --replica-retry-limit 0 --parallelism 1 --replica-completion-count 1 \
-  --cpu 0.25 --memory 0.5Gi --command "node" --args "dist/worker/once.js" \
+# Worker: sem ingress, sempre uma réplica (ouve o *Enviar agora*).
+az containerapp create -g $RG -n sdr-worker --environment $ENV $IMG \
+  --cpu 0.25 --memory 0.5Gi --min-replicas 1 --max-replicas 1 \
+  --command "node" --args "dist/worker/index.js" \
   --secrets $SECRETS --env-vars $ENVV
 ```
 
@@ -278,7 +284,7 @@ az containerapp job create -g $RG -n sdr-sweep --environment $ENV $IMG \
   certificado gerenciado, que é gratuito.
 - **Deploy contínuo:** GitHub Actions com `azure/login` por OIDC → build e push para o
   ACR → atualizar e disparar `sdr-migrate`, e esperar `Succeeded` → atualizar
-  `sdr-app` e `sdr-sweep`.
+  `sdr-app` e `sdr-worker`.
 - **Orçamento com alerta** (Cost Management → Budgets): é o freio contra a aba esquecida.
 
 ---
@@ -345,16 +351,15 @@ Nada disso existe na Azure gerenciada:
 
 ## 6. O que falta no código
 
-**Para a Azure com job agendado: o worker em modo "uma varredura e sai".** O
-`src/worker/index.ts` só sabe rodar para sempre (`setInterval`). A mudança tem cerca de
-20 linhas e não toca nenhum consumidor:
-- extrair `sweep()` para uma função exportada;
-- criar um segundo ponto de entrada, `src/worker/once.ts`, que varre uma vez, faz o
-  *flush* do Langfuse, fecha o pool e sai com código 0;
-- acrescentá-lo ao `build:jobs`.
+**Para subir, nada, em nenhum dos destinos.** A primeira versão desta exploração
+pedia um modo "uma varredura e sai" no worker, para rodá-lo como job agendado na Azure.
+Com a campainha da spec 017 (§2.4), um job perderia o *Enviar agora*, e o worker passa a
+ser um processo sempre ligado nos dois destinos, exatamente como no Compose.
 
-Sem isso, a alternativa é rodar o worker como um segundo Container App, `min = max = 1`,
-0,25 vCPU / 0,5 GiB, por ~US$ 6/mês. **Para a VPS, nada falta.**
+**Exercitado depois do merge da spec 017 (11/10/2026),** na imagem nova e na pilha de
+`deploy/vps/`: as 5 migrations, o seed, a gerente (`carla@demo.com.br`) em
+`/configuracoes` e `/followups`, e a campainha do worker empacotado. Um
+`pg_notify('followup_due', …)` disparou uma varredura completa em menos de meio segundo.
 
 **Pequenos pontos:**
 - `login` procura o usuário só pelo e-mail (`services/auth.ts`), mas a unicidade é por

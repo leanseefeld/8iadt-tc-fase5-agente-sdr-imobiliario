@@ -33,23 +33,29 @@ não precisa de sessão), mas nunca recebe a resposta e não consegue digitar.
 
 ## 2. O que a imobiliária configuraria
 
-A ideia: na página de configurações do gerente comercial (`salesManager`), uma lista
-de **domínios autorizados** a exibir o widget daquela agência, por exemplo
+A ideia: em `/configuracoes`, a tela do gerente comercial que a spec 017 criou, um
+terceiro cartão, **"Sites que podem exibir o chat"**: uma lista de origens como
 `https://www.imobiliariax.com.br`. Ela vale para qualquer uma das opções abaixo.
 
-- **Guardado por agência:** uma coluna `allowedOrigins text[]` em `agencies`, ou
-  numa tabela de configurações da agência, se a página nova já tiver uma.
-  ([`configuracoes.md`](../arquitetura/configuracoes.md) registra o que é por agência.)
-- **Validação:** só `https://`, só a origem (esquema + host + porta, sem caminho), e
-  um número pequeno de entradas. A mudança vale na próxima requisição.
-- **O que a lista garante, e o que não garante:** ela impede que *outro site* exiba o
-  widget da agência num navegador. Ela **não é autenticação**: um script fora do
-  navegador manda o `Origin` que quiser. Contra abuso automatizado continua valendo o
-  orçamento de mensagens por sessão (`CHAT_MESSAGE_BUDGET`).
+A tela já tem o formato certo para isso:
+- **Guardado na linha da agência,** como a janela de follow-up e o lembrete
+  (`followup_window_*`, `reminder_lead_minutes` em `agencies`). Seria uma coluna
+  `widget_allowed_origins`, `jsonb` ou `text[]`, com padrão vazio, numa migration nova.
+- **Só a gerência edita:** `updateAgencySettings` (`services/agency-settings.ts`) já
+  recusa quem não é `salesManager` e grava um evento `settings.updated`. A lista entra
+  no mesmo `input`, e o evento passa a registrá-la.
+- **Validação em `validateSettings`,** ao lado das regras de horário: só `https://`,
+  só a origem (esquema + host + porta, sem caminho nem barra no fim), sem duplicatas e
+  com poucas entradas. A tela mostra a regra ao lado do campo, como já faz com a janela.
+- **Vale na hora:** como o resto da tela, é lido a cada requisição, sem reiniciar
+  nada.
 
-> A página de configurações citada pelo desenvolvedor não estava no `main` do GitHub
-> em 11/10/2026. Esta seção supõe uma página por agência, só para o gerente. Ajustar
-> quando ela for publicada.
+**O que a lista garante, e o que não garante:** ela impede que *outro site* exiba o
+widget da agência num navegador. Ela **não é autenticação**: um script fora do
+navegador manda o `Origin` que quiser. Contra abuso automatizado continua valendo o
+orçamento de mensagens por sessão (`CHAT_MESSAGE_BUDGET`).
+
+**Lista vazia,** o padrão: o widget só abre pelo próprio endereço, como hoje.
 
 ## 3. Opções
 
@@ -63,8 +69,9 @@ de **domínios autorizados** a exibir o widget daquela agência, por exemplo
    **Testado no Chromium** (tabela acima): uma troca de atributo resolve.
 2. **`Content-Security-Policy: frame-ancestors <domínios autorizados>`** na página
    `/chat/<slug>`, montado a partir da lista da agência. O navegador recusa o iframe em
-   qualquer outro site. Pode morar no `src/proxy.ts`, com a lista em cache curto por
-   *slug*.
+   qualquer outro site. O lugar natural é o `src/proxy.ts`, que roda no Node e hoje só
+   guarda as rotas do painel. Ganharia um ramo para `/chat/:slug`, sem exigir sessão,
+   que lê a lista da agência (com cache curto por *slug*) e devolve o cabeçalho.
 
 **SDK:** um `widget.js` servido pela própria aplicação, com algumas dezenas de linhas
 sem dependências:
@@ -83,8 +90,9 @@ para fora.
 stream volta 401. O widget pode detectar isso e oferecer "abrir a conversa em nova
 aba", e lá o endereço é o próprio, e funciona.
 
-**Tamanho:** pequeno. Um atributo de cookie, um cabeçalho com a lista da agência, um
-arquivo estático, o campo na página de configurações e um teste.
+**Tamanho:** pequeno. Um atributo de cookie, uma coluna e uma migration, o cartão novo
+em `/configuracoes` com a sua validação, o cabeçalho no `proxy.ts`, um arquivo estático
+(`widget.js`) e testes. É do tamanho de uma spec curta, no formato da 017.
 
 ### B. SDK que desenha o widget na página do site (sem iframe)
 

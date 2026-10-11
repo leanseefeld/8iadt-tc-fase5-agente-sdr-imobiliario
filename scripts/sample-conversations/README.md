@@ -20,8 +20,9 @@ python3 scripts/sample-conversations/drive.py scripts/sample-conversations/plan.
 do zero, troque o `session` no `plan.json` (por exemplo `amostra3-…` para `amostra4-…`) e atualize o
 `shots.json` das capturas.
 
-**Follow-up.** O cenário para depois de duas mensagens. Abra o lead no painel, use **Enviar follow-up agora**,
-espere o envio e rode de novo. Fora da janela de envio (09h às 20h), o worker adia a tentativa.
+**Follow-up.** O cenário para depois de duas mensagens. Abra o lead no painel, use **Enviar follow-up agora**
+(ou **Enviar agora** na tela **Follow-ups**), espere o envio e rode de novo. O botão envia mesmo fora da janela de
+envio da agência (spec 017).
 
 Para copiar a conversa para a documentação, sem edição:
 

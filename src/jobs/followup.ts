@@ -1,17 +1,18 @@
 import { eq, sql } from "drizzle-orm";
 import { writeFollowup, type FollowupInput, type FollowupMessage } from "../agent/followup-writer.ts";
+import { reminderSentence } from "../agent/prompts/meeting.ts";
 import { webChannel } from "../channels/web.ts";
 import type { OutboundMessage } from "../channels/types.ts";
 import { getConfig } from "../core/config.ts";
 import { withTurnTrace } from "../core/langfuse.ts";
-import { conversations, events, followupJobs, users } from "../db/schema.ts";
+import { events, followupJobs, users } from "../db/schema.ts";
 import {
   cancelIneligibleAttempt,
-  followupDelayMinutes,
   followupEligibility,
   nextSendingTime,
-  type FollowupContext,
+  recordFollowupSent,
 } from "../services/followup.ts";
+import { reminderEligibility } from "../services/reminder.ts";
 import type { SweepConsumer, SweepContext } from "./consumers.ts";
 
 /**
@@ -28,6 +29,10 @@ import type { SweepConsumer, SweepContext } from "./consumers.ts";
  *
  * **A failed compose or send consumes nothing** (FR-013): the row goes back to
  * `pending` at its own due time, and the next sweep tries again.
+ *
+ * **Two kinds share the queue** (spec 017): a follow-up, composed by the model
+ * inside the agency's window — unless *Enviar agora* set `bypass_window` — and
+ * a meeting reminder, written by code, outside every time rule but its own.
  */
 
 const STALE_RUNNING_MINUTES = 10;
@@ -35,6 +40,7 @@ const MINUTE = 60_000;
 
 export type SweepOutcome =
   | { jobId: string; outcome: "sent"; attempt: number; traceId: string | null }
+  | { jobId: string; outcome: "reminded" }
   | { jobId: string; outcome: "rescheduled"; to: Date }
   | { jobId: string; outcome: "cancelled"; reason: string }
   | { jobId: string; outcome: "failed"; error: string };
@@ -54,6 +60,9 @@ const DEFAULT_DEPS: FollowupDeps = {
 interface ClaimedRow extends Record<string, unknown> {
   id: string;
   conversation_id: string;
+  kind: "followup" | "reminder";
+  appointment_id: string | null;
+  bypass_window: boolean;
 }
 
 export const followup: SweepConsumer = {
@@ -95,13 +104,16 @@ export async function sweepFollowups(
         limit ${config.FOLLOWUP_BATCH_SIZE}
         for update skip locked
      )
-    returning id, conversation_id`);
+    returning id, conversation_id, kind, appointment_id, bypass_window`);
 
   const outcomes: SweepOutcome[] = [];
   for (const row of claimed.rows) {
-    const outcome = await processOne(ctx, deps, clock, row.id, row.conversation_id);
+    const outcome =
+      row.kind === "reminder" && row.appointment_id !== null
+        ? await remindOne(ctx, deps, clock, row.id, row.appointment_id)
+        : await processOne(ctx, deps, clock, row);
     outcomes.push(outcome);
-    ctx.log.info({ conversationId: row.conversation_id, ...outcome }, "follow-up");
+    ctx.log.info({ conversationId: row.conversation_id, kind: row.kind, ...outcome }, "follow-up");
   }
   return outcomes;
 }
@@ -116,10 +128,11 @@ async function ineligible(
   ctx: SweepContext,
   jobId: string,
   conversationId: string,
-  reason: string,
+  verdict: Awaited<ReturnType<typeof followupEligibility>>,
 ): Promise<SweepOutcome> {
-  if (reason === "outside_window") {
-    const to = nextSendingTime(ctx.now);
+  if (verdict.ok) throw new Error("ineligible() called with an eligible verdict");
+  if (verdict.reason === "outside_window" && verdict.context !== undefined) {
+    const to = nextSendingTime(ctx.now, verdict.context.window);
     await ctx.db
       .update(followupJobs)
       .set({ status: "pending", lockedAt: null, scheduledFor: to })
@@ -127,18 +140,20 @@ async function ineligible(
     return { jobId, outcome: "rescheduled", to };
   }
   await cancelIneligibleAttempt(ctx.db, jobId, conversationId);
-  return { jobId, outcome: "cancelled", reason };
+  return { jobId, outcome: "cancelled", reason: verdict.reason };
 }
 
 async function processOne(
   ctx: SweepContext,
   deps: FollowupDeps,
   clock: () => Date,
-  jobId: string,
-  conversationId: string,
+  job: ClaimedRow,
 ): Promise<SweepOutcome> {
-  const first = await followupEligibility(ctx.db, conversationId, ctx.now);
-  if (!first.ok) return ineligible(ctx, jobId, conversationId, first.reason);
+  const jobId = job.id;
+  const conversationId = job.conversation_id;
+  const options = { bypassWindow: job.bypass_window };
+  const first = await followupEligibility(ctx.db, conversationId, ctx.now, options);
+  if (!first.ok) return ineligible(ctx, jobId, conversationId, first);
   const context = first.context;
 
   const proposal = await ctx.db.execute(sql`
@@ -174,8 +189,8 @@ async function processOne(
       }
 
       // FR-012's second check: the lead may have written while we composed.
-      const second = await followupEligibility(ctx.db, conversationId, clock());
-      if (!second.ok) return ineligible(ctx, jobId, conversationId, second.reason);
+      const second = await followupEligibility(ctx.db, conversationId, clock(), options);
+      if (!second.ok) return ineligible(ctx, jobId, conversationId, second);
 
       try {
         await deps.send({ conversationId, text: message.text, isFollowUp: true });
@@ -184,50 +199,74 @@ async function processOne(
         return { jobId, outcome: "failed" as const, error: (error as Error).message };
       }
 
-      const attempt = await recordSent(ctx, jobId, context, trace.traceId, message.opening, clock());
+      const attempt = await recordFollowupSent(ctx.db, {
+        jobId,
+        context,
+        sentAt: clock(),
+        traceId: trace.traceId,
+        payload: { opening: message.opening, ...(job.bypass_window ? { sentNow: true } : {}) },
+        actor: { type: "worker" },
+      });
       trace.finish({ score: 0, stage: "", outcome: "followup_sent", reply: message.text });
       return { jobId, outcome: "sent" as const, attempt, traceId: trace.traceId };
     },
   );
 }
 
-/** FR-016: count it, schedule the next at the backed-off interval, or give up as *Sem resposta*. */
-async function recordSent(
+/**
+ * Spec 017: the meeting reminder. No model call, so no trace — the sentence is
+ * code's. A reminder that may not go is skipped for good: the next one belongs
+ * to the next booking, not to a retry.
+ */
+async function remindOne(
   ctx: SweepContext,
+  deps: FollowupDeps,
+  clock: () => Date,
   jobId: string,
-  context: FollowupContext,
-  traceId: string | null,
-  opening: FollowupMessage["opening"],
-  sentAt: Date,
-): Promise<number> {
-  const config = getConfig();
-  const attempt = context.attempts + 1;
-  const exhausted = attempt >= config.FOLLOWUP_MAX_ATTEMPTS;
-
+  appointmentId: string,
+): Promise<SweepOutcome> {
+  const verdict = await reminderEligibility(ctx.db, appointmentId, ctx.now);
+  if (!verdict.ok) {
+    await ctx.db.transaction(async (tx) => {
+      await tx.update(followupJobs).set({ status: "cancelled" }).where(eq(followupJobs.id, jobId));
+      if (verdict.context !== undefined) {
+        await tx.insert(events).values({
+          agencyId: verdict.context.agencyId,
+          leadId: verdict.context.leadId,
+          conversationId: verdict.context.conversationId,
+          type: "reminder.skipped",
+          actorType: "worker",
+          payload: { appointmentId, reason: verdict.reason },
+          createdAt: ctx.now,
+        });
+      }
+    });
+    return { jobId, outcome: "cancelled", reason: verdict.reason };
+  }
+  const { context } = verdict;
+  const text = reminderSentence(
+    { ...context.meeting, leadName: context.leadName, held: context.held },
+    ctx.now,
+    getConfig().FOLLOWUP_TIMEZONE,
+  );
+  try {
+    await deps.send({ conversationId: context.conversationId, text, reminderFor: appointmentId });
+  } catch (error) {
+    await release(ctx, jobId);
+    return { jobId, outcome: "failed", error: (error as Error).message };
+  }
+  const sentAt = clock();
   await ctx.db.transaction(async (tx) => {
     await tx.update(followupJobs).set({ status: "sent", sentAt }).where(eq(followupJobs.id, jobId));
-    await tx
-      .update(conversations)
-      .set({ followupAttempts: attempt, followupState: exhausted ? "exhausted" : "pending" })
-      .where(eq(conversations.id, context.conversationId));
-    if (!exhausted) {
-      await tx.insert(followupJobs).values({
-        agencyId: context.agencyId,
-        conversationId: context.conversationId,
-        attempt: attempt + 1,
-        scheduledFor: new Date(sentAt.getTime() + followupDelayMinutes(attempt + 1) * MINUTE),
-      });
-    }
     await tx.insert(events).values({
       agencyId: context.agencyId,
       leadId: context.leadId,
       conversationId: context.conversationId,
-      type: "followup.sent",
+      type: "reminder.sent",
       actorType: "worker",
-      traceId,
-      payload: { attempt, opening, exhausted },
+      payload: { appointmentId, held: context.held },
       createdAt: sentAt,
     });
   });
-  return attempt;
+  return { jobId, outcome: "reminded" };
 }

@@ -4,6 +4,7 @@ import { createLogger } from "../core/logging.ts";
 import { closePool, getDb } from "../db/client.ts";
 import { consumers } from "../jobs/consumers.ts";
 import { startHealthServer } from "./health-server.ts";
+import { listenForWake } from "./wake.ts";
 
 /**
  * The worker: its own process, its own entrypoint, from the same image as the
@@ -25,6 +26,9 @@ await registerLangfuse("worker");
 
 let lastSweepAt = Date.now();
 let sweeping = false;
+// Spec 017: a wake that arrives mid-sweep runs one more sweep right after, so a
+// job made due while the claim was already past it is not left for the tick.
+let wokenMeanwhile = false;
 
 async function sweep(): Promise<void> {
   if (sweeping) {
@@ -50,11 +54,25 @@ async function sweep(): Promise<void> {
   } finally {
     sweeping = false;
   }
+  if (wokenMeanwhile) {
+    wokenMeanwhile = false;
+    void sweep();
+  }
+}
+
+function wake(): void {
+  if (sweeping) {
+    wokenMeanwhile = true;
+    return;
+  }
+  void sweep();
 }
 
 const timer = setInterval(() => {
   void sweep();
 }, config.WORKER_SWEEP_INTERVAL_MS);
+
+const doorbell = listenForWake(wake, log);
 
 const healthServer = startHealthServer({
   port: config.WORKER_HEALTH_PORT,
@@ -74,6 +92,7 @@ async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
 
   clearInterval(timer);
+  await doorbell.close();
   await new Promise<void>((resolve) => healthServer.close(() => resolve()));
   // Bounded inside `core/langfuse.ts`: a slow or dead Langfuse costs the
   // shutdown its timeout and nothing more (contracts/observability.md §5).

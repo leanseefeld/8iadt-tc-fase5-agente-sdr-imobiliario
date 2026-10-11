@@ -49,7 +49,9 @@ Um **SDR digital** que atende 24 horas por dia em conversa natural:
 4. **Agenda** visita ou ligação em horários reais da agenda do corretor. Também remarca e cancela.
 5. **Calcula um score** de 0 a 100 (frio, morno ou quente), visível no painel.
 6. **Resume a conversa** para o corretor.
-7. **Faz follow-up** sozinho quando o lead some, retomando do ponto em que parou.
+7. **Faz follow-up** sozinho quando o lead some, retomando do ponto em que parou, e **lembra o lead** antes de
+   cada visita ou ligação. A gerente decide quando essas mensagens podem sair; o corretor vê a fila e pode
+   enviar na hora, escrever a mensagem ele mesmo ou cancelar.
 8. **Passa para um humano** quando o lead pede, ou quando não consegue entender.
 
 **A IA não fecha venda.** Ela protege o tempo do corretor e evita que o lead esfrie.
@@ -69,7 +71,9 @@ Mais telas: [chat de investimento](docs/imagens/chat-investimento.png) ·
 [follow-up](docs/imagens/chat-followup.png) · [guardrails](docs/imagens/chat-guardrails.png) ·
 [cartões de imóveis](docs/imagens/chat-compra-cartoes.png) ·
 [painel do lead investidor](docs/imagens/painel-lead-investimento.png) ·
-[catálogo](docs/imagens/catalogo.jpg) · [*trace* de um turno no Langfuse](docs/imagens/langfuse-trace.png).
+[catálogo](docs/imagens/catalogo.jpg) · [fila de follow-ups](docs/imagens/followups.png) ·
+[configurações da gerente](docs/imagens/configuracoes.png) ·
+[*trace* de um turno no Langfuse](docs/imagens/langfuse-trace.png).
 
 ---
 
@@ -161,7 +165,7 @@ Resumo abaixo; a matriz completa, com arquivo e teste para cada item, está em
 | Qualificação de leads | Roteiro por intenção, score de 0 a 100 e temperatura, recalculados a cada turno |
 | Agendamento de reuniões | Horários reais por corretor e especialização; propor, confirmar, remarcar e cancelar |
 | Resumo inteligente | O worker resume cada conversa para o corretor, com uma linha de prévia na lista |
-| Dashboard mínimo | Leads ao vivo, indicadores do funil, painel do lead (assumir, devolver, transferir), agenda e catálogo |
+| Dashboard mínimo | Leads ao vivo, indicadores do funil, painel do lead (assumir, devolver, transferir), fila de follow-ups e lembretes, agenda, catálogo e as configurações da gerente |
 
 **Os três cenários do enunciado**, com as mensagens do próprio enunciado, rodando de verdade (trechos; a
 íntegra está em [`docs/exemplos/conversas.md`](docs/exemplos/conversas.md)):
@@ -285,21 +289,23 @@ movida do modelo para o código foi um defeito a menos nos testes com o modelo d
 
 A qualidade foi medida em três níveis, do mais barato ao mais caro:
 
-1. **Suíte determinística** (`npm run test:integration`, cerca de 430 testes em ~1 min): regras puras, banco
+1. **Suíte determinística** (`npm run test:integration`, cerca de 450 testes em ~1 min): regras puras, banco
    real e um **modelo roteirizado** (`tests/support/scripted-model.ts`), de modo que as decisões do turno são
    testadas sem depender da sorte do *sampler*.
-2. **Evals com o modelo real** (`npm run eval`, 58 verificações em [`tests/eval/`](tests/eval/), ~6 min no
+2. **Evals com o modelo real** (`npm run eval`, 65 verificações em [`tests/eval/`](tests/eval/), ~8 min no
    e4b local): os cenários do enunciado ponta a ponta e o comportamento da agenda.
 3. **Eval de extração** ([`evals/`](evals/README.md)): 18 mensagens reais rotuladas, rodadas várias vezes
    cada. Um caso só passa se acerta sempre, porque o lead tem um turno só.
 
-Na última execução antes da entrega, as evals passaram 58/58 no e4b e a suíte determinística 431/431.
+Na última execução antes da entrega, as evals passaram 58/58 no e4b e a suíte determinística 431/431. Depois
+da spec 017 (11/10): evals 65/65 e suíte 453/453, no e4b.
 
 | O que é verificado | Onde |
 |---|---|
 | Cenário 1 (compra) ponta a ponta: roteiro completo, uma pergunta por mensagem, todo imóvel mostrado existe e respeita o filtro, oferta de visita | `tests/eval/scenario-purchase.test.ts` |
 | Cenário 2 (investimento) ponta a ponta: roteiro de investidor, catálogo nunca consultado, ligação | `tests/eval/scenario-investment.test.ts` |
 | Cenário 3 (follow-up): a retomada traz contexto e termina na pergunta pendente | `tests/eval/followup-writer.test.ts`, `tests/integration/followup-send.test.ts` |
+| Resposta ao lembrete (spec 017): agradecer, confirmar, cancelar, remarcar, marcar mais uma conversa e pedir para parar, cada um como um turno normal | `tests/eval/reminder-replies.test.ts` |
 | Agenda: reservar, horário fora do expediente, dois leads no mesmo horário, remarcar, cancelar só com confirmação, limite de três compromissos | `tests/eval/booking.test.ts`, `tests/eval/changes.test.ts` |
 | Saídas de uma oferta: recusa reconhecida uma vez, "só de manhã", mudança de assunto, revisão do pedido | `tests/eval/meeting-escapes.test.ts`, `tests/eval/offer-once.test.ts` |
 | O que a Sofia não sabe resolver (videochamada, escolher corretor por traço pessoal, pedidos fora do escopo): diz que não consegue e oferece a equipe, sem inventar | `tests/eval/meeting-limits.test.ts`, `tests/boundary.test.ts`, `tests/integration/scripted-boundary.test.ts` |
@@ -363,7 +369,7 @@ semeada.
 
 | E-mail | Papel | O que vê |
 |---|---|---|
-| `carla@demo.com.br` | gerente comercial (Carla Nunes) | todos os leads e a agenda da imobiliária; liga e desliga o follow-up automático |
+| `carla@demo.com.br` | gerente comercial (Carla Nunes) | todos os leads, a fila e a agenda da imobiliária; em **Configurações**, quando o follow-up e os lembretes podem sair |
 | `ana@demo.com.br` | corretora (Ana Ribeiro) · compra e aluguel | *Meus leads* e as próprias visitas |
 | `bruno@demo.com.br` | corretor (Bruno Castro) · investimento e compra | idem |
 
@@ -462,7 +468,7 @@ valioso no começo, quando o modelo de dados e o turno ainda eram incertos.
 **Depois, um processo mais leve.** O Spec Kit gerava mais requisitos inventados do que um desenvolvedor sozinho
 conseguia revisar. A partir da spec 009, cada mudança passou a ter uma **spec de uma página em prosa**: o que
 cobre, o que não cobre e como se verifica (009, [015](specs/015-fronteira/spec.md),
-[016](specs/016-model-provider/spec.md)). Hoje a spec é oferecida, não exigida (ADR 24). O que continua
+[016](specs/016-model-provider/spec.md), [017](specs/017-followup-queue/spec.md)). Hoje a spec é oferecida, não exigida (ADR 24). O que continua
 obrigatório é a suíte determinística passando antes de cada *merge* e o mapa do turno atualizado junto com o
 código do turno.
 
@@ -479,6 +485,8 @@ entrega.
 - **Latência local:** no 12B, um turno leva dezenas de segundos numa máquina de desenvolvimento; um modelo
   hospedado responde em poucos segundos.
 - **Canal único e sem deploy:** só chat web, só local.
+- **Fuso por instalação:** a janela de follow-up e os lembretes já são por imobiliária, mas o fuso
+  (`FOLLOWUP_TIMEZONE`) ainda vem do `.env`, porque visitas, agenda e chat também o usam.
 
 ## Estrutura do repositório
 

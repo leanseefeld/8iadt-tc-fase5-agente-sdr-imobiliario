@@ -20,7 +20,7 @@ roda uma vez e sai) e o que fica de fora dele.
 ```mermaid
 flowchart LR
     lead(["Lead<br/>widget de chat<br/>/chat/demo"])
-    broker(["Corretor<br/>painel /leads · /agenda · /catalogo"])
+    broker(["Corretor e gerente<br/>painel /leads · /followups · /agenda<br/>/catalogo · /configuracoes (gerente)"])
 
     subgraph compose["docker compose up"]
         subgraph app["app — Next.js, stateless (mesma imagem do worker)"]
@@ -31,7 +31,7 @@ flowchart LR
             svc["<b>services/</b><br/>única porta para o banco"]
             notif["core/notifier.ts<br/><b>Notifier</b> (LISTEN)"]
         end
-        worker["<b>worker</b> — processo separado<br/>varredura: turnos sem resposta,<br/>resumos, follow-up"]
+        worker["<b>worker</b> — processo separado<br/>varredura: turnos sem resposta,<br/>resumos, follow-up e lembretes"]
         pg[("<b>PostgreSQL</b><br/>agencies · users · leads · conversations<br/>messages · properties · appointments<br/>events · followup_jobs")]
         migrate["migrate<br/>(roda e sai)"]
     end
@@ -56,6 +56,7 @@ flowchart LR
     svc --> pg
     pg -. "NOTIFY" .-> notif
     notif -.-> routes
+    pg -. "NOTIFY followup_due<br/>(Enviar agora)" .-> worker
     worker --> svc
     worker --> pg
     migrate --> pg
@@ -75,6 +76,8 @@ Leitura do diagrama:
 - **O modelo faz três coisas no turno** — `extract`, `act` e `phrase` — e duas
   fora dele, no worker: resumo para o corretor e mensagem de follow-up. Quem decide
   o que perguntar, quando propor visita e quando passar para um corretor é código.
+  O lembrete antes de um compromisso (spec 017) também sai do worker, mas é uma
+  frase escrita pelo código, sem modelo.
 - **Langfuse é opcional.** Só sobe com `docker compose --profile observability up`. Uma chamada ao modelo que falha fica
   marcada como `ERROR` (a geração, se a chamada lançou erro; um evento `<nome>.failed`, se a resposta veio mas
   não serviu), então um nó que tentou duas vezes aparece com a tentativa falha ao lado da que valeu.
@@ -177,6 +180,10 @@ como processo separado desde o primeiro dia** (ADR 2).
   varreduras de follow-up e de resumo reivindicam linhas com
   `FOR UPDATE SKIP LOCKED`, então mais de um worker não duplica trabalho; um teste
   de integração varre 100 tentativas com dois claimers (`tests/followup-claim.test.ts`).
+  A varredura roda a cada `WORKER_SWEEP_INTERVAL_MS`, e também na hora quando alguém
+  aperta *Enviar agora* na fila: o worker escuta o canal `followup_due`
+  (`worker/wake.ts`, spec 017). Uma notificação perdida custa um intervalo, não a
+  mensagem.
   O turno em si é protegido por `claimTurn`, uma coluna na própria conversa.
 - **Tempo real sem polling**: `LISTEN/NOTIFY` com **uma conexão por réplica**, não
   por cliente (§8).

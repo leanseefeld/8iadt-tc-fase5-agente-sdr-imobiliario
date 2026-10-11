@@ -263,6 +263,55 @@ export function closingSentence(
  * Spec 015: the offer, when the phrased one fails or a guard throws it away.
  * It names nothing the lead said, so it is safe for any remainder.
  */
+// ---------------------------------------------------------------------------
+// Spec 017: the meeting reminder
+// ---------------------------------------------------------------------------
+
+export interface ReminderFacts {
+  scheduledAt: Date;
+  type: MeetingType;
+  propertyCode: string | null;
+  investmentSpecialist: boolean;
+  leadName: string | null;
+  /** A broker holds the conversation or is awaited on it: Sofia says she is interrupting. */
+  held: boolean;
+}
+
+/** "hoje às 15h", "amanhã às 9h30", or the slot label for anything further. */
+function whenFromNow(at: Date, now: Date, timeZone: string): string {
+  const day = localParts(at, timeZone);
+  const today = localParts(now, timeZone);
+  const tomorrow = localParts(new Date(now.getTime() + 24 * 60 * 60_000), timeZone);
+  const same = (a: typeof day, b: typeof day) => a.year === b.year && a.month === b.month && a.day === b.day;
+  if (!same(day, today) && !same(day, tomorrow)) return `${slotLabel(at, timeZone)}`;
+  const hours = Math.floor(day.minutes / 60);
+  const minutes = day.minutes % 60;
+  const time = minutes === 0 ? `${hours}h` : `${hours}h${String(minutes).padStart(2, "0")}`;
+  return `${same(day, today) ? "hoje" : "amanhã"} às ${time}`;
+}
+
+/**
+ * Written, never phrased: the time, the meeting and who attends are exactly
+ * what must not be invented. Informational — it asks nothing, and says how to
+ * change it. No broker's name (FR-005e). Inside a conversation a broker holds,
+ * Sofia announces herself, because the lead is talking to a person there.
+ */
+export function reminderSentence(facts: ReminderFacts, now: Date, timeZone: string): string {
+  const meeting =
+    facts.type === "call"
+      ? "sua conversa por telefone"
+      : facts.propertyCode === null
+        ? "sua visita"
+        : `sua visita ao ${facts.propertyCode}`;
+  const when = whenFromNow(facts.scheduledAt, now, timeZone);
+  const change = "Pode avisar por aqui mesmo se não puder mais ou precisar remarcar.";
+  if (facts.held) return `Sofia aqui, interrompendo só pra lembrar: ${meeting} é ${when}. ${change}`;
+  const firstName = facts.leadName?.trim().split(/\s+/)[0];
+  const hello = firstName === undefined || firstName === "" ? "Oi!" : `Oi, ${firstName}!`;
+  const who = meetingHost(facts.investmentSpecialist);
+  return `${hello} Passando pra lembrar: ${meeting} é ${when}, com ${who}. ${change}`;
+}
+
 export const BOUNDARY_OFFER_QUESTION = "Quer que alguém da nossa equipe verifique isso pra você?";
 
 export const BOUNDARY_FALLBACK_SENTENCE = `Isso eu não consigo garantir por aqui. ${BOUNDARY_OFFER_QUESTION}`;

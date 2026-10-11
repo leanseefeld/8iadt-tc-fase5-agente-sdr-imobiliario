@@ -289,21 +289,23 @@ movida do modelo para o código foi um defeito a menos nos testes com o modelo d
 
 A qualidade foi medida em três níveis, do mais barato ao mais caro:
 
-1. **Suíte determinística** (`npm run test:integration`, cerca de 430 testes em ~1 min): regras puras, banco
+1. **Suíte determinística** (`npm run test:integration`, cerca de 450 testes em ~1 min): regras puras, banco
    real e um **modelo roteirizado** (`tests/support/scripted-model.ts`), de modo que as decisões do turno são
    testadas sem depender da sorte do *sampler*.
-2. **Evals com o modelo real** (`npm run eval`, 58 verificações em [`tests/eval/`](tests/eval/), ~6 min no
+2. **Evals com o modelo real** (`npm run eval`, 65 verificações em [`tests/eval/`](tests/eval/), ~8 min no
    e4b local): os cenários do enunciado ponta a ponta e o comportamento da agenda.
 3. **Eval de extração** ([`evals/`](evals/README.md)): 18 mensagens reais rotuladas, rodadas várias vezes
    cada. Um caso só passa se acerta sempre, porque o lead tem um turno só.
 
-Na última execução antes da entrega, as evals passaram 58/58 no e4b e a suíte determinística 431/431.
+Na última execução antes da entrega, as evals passaram 58/58 no e4b e a suíte determinística 431/431. Depois
+da spec 017 (11/10): evals 65/65 e suíte 453/453, no e4b.
 
 | O que é verificado | Onde |
 |---|---|
 | Cenário 1 (compra) ponta a ponta: roteiro completo, uma pergunta por mensagem, todo imóvel mostrado existe e respeita o filtro, oferta de visita | `tests/eval/scenario-purchase.test.ts` |
 | Cenário 2 (investimento) ponta a ponta: roteiro de investidor, catálogo nunca consultado, ligação | `tests/eval/scenario-investment.test.ts` |
 | Cenário 3 (follow-up): a retomada traz contexto e termina na pergunta pendente | `tests/eval/followup-writer.test.ts`, `tests/integration/followup-send.test.ts` |
+| Resposta ao lembrete (spec 017): agradecer, confirmar, cancelar, remarcar, marcar mais uma conversa e pedir para parar, cada um como um turno normal | `tests/eval/reminder-replies.test.ts` |
 | Agenda: reservar, horário fora do expediente, dois leads no mesmo horário, remarcar, cancelar só com confirmação, limite de três compromissos | `tests/eval/booking.test.ts`, `tests/eval/changes.test.ts` |
 | Saídas de uma oferta: recusa reconhecida uma vez, "só de manhã", mudança de assunto, revisão do pedido | `tests/eval/meeting-escapes.test.ts`, `tests/eval/offer-once.test.ts` |
 | O que a Sofia não sabe resolver (videochamada, escolher corretor por traço pessoal, pedidos fora do escopo): diz que não consegue e oferece a equipe, sem inventar | `tests/eval/meeting-limits.test.ts`, `tests/boundary.test.ts`, `tests/integration/scripted-boundary.test.ts` |

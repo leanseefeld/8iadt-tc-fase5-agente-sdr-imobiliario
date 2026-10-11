@@ -146,7 +146,8 @@ desenvolvimento.
 
 **Consequência para a entrega:** o `docker compose up` sobe a aplicação e o worker
 com o alvo `dev` do `Dockerfile` (`npm run dev`, código por bind mount). É o que
-roda hoje, inclusive na demonstração. O alvo `runner` (`next build` + `next start`)
+roda hoje, inclusive na demonstração. O alvo `runner` (servidor *standalone* do
+Next mais o worker, as migrations e o seed empacotados com esbuild em `dist/`)
 existe, mas o Compose não o usa; ver §7.
 
 ---
@@ -257,11 +258,14 @@ alvo `runner` existe para que a afirmação "os mesmos contêineres rodam na nuv
 seja testável, mas não foi implantado em lugar algum. Detalhes de escala em
 [`visao-geral.md`](visao-geral.md) §4 e §7.
 
-**Exploração de 10/10/2026:** [`../exploracoes/hospedagem-azure.md`](../exploracoes/hospedagem-azure.md)
-avalia a Azure (Container Apps escalando a zero, worker como job agendado, Postgres
-Flexible Server). A imagem `runner` foi construída e exercitada num contêiner, com
-migrations, seed, `next start`, uma conversa por SSE e uma varredura do worker.
-Continua sem implantação.
+**Exploração de 10 e 11/10/2026:** [`../exploracoes/hospedagem.md`](../exploracoes/hospedagem.md)
+compara a Azure (Container Apps escalando a zero, worker como job agendado, Postgres
+Flexible Server) com uma VPS abaixo de R$ 50/mês. A imagem `runner` foi reduzida de
+479 MB para 68 MB (comprimida) e exercitada: migrations, seed, login, uma conversa por
+SSE e a varredura do worker. [`deploy/vps/`](../../deploy/vps/) traz um Compose de
+produção com Caddy, testado localmente e não numa VPS real. Continua sem implantação.
+O widget incorporado num site de outro domínio não funciona hoje, por causa do cookie
+`SameSite=Lax` do chat: ver [`../exploracoes/widget-embutido.md`](../exploracoes/widget-embutido.md).
 
 ---
 

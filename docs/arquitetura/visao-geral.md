@@ -246,6 +246,7 @@ src/
 ├── proxy.ts          # guarda de sessão do painel (/leads, /agenda, /catalogo)
 └── instrumentation*.ts
 config/models/        # um YAML por perfil de modelo
+deploy/vps/           # Compose de produção (imagem runner + Caddy), não implantado
 ```
 
 **Regra de dependência:** `app → channels → agent → services → db`, e `domain` não

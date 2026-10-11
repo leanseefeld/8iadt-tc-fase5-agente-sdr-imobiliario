@@ -1,351 +1,247 @@
-# Exploração: hospedagem na Azure
+# Exploração: hospedagem (Azure ou VPS)
 
-> **Status (10/10/2026): exploração de viabilidade, nada implantado.** Nenhum recurso
-> foi criado na Azure e nenhuma linha de código mudou. O registro de
+> **Status (11/10/2026): exploração, nada implantado.** Nenhum recurso foi criado na
+> Azure nem numa VPS. O que mudou no código foi a imagem de produção (§3), que ficou
+> menor. O registro de
 > [`restricoes-de-implantacao.md`](../arquitetura/restricoes-de-implantacao.md) §7
 > continua verdadeiro: não há ambiente na nuvem.
 
 > **Não normativo.** Avalia uma proposta de arquitetura recebida pelo desenvolvedor
 > ("AI SDR — Cloud Architecture Proposal": App Service + Function Timer + Postgres
-> gerenciado + Azure OpenAI + Key Vault + ACR, com o domínio no Route 53) contra o
-> código como ele é hoje. A escolha final vira ADR quando for feita.
+> gerenciado + Azure OpenAI + Key Vault + ACR, com o domínio no Route 53), compara com
+> uma VPS barata, e registra o que foi medido. A escolha final vira ADR quando for feita.
 
 **Objetivo declarado:** o caminho mais curto para hospedar o sistema e ter o primeiro
-cliente rodando, até duas imobiliárias. Sem SLA, sem cadastro ou cobrança. Não
-gastar crédito da Azure quando nada estiver rodando.
+cliente rodando, até duas imobiliárias. Sem SLA, sem cadastro nem cobrança. Na Azure,
+não gastar crédito quando nada estiver rodando. Alternativa: uma VPS abaixo de
+R$ 50/mês, ligada o tempo todo.
+
+**Fora do escopo:** cadastrar uma imobiliária nova. Hoje só existe a `demo`, criada
+pelo seed; um fluxo de *onboarding* de verdade será desenhado quando houver o segundo
+cliente. Incorporar o widget no site da imobiliária tem a sua própria exploração:
+[`widget-embutido.md`](widget-embutido.md).
 
 ---
 
 ## 1. Resposta curta
 
-**Viável, sem mudar a arquitetura.** A imagem de produção (`runner`) já existe e foi
-exercitada nesta exploração: build, migrations, seed, `next start`, uma conversa de
-ponta a ponta por SSE e uma varredura do worker (§2).
+As duas opções são viáveis sem mudar a arquitetura. A imagem de produção foi
+reconstruída para levar só o que roda (§3) e exercitada nos dois formatos:
 
-A proposta funciona como está, mas duas escolhas dela trabalham contra o objetivo de
-não pagar por tempo ocioso. A recomendação é trocá-las:
+| | Azure (Container Apps) | VPS (Docker Compose) |
+|---|---|---|
+| Custo por mês | ~US$ 21–27, pago com crédito (§4.4) | R$ 30–45, pago em reais (§5.2) |
+| Parada quando ninguém usa | sim, a aplicação escala a zero | não, e não precisa |
+| Partida a frio | sim, segundos (imagem de 68 MB) | não |
+| SSE | corte a cada 240 s, reconexão invisível (§4.3) | sem corte |
+| Worker | job agendado: precisa do modo "uma varredura" (§6) | o processo de hoje, sem mudança |
+| Banco | gerenciado, com backup | nosso, backup por cron (`deploy/vps/README.md`) |
+| Mudança de código para subir | ~20 linhas no worker | nenhuma |
+| Pronto em `deploy/` | não, roteiro em §4.5 | `deploy/vps/` (Compose + Caddy), testado localmente |
+
+**Recomendação:** para o primeiro cliente, **a VPS**. É o mesmo `docker compose up`
+que o projeto já exige (constituição), fica sempre quente, não tem o corte de 240 s, e
+o Compose de produção já está pronto e testado. A Azure faz sentido enquanto os
+créditos durarem e não houver cliente usando o widget, ou quando um contrato pedir
+banco gerenciado.
+
+---
+
+## 2. A proposta original contra o código
+
+Pontos em que a proposta presume algo diferente do que o código faz, válidos para os
+dois destinos:
+
+1. **"Adicionar Redis Pub/Sub se houver mais de uma instância."** Não é necessário. O
+   SSE já usa `LISTEN/NOTIFY` do Postgres, com uma conexão por réplica
+   ([`visao-geral.md`](../arquitetura/visao-geral.md) §9, `core/notifier.ts`). Um evento
+   gravado por qualquer réplica, ou pelo worker, chega aos streams de todas. Redis também
+   contraria a regra "No Redis" do `AGENTS.md`. **Consequência prática:** a
+   `DATABASE_URL` precisa apontar para uma conexão direta com o Postgres, nunca para um
+   pool em modo transação (como o PgBouncer embutido do Flexible Server, porta 6432),
+   porque `LISTEN` não sobrevive a ele.
+2. **"Webhook do WhatsApp no mesmo app."** O WhatsApp **não está implementado**
+   ([`restricoes-de-implantacao.md`](../arquitetura/restricoes-de-implantacao.md) §6). A
+   hospedagem não depende dele. O que ela muda é que passa a existir uma URL pública com
+   HTTPS, que era o bloqueio citado no registro.
+3. **"Proteger contra varreduras sobrepostas."** Já está protegido. Os consumidores
+   reivindicam linhas com `FOR UPDATE SKIP LOCKED`, o turno é guardado por `claimTurn`,
+   e há teste de integração com dois *claimers* (`tests/followup-claim.test.ts`).
+4. **Rota interna `POST /api/internal/worker/sweep` acionada por Function Timer.** Na
+   Azure, o job agendado é melhor (§4.1). Na VPS, o worker continua sendo o processo
+   de hoje.
+5. **Key Vault.** Os *secrets* do Container Apps, ou o `.env` com `chmod 600` na VPS,
+   bastam para duas imobiliárias.
+
+---
+
+## 3. A imagem de produção
+
+**Antes (10/10/2026):** o alvo `runner` copiava o repositório inteiro, `node_modules`
+completo (dependências de desenvolvimento incluídas, os binários do SWC para glibc
+*e* musl, o `sharp`) e o cache de build do Next. Ficava com **479 MB comprimida, 1,6 GB
+descompactada**.
+
+**Agora (11/10/2026), no `Dockerfile`:**
+
+- o app sai do **`output: "standalone"`** do Next. É o `server.js` mais um
+  `node_modules` podado pelo *trace* do próprio Next (33 pacotes, 21 MB). O `sharp`
+  fica de fora (`outputFileTracingExcludes`): ele só serve ao `next/image`, que o
+  projeto não usa;
+- o worker, o migrate e o seed são **empacotados com esbuild** (`npm run build:jobs`,
+  `dist/`). São três arquivos com as dependências dentro, 7 MB no total, que não
+  precisam de `node_modules`;
+- a imagem final só leva o que é lido em tempo de execução: o *standalone*,
+  `.next/static`, `dist/`, `config/models/`, as migrations (aplicadas pelo migrate e
+  comparadas pelo *readiness*) e o catálogo do seed. Roda como o usuário `node`.
+
+**Cache:** o `npm ci` fica num estágio que só depende de `package.json` e
+`package-lock.json`, com o cache do npm montado (`--mount=type=cache`). O
+`.next/cache` também é um *cache mount*: acelera o build incremental sem entrar em
+nenhuma camada. As camadas da imagem final vão da que menos muda (configuração,
+migrations) para a que mais muda (o código compilado).
+
+| Medida | Antes | Depois |
+|---|---|---|
+| Imagem comprimida (o que se baixa) | 479 MB | **68 MB** (62 MB são a própria `node:24-alpine`) |
+| Imagem descompactada | 1,6 GB | 288 MB |
+| Memória do app em repouso | 246 MiB | 60–74 MiB |
+| Memória do worker em repouso | 186 MiB | 42–45 MiB |
+| Rebuild depois de mudar só código | — | 22 s; `npm ci` reaproveitado do cache; 8 de 11 camadas idênticas |
+
+**O que foi exercitado na imagem nova:**
+- `node dist/db/migrate.js` aplica as 4 migrations, e `node dist/db/seed/index.js` semeia;
+- o app sobe com o *readiness* verde (banco e migrations), serve os *assets*, e um
+  corretor entra pelo `/login` (Playwright) e vê `/leads`;
+- uma conversa chega por SSE (`pulse`, `chunk`, `message`);
+- `node dist/worker/index.js` roda os três consumidores, com e sem o Langfuse (que
+  importa o OpenTelemetry dinamicamente). Ele também refez um turno que o app deixou
+  sem resposta (app derrubado dentro do debounce): extração, chamada ao modelo,
+  *fallback* e `commit`. Esse é o caminho inteiro do agente empacotado;
+- `npm test` passa no Node 24 (288 testes, 0 falhas), e o `npm run lint` também.
+  A suíte de integração não foi rodada: ela usa o alvo `dev`, que não mudou.
+
+**Comandos:** o padrão da imagem sobe o app (`node server.js`, porta `APP_PORT`). O
+worker é `node dist/worker/index.js`, o migrate `node dist/db/migrate.js` e o seed
+`node dist/db/seed/index.js`. O alvo `dev` e o Compose de desenvolvimento não mudaram
+de comportamento.
+
+---
+
+## 4. Azure
+
+### 4.1 Recomendado no lugar da proposta
 
 | Proposta | Recomendado | Por quê |
 |---|---|---|
-| App Service (Docker) | **Azure Container Apps**, plano Consumption, `min-replicas 0` | App Service cobra o plano 24 h por dia, mesmo parado. Container Apps escala a zero e não cobra nada nesse estado |
-| Azure Function Timer → `POST /api/internal/worker/sweep` | **Container Apps Job agendado**, mesma imagem, outro comando | O ping HTTP a cada 15 min **acorda a aplicação** e a mantém ativa pelo cooldown (300 s), cerca de um terço do dia. O job roda o worker direto no banco: sem rota interna, sem autenticação a inventar, sem recurso Functions e sem conta de storage |
-| Migrations rodando no GitHub Actions | **Container Apps Job manual** com `node src/db/migrate.ts` | O runner do GitHub tem IP variável e não alcança um Postgres com firewall. O job roda dentro da Azure, com a mesma imagem |
-| Key Vault | **Secrets do próprio Container Apps** (Key Vault opcional) | São criptografados e chegam à aplicação como variável de ambiente, que é o que `core/config.ts` lê. Key Vault acrescenta identidade gerenciada e RBAC sem ganho para duas imobiliárias |
+| App Service (Docker) | **Container Apps**, plano Consumption, `min-replicas 0` | O App Service cobra o plano 24 h por dia, mesmo parado. O Container Apps escala a zero e não cobra nada nesse estado |
+| Function Timer → `POST /api/internal/worker/sweep` | **Job agendado do Container Apps**, mesma imagem, outro comando | O ping HTTP a cada 15 min **acorda a aplicação** e a mantém ativa pelo *cooldown* (300 s), cerca de um terço do dia. O job roda o worker direto no banco, sem rota interna nem autenticação a inventar |
+| Migrations rodando no GitHub Actions | **Job manual** com `node dist/db/migrate.js` | O runner do GitHub tem IP variável e não alcança um Postgres com firewall. O job roda dentro da Azure |
+| Key Vault | *Secrets* do próprio Container Apps | Chegam como variável de ambiente, que é o que `core/config.ts` lê |
 
-O resto da proposta se mantém: Azure Database for PostgreSQL Flexible Server, Azure
-OpenAI pelo perfil `azure_nano` (ou `azure_luna_none`), ACR, Langfuse Cloud e o
-domínio no Route 53.
-
-**Custo esperado** (preços de tabela da API de varejo da Azure, consultada em
-10/10/2026, East US 2): **cerca de US$ 21/mês parado e US$ 28/mês com uso em horário
-comercial**, quase tudo Postgres. Detalhe em §5.
-
----
-
-## 2. O que foi verificado nesta exploração
-
-Rodado num contêiner Linux, com a imagem `runner` do `Dockerfile` e um
-`postgres:17-alpine`, simulando a topologia da nuvem: um `migrate` avulso, a
-aplicação com `npm run start` e `NODE_ENV=production`, e o worker separado. O
-modelo apontava para um endpoint Azure inválido, de propósito: sem chave real, o
-teste é do encanamento, não da qualidade das respostas.
-
-| Verificação | Resultado |
-|---|---|
-| `npm run build` sem `.env` e sem banco | Passa. O build não precisa de segredo, então o CI consegue gerar a imagem |
-| `docker build --target runner` | Passa. **479 MB comprimida, 1,6 GB descompactada** (leva `node_modules` inteiro, inclusive dependências de desenvolvimento) |
-| `node src/db/migrate.ts` na imagem `runner` | Aplica as 4 migrations em ~0,3 s |
-| `node src/db/seed/index.ts` na imagem `runner` | Semeia a agência `demo`, 3 usuários, 100 imóveis, 3 leads |
-| `npm run start` até `/api/health/ready` = 200 | **~2,1 s** com a imagem já baixada. 246 MiB de memória em repouso |
-| `/login` e `/chat/demo` | 200, em 0,17 s e 0,08 s |
-| Conversa por SSE: `POST /api/chat` → debounce → turno → `LISTEN/NOTIFY` → stream | Funciona. O stream entregou `pulse`, `chunk` e `message`. Com o modelo fora, a resposta foi o *fallback* ("Tive um problema técnico aqui…"), como previsto |
-| `node src/worker/index.ts` | Varre os três consumidores logo ao subir, em ~1 s. 186 MiB. `SIGTERM` encerra limpo, com código 0 |
-
-**Não verificado, e só se verifica na Azure:** o tempo de partida a frio (download
-da imagem), o corte de 240 s do ingress sobre o SSE (§4.3), o TLS até o Postgres
-gerenciado (§6) e a qualidade das respostas com o modelo real. A última já foi
-validada nas demonstrações com o perfil `azure_*`, e não depende de onde a
-aplicação roda.
-
----
-
-## 3. A proposta contra o código
-
-Pontos em que a proposta presume algo diferente do que o código faz:
-
-1. **"Adicionar Redis Pub/Sub se houver mais de uma instância."** Não é necessário.
-   O SSE já usa `LISTEN/NOTIFY` do Postgres, com uma conexão por réplica
-   ([`visao-geral.md`](../arquitetura/visao-geral.md) §9, `core/notifier.ts`): um
-   evento gravado por qualquer réplica, ou pelo worker, chega aos streams de todas.
-   Redis também contraria a regra "No Redis" do `AGENTS.md`. **Consequência
-   prática:** a `DATABASE_URL` precisa apontar para a porta direta do servidor
-   (5432), **não** para o PgBouncer embutido do Flexible Server (6432), porque
-   `LISTEN` não sobrevive ao pool em modo transação.
-2. **"Webhook do WhatsApp no mesmo app."** O WhatsApp **não está implementado**
-   ([`restricoes-de-implantacao.md`](../arquitetura/restricoes-de-implantacao.md)
-   §6). A hospedagem não depende dele. O que ela muda é que passa a existir uma URL
-   pública com HTTPS, que era o bloqueio citado no registro.
-3. **"Proteger contra varreduras sobrepostas."** Já está protegido. Os consumidores
-   reivindicam linhas com `FOR UPDATE SKIP LOCKED` e o turno é guardado por
-   `claimTurn`. Há teste de integração com dois *claimers*
-   (`tests/followup-claim.test.ts`). Duas execuções do job ao mesmo tempo não
-   duplicam trabalho.
-4. **Organização sugerida (`src/worker/sweep.ts` + rota interna).** A metade útil é
-   extrair a varredura de `src/worker/index.ts` para uma função reutilizável. A rota
-   interna deixa de ser necessária com o job (§7.1).
-5. **"Usar o comando de produção."** Já existe: o alvo `runner` termina em
-   `npm run start` (`next start`). Nada a mudar no `Dockerfile` para a primeira
-   implantação.
-
----
-
-## 4. Arquitetura recomendada
+O resto da proposta se mantém: Postgres Flexible Server (B1ms), Azure OpenAI pelo
+perfil `azure_*`, ACR Basic, Langfuse Cloud e o domínio no Route 53.
 
 ```text
-                Route 53 (CNAME app.<domínio> → FQDN do Container App)
-                                    │
-                                    ▼
-     ┌──────────── Container Apps Environment (Consumption) ────────────┐
-     │                                                                  │
-     │  sdr-app      Container App, ingress externo, porta 3100         │
-     │               imagem runner, `npm run start`                     │
-     │               min 0 / max 1 réplica, 0,5 vCPU / 1 GiB            │
-     │                                                                  │
-     │  sdr-sweep    Job agendado, cron */15 * * * *                    │
-     │               mesma imagem, uma varredura e sai                  │
-     │                                                                  │
-     │  sdr-migrate  Job manual, `node src/db/migrate.ts`               │
-     │               mesma imagem, disparado pelo deploy                │
-     └──────────────────────────────────────────────────────────────────┘
-          │  LISTEN/NOTIFY + SQL (porta 5432, TLS)       │ HTTPS
-          ▼                                              ▼
-   PostgreSQL Flexible Server, B1ms            Azure OpenAI (perfil azure_*)
-                                               Langfuse Cloud (opcional)
-
-   GitHub Actions ──build runner──▶ ACR Basic ──▶ sdr-migrate ──▶ sdr-app / sdr-sweep
+ Route 53 (CNAME app.<domínio>) → Container Apps Environment (Consumption)
+     sdr-app      ingress externo, porta 3100, min 0 / max 1, 0,25 vCPU / 0,5 GiB
+     sdr-sweep    job agendado */15, node dist/worker/once.js (§6)
+     sdr-migrate  job manual, node dist/db/migrate.js
+         │ SQL + LISTEN/NOTIFY (5432, TLS)          │ HTTPS
+         ▼                                          ▼
+ Postgres Flexible Server B1ms               Azure OpenAI · Langfuse Cloud
 ```
 
-É o desenho de [`visao-geral.md`](../arquitetura/visao-geral.md) §7: uma imagem, os
-processos `app` e `worker` separados e o Postgres gerenciado. Nada específico da Azure
-entra no código. O que é da Azure fica na configuração de implantação.
+O tamanho **0,25 vCPU / 0,5 GiB** passou a caber com a imagem nova: o app usa ~70 MiB
+em repouso. É a menor combinação do Container Apps, e metade do custo de 0,5 / 1 GiB.
 
-### 4.1 Escalar a zero, na prática
+### 4.2 Escalar a zero, na prática
 
-- **Partida a frio.** Depois de 300 s sem requisição, a réplica sai. A próxima
-  requisição baixa a imagem (479 MB, se o nó não a tiver em cache) e sobe o Next.js
-  (~2 s medidos). Estimativa: **dezenas de segundos** na primeira carga do chat
-  depois de um período ocioso. O número precisa ser medido na Azure. Para a fase de
-  demonstração isso não pesa. **Quando o widget do primeiro cliente estiver no ar**,
-  um lead esperando 20 a 30 s é um lead perdido. Nesse momento, vale passar para
-  `--min-replicas 1`, que custa cerca de US$ 12/mês em tarifa ociosa (§5).
+- **Partida a frio.** Depois de 300 s sem requisição, a réplica sai. A próxima baixa a
+  imagem (68 MB, se o nó não tiver cache) e sobe o servidor (~3 s medidos depois do
+  download). A espera precisa ser medida na Azure; a estimativa é de alguns segundos a
+  algumas dezenas. Para um lead abrindo o widget, isso pesa. A saída é
+  `min-replicas 1` (§4.4).
 - **Streams abertos mantêm a réplica viva.** Um SSE aberto é uma requisição em
-  andamento. Um corretor que deixa a aba de `/leads` aberta durante a noite mantém
-  a aplicação em tarifa ativa. Pela definição da Azure ("processing requests"),
-  isso é provável, mas não foi medido. O teto é de cerca de US$ 34/mês se ficar
-  ativa 24 h com 0,5 vCPU / 1 GiB. Mitigações: `max-replicas 1` limita a uma
-  réplica, e um orçamento com alerta avisa (§8). Se virar problema, o stream do
-  painel pode fechar quando a aba fica oculta, uma mudança pequena de UI.
-- **O debounce do turno é seguro.** O timer de 3 s mora no processo
-  (`channels/web.ts`), mas o `POST` que o arma é uma requisição, e o widget mantém
-  o SSE aberto. A réplica não sai no meio. Se sair, `unanswered-turns` refaz o turno
-  na próxima varredura.
-- **O worker não depende da aplicação.** O job grava o follow-up e dá o `NOTIFY`.
-  Se o lead estiver com o widget aberto, a réplica da aplicação está de pé e entrega.
-  Se não estiver, a mensagem aparece quando ele voltar, lida do banco.
-
-### 4.2 Cadência da varredura
-
-Hoje a varredura roda a cada `WORKER_SWEEP_INTERVAL_MS` (15 min). Com o job, a
-cadência vira o cron. Efeitos de 15 min: o follow-up sai até 15 min depois de
-vencido, o resumo do lead aparece no painel até 15 min depois da conversa, e um
-turno perdido é refeito em até 15 min. Um cron de `*/5` reduz isso a 5 min, ainda
-dentro da cota gratuita (§5).
+  andamento. Uma aba de `/leads` esquecida aberta mantém a aplicação em tarifa ativa
+  (pior caso em §4.4).
+- **O debounce do turno é seguro.** O `POST` que arma o timer é uma requisição, e o
+  widget mantém o SSE aberto. Se a réplica sair mesmo assim, `unanswered-turns` refaz o
+  turno na próxima varredura (comportamento verificado em §3).
+- **O worker não depende da aplicação.** O job grava e dá o `NOTIFY`. Se houver widget
+  aberto, a réplica do app está de pé e entrega.
 
 ### 4.3 O corte de 240 s do ingress
 
-A documentação do Container Apps fixa **"Request time out is 240 seconds"** no
-ingress HTTP. O mais provável é que um SSE seja encerrado aos 4 minutos, mesmo com
-o `pulse` a cada 15 s. Pela leitura do código, o efeito é invisível:
+A documentação do Container Apps fixa *"Request time out is 240 seconds"* no ingress
+HTTP. O mais provável é que um SSE seja encerrado aos 4 minutos, mesmo com o `pulse`
+a cada 15 s. Pela leitura do código, o efeito é invisível. A rota manda `retry: 3000`,
+e o `EventSource` reconecta em 3 s. O `readyState` fica `CONNECTING`, e não `CLOSED`,
+então o widget não mostra "Conexão perdida". As mensagens gravadas no intervalo voltam
+por `Last-Event-ID`. **A verificar na primeira implantação.** Numa VPS com Caddy, não
+há corte.
 
-- a rota manda `retry: 3000`, e o `EventSource` reconecta sozinho em 3 s;
-- durante a reconexão o `readyState` é `CONNECTING`, não `CLOSED`, então o widget
-  não mostra "Conexão perdida". O alerta só aparece depois de dois `pulse` perdidos
-  (31 s), e a reconexão manda um `pulse` imediato;
-- mensagens gravadas nesse intervalo voltam por `Last-Event-ID`. Só um `chunk`
-  (animação de digitação) pode se perder, e isso já é aceito pelo desenho.
+### 4.4 Custos
 
-**A verificar na primeira implantação:** deixar o chat e o painel abertos por 10
-minutos e confirmar que não aparece a faixa "Conexão perdida". O App Service tem
-limite equivalente (230 s sem resposta), mas conta ociosidade, e o `pulse` o
-evitaria.
-
----
-
-## 5. Custos
-
-Preços de tabela em USD, da API de varejo da Azure (`prices.azure.com`), consultada
-em 10/10/2026. Mês de 730 h. Sem impostos e sem descontos.
+Preços de tabela em USD da API de varejo da Azure (`prices.azure.com`), consultada em
+10/10/2026, East US 2, mês de 730 h.
 
 | Recurso | East US 2 | Brazil South |
 |---|---|---|
-| Postgres Flexible B1ms (1 vCore, 2 GiB), 24 h | US$ 0,017/h → **12,41** | US$ 0,035/h → **25,55** |
-| Armazenamento do Postgres, 32 GB | US$ 0,115/GB → **3,68** | US$ 0,2185/GB → **6,99** |
-| ACR Basic | US$ 0,1666/dia → **5,07** | **5,07** |
+| Postgres Flexible B1ms, 24 h | 12,41 | 25,55 |
+| Armazenamento do Postgres, 32 GB | 3,68 | 6,99 |
+| ACR Basic | 5,07 | 5,07 |
 | Container Apps, vCPU ativa / ociosa | US$ 0,000024 / 0,000003 por s | igual |
-| Container Apps, memória ativa ou ociosa | US$ 0,000003 por GiB·s | igual |
-| Cota gratuita mensal do Container Apps | 180.000 vCPU·s, 360.000 GiB·s, 2 M requisições | igual |
-| *Para comparação:* App Service B1 Linux | US$ 0,017/h → 12,41 | US$ 0,020/h → 14,60 |
+| Container Apps, memória (ativa ou ociosa) | US$ 0,000003 por GiB·s | igual |
+| Cota gratuita mensal do Container Apps | 180.000 vCPU·s, 360.000 GiB·s | igual |
 
-**Cenários (East US 2):**
+**Cenários (East US 2, app em 0,25 vCPU / 0,5 GiB):**
 
 | Cenário | Mês |
 |---|---|
-| Parado: ninguém usando, Postgres ligado | ~US$ 21 (Postgres 16,09 + ACR 5,07; app e job dentro da cota) |
-| Uso real: duas imobiliárias, painel aberto 10 h × 22 dias | ~US$ 28 (soma ~7 de Container Apps acima da cota) |
-| Sem partida a frio: `min-replicas 1` | +~US$ 12 de tarifa ociosa |
-| "Hibernado": Postgres parado | ~US$ 9 (só armazenamento + ACR). A Azure religa o Postgres sozinha depois de 7 dias |
+| Parado, escalando a zero | **~US$ 21**: Postgres 16,09 + ACR 5,07. App e job ficam dentro da cota |
+| Uso real: duas imobiliárias, painel aberto 10 h × 22 dias | **~US$ 22**: o uso ativo passa da cota em ~US$ 1 |
+| Sempre quente (`min-replicas 1`), sem partida a frio | **~US$ 27**: os de cima **mais** ~US$ 6 de tarifa ociosa |
+| Pior caso: uma aba de `/leads` aberta 24 h por dia | ~US$ 35 (o app ativo o mês inteiro, ~US$ 14 depois da cota) |
+| "Hibernado": Postgres parado | ~US$ 9. A Azure religa o Postgres sozinha em 7 dias |
 | *A proposta original* (App Service B1 + Function + ACR + Postgres) | ~US$ 34 fixos, usando ou não |
 
-O job de varredura a cada 15 min, com ~30 s por execução a 0,25 vCPU / 0,5 GiB,
-usa ~22.000 vCPU·s por mês. A cada 5 min, ~65.000. Nos dois casos fica dentro da
-cota gratuita.
+**Sobre o "manter quente":** sim, é **somado** à estimativa base. A primeira versão
+desta exploração dizia ~US$ 12 por mês porque considerava o app com 0,5 vCPU e 1 GiB
+(US$ 0,0000045 por segundo ocioso × 2.628.000 s). Com a imagem nova, 0,25 vCPU / 0,5 GiB
+basta, e a tarifa ociosa cai para ~US$ 5,90. Não confirmei se a cota gratuita também
+desconta segundos ociosos; os números acima não a aplicam.
 
-**Duas alavancas que mudam a conta:**
+**Duas alavancas:**
 
 1. **Conta gratuita da Azure.** Nos primeiros 12 meses de uma conta gratuita, a Azure
-   inclui **750 h/mês de Postgres Flexible B1ms, 32 GB de armazenamento e 32 GB de
-   backup**. Isso cobre exatamente o servidor acima e derruba o custo para ~US$ 5 a
-   12/mês. Vale conferir se a assinatura onde estão os créditos é desse tipo. Não
-   confirmei se a assinatura Azure for Students inclui o mesmo benefício.
-2. **Região.** O Container Apps custa o mesmo nas duas regiões, mas o Postgres no
-   Brazil South custa o dobro (+~US$ 16,50/mês). Para a POC, a sugestão é ficar na
-   região do recurso Azure OpenAI que já existe e ir para o Brazil South quando um
-   contrato pedir dados no Brasil (LGPD). Aplicação e banco ficam sempre na
-   mesma região. A latência que o lead sente é uma ida e volta até o servidor, mais
-   o modelo.
+   inclui 750 h/mês de Postgres Flexible B1ms, 32 GB de armazenamento e 32 GB de backup.
+   Isso tira ~US$ 16 de todos os cenários. Vale conferir se a assinatura dos créditos é
+   desse tipo. Não confirmei se a assinatura Azure for Students inclui o benefício.
+2. **Região.** O Container Apps custa o mesmo nas duas regiões. O Postgres no Brazil
+   South custa o dobro (+~US$ 16,50). Para a POC, a sugestão é a região do recurso Azure
+   OpenAI que já existe.
 
-Itens de custo desprezível ou zero: Log Analytics (o ambiente cria um workspace;
-os logs JSON desta escala ficam bem abaixo da franquia gratuita mensal), Key Vault
-(se usado), Langfuse Cloud Hobby (gratuito na faixa de uma POC) e Route 53 (já pago).
-O Azure OpenAI é por token e não depende da hospedagem.
+**Armadilha:** o ambiente precisa ser só Consumption. Um *workload profile* dedicado
+liga o medidor "Environment Management Hour" (US$ 0,10/h, ~US$ 73/mês).
 
-**Armadilha a evitar:** criar o ambiente do Container Apps com um *workload profile*
-dedicado. O medidor "Environment Management Hour" (US$ 0,10/h em East US 2, ~US$ 73/mês)
-só vale para o plano Dedicated. O ambiente precisa ser só Consumption.
+### 4.5 Roteiro (não executado)
 
----
-
-## 6. Configuração
-
-O mesmo contrato de `.env.example`, com estes valores na nuvem:
-
-| Variável | Valor | Nota |
-|---|---|---|
-| `NODE_ENV` | `production` | Liga o `Secure` no cookie de sessão (`core/auth.ts`) |
-| `APP_PORT` | `3100` | Igual ao `--target-port` do ingress |
-| `DATABASE_URL` | `postgresql://<user>:<senha>@<servidor>.postgres.database.azure.com:5432/sdr?sslmode=verify-full` | Porta 5432, não 6432 (§3.1). `verify-full` explícito: o `pg` 8.23 já trata `require` como `verify-full`, mas emite aviso de segurança. Os certificados do Flexible Server encadeiam em raízes públicas que o Node já conhece. Confirmar na primeira conexão |
-| `AUTH_SECRET` | `openssl rand -base64 32` | Secret |
-| `MODEL_PROFILE` | `azure_nano` ou `azure_luna_none` | |
-| `AZURE_OPENAI_BASE_URL`, `AZURE_OPENAI_API_KEY` | do recurso existente | Chave em secret |
-| `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | Langfuse Cloud (`https://cloud.langfuse.com` ou `https://us.cloud.langfuse.com`) | Opcional: sem as chaves, o rastreamento é no-op |
-| `FOLLOWUP_FIRST_DELAY_MINUTES` | `240` | O `5` de demonstração não serve com cliente real |
-
-**Dados pessoais.** Os traces do Langfuse e as chamadas ao Azure OpenAI levam
-mensagens de leads, com nome e telefone. Para a POC, tudo bem. Antes do primeiro
-cliente, confirmar os termos de tratamento de dados dos dois serviços e citá-los no
-aviso de privacidade da imobiliária. A proposta já apontava isso.
-
----
-
-## 7. O que falta no código
-
-### 7.1 Necessário: o worker em modo "uma varredura e sai"
-
-`src/worker/index.ts` só sabe rodar para sempre (`setInterval`). Um job precisa de
-um processo que varra uma vez, faça o *flush* do Langfuse, feche o pool e saia com
-código 0. A mudança tem cerca de 20 linhas e não toca nenhum consumidor:
-
-- extrair `sweep()` para uma função exportada (por exemplo,
-  `src/worker/sweep.ts`), que devolve se algum consumidor falhou;
-- `src/worker/index.ts` continua igual para o Compose (timer + porta de *health*);
-- um segundo ponto de entrada (`src/worker/once.ts`) chama a função uma vez e sai.
-  O comando do job é `node src/worker/once.ts`.
-
-**Alternativa sem código:** rodar o worker como um segundo Container App sem
-ingress, `min = max = 1`, 0,25 vCPU / 0,5 GiB, com o comando atual. Custa ~US$ 6/mês
-em tarifa ociosa e é exatamente o processo do Compose. É o caminho se a primeira
-implantação vier antes da mudança.
-
-### 7.2 Necessário para o primeiro cliente: cadastrar a imobiliária
-
-Multi-tenancy existe em tempo de execução: o widget é `/chat/<slug>`, a sessão do
-corretor carrega `agencyId`, e toda consulta filtra por agência (ADR 10). **O que não
-existe é como criar uma agência.** O único caminho é `src/db/seed/index.ts`, que cria
-a `demo`, três usuários fixos e imóveis de exemplo. Para o primeiro cliente falta um
-script de provisionamento que receba a agência (nome, slug), os corretores (nome,
-e-mail, papel, senha inicial com hash bcrypt) e o catálogo de imóveis (no formato de
-`properties.json`). Ele roda da máquina do desenvolvedor contra o banco da nuvem,
-com regra de firewall para o próprio IP (§8). Não há tela de troca de senha.
-
-Uma restrição pequena: `login` procura o usuário só pelo e-mail
-(`services/auth.ts`), e a unicidade é por agência e e-mail. O mesmo e-mail em duas
-imobiliárias entra numa delas arbitrariamente. Com duas agências, basta não repetir
-e-mails.
-
-### 7.3 Não necessário, mas útil
-
-- **Incorporar o widget no site da imobiliária.** O cookie da sessão do chat é
-  `SameSite=Lax` (`core/auth.ts`). Num `<iframe>` dentro de outro domínio, o
-  navegador não o envia, e o stream SSE perde a sessão. Para o primeiro cliente,
-  **link direto** para `https://app.<domínio>/chat/<slug>` (botão no site, QR code,
-  bio do Instagram) funciona sem mudança. Para *iframe*, é preciso `SameSite=None`
-  com o resto das proteções revisado, ou um subdomínio do próprio cliente apontando
-  para a aplicação.
-- **Imagem menor.** `output: "standalone"` do Next reduziria os 479 MB e a partida a
-  frio. Mas o worker e o `migrate` rodam `src/` direto com o `node_modules`
-  inteiro, então a mudança precisa de cuidado. Fica para quando a partida a frio
-  incomodar.
-- **CI.** Não há. O workflow de deploy (§8.3) passa a ser o primeiro, e o
-  `next build` dele vira a checagem de tipos que hoje roda à mão.
-
----
-
-## 8. Roteiro de implantação
-
-> **Não executado.** Comandos escritos contra a documentação da CLI `az`
-> (`az extension add -n containerapp`), não testados nesta assinatura. Conferir
-> cada um no primeiro uso.
-
-### 8.1 Infraestrutura (uma vez)
+> Comandos escritos contra a documentação da CLI `az` (`az extension add -n containerapp`),
+> não testados nesta assinatura. Conferir cada um no primeiro uso.
 
 ```bash
 RG=sdr-poc; LOC=eastus2; ENV=sdr-poc-env
-ACR=sdrpoc$RANDOM            # nome global, só letras e números
-PG=sdr-poc-pg-$RANDOM        # nome global
+ACR=sdrpoc$RANDOM; PG=sdr-poc-pg-$RANDOM
 az group create -n $RG -l $LOC
-
-# Orçamento com alerta: o freio contra a aba esquecida (§4.1). Mais simples pelo portal:
-# Cost Management → Budgets → US$ 30/mês, alertas em 50 %, 80 % e 100 %.
-
 az acr create -g $RG -n $ACR --sku Basic
-
-# Postgres: acesso público restrito a serviços da Azure (0.0.0.0), TLS obrigatório.
-# O IP de saída do Container Apps Consumption não é fixo; VNet fica para depois.
 az postgres flexible-server create -g $RG -n $PG -l $LOC \
   --tier Burstable --sku-name Standard_B1ms --storage-size 32 --version 17 \
   --admin-user sdradmin --admin-password "$PG_PASSWORD" \
-  --public-access 0.0.0.0 --database-name sdr
-# pgvector, só quando houver RAG:
-# az postgres flexible-server parameter set -g $RG -s $PG --name azure.extensions --value vector
+  --public-access 0.0.0.0 --database-name sdr          # 0.0.0.0 = serviços da Azure
+az containerapp env create -g $RG -n $ENV -l $LOC       # Consumption
 
-az containerapp env create -g $RG -n $ENV -l $LOC   # Consumption (§5, armadilha)
-```
-
-### 8.2 Primeira implantação (à mão)
-
-```bash
 TAG=$(git rev-parse --short HEAD)
-# Em Mac com Apple Silicon, --platform é obrigatório: a Azure roda amd64.
 docker build --platform linux/amd64 --target runner -t $ACR.azurecr.io/sdr:$TAG .
 az acr login -n $ACR && docker push $ACR.azurecr.io/sdr:$TAG
 
@@ -356,108 +252,134 @@ ENVV="NODE_ENV=production APP_PORT=3100 MODEL_PROFILE=azure_nano \
   AZURE_OPENAI_BASE_URL=$AZURE_OPENAI_BASE_URL AZURE_OPENAI_API_KEY=secretref:aoai-key"
 IMG="--image $ACR.azurecr.io/sdr:$TAG --registry-server $ACR.azurecr.io --registry-identity system"
 
-# Migrations: job manual, dentro da Azure.
 az containerapp job create -g $RG -n sdr-migrate --environment $ENV $IMG \
   --trigger-type Manual --replica-timeout 300 --replica-retry-limit 0 \
   --parallelism 1 --replica-completion-count 1 --cpu 0.25 --memory 0.5Gi \
-  --command "node" --args "src/db/migrate.ts" --secrets $SECRETS --env-vars $ENVV
+  --command "node" --args "dist/db/migrate.js" --secrets $SECRETS --env-vars $ENVV
 az containerapp job start -g $RG -n sdr-migrate
-az containerapp job execution list -g $RG -n sdr-migrate -o table   # esperar Succeeded
 
-# Aplicação: escala a zero, no máximo uma réplica.
 az containerapp create -g $RG -n sdr-app --environment $ENV $IMG \
   --ingress external --target-port 3100 \
-  --cpu 0.5 --memory 1.0Gi --min-replicas 0 --max-replicas 1 \
+  --cpu 0.25 --memory 0.5Gi --min-replicas 0 --max-replicas 1 \
   --secrets $SECRETS --env-vars $ENVV
 
-# Varredura: depende de §7.1. Sem ela, usar a alternativa daquela seção.
 az containerapp job create -g $RG -n sdr-sweep --environment $ENV $IMG \
   --trigger-type Schedule --cron-expression "*/15 * * * *" \
   --replica-timeout 600 --replica-retry-limit 0 --parallelism 1 --replica-completion-count 1 \
-  --cpu 0.25 --memory 0.5Gi --command "node" --args "src/worker/once.ts" \
+  --cpu 0.25 --memory 0.5Gi --command "node" --args "dist/worker/once.js" \
   --secrets $SECRETS --env-vars $ENVV
 ```
 
-**Dados iniciais.** Liberar o próprio IP no firewall e rodar o seed ou o
-provisionamento (§7.2) da máquina local:
-
-```bash
-az postgres flexible-server firewall-rule create -g $RG -n $PG \
-  --rule-name dev --start-ip-address $MEU_IP --end-ip-address $MEU_IP
-DATABASE_URL="$DB" npm run db:seed        # demo; o cliente real usa o script de §7.2
-```
-
-**Domínio no Route 53.**
-
-```bash
-FQDN=$(az containerapp show -g $RG -n sdr-app --query properties.configuration.ingress.fqdn -o tsv)
-VERIFY=$(az containerapp env show -g $RG -n $ENV --query properties.customDomainConfiguration.customDomainVerificationId -o tsv)
-# Route 53: CNAME app.<domínio> → $FQDN   e   TXT asuid.app.<domínio> → $VERIFY
-az containerapp hostname add  -g $RG -n sdr-app --hostname app.<domínio>
-az containerapp hostname bind -g $RG -n sdr-app --hostname app.<domínio> \
-  --environment $ENV --validation-method CNAME     # certificado gerenciado, gratuito
-```
-
-Um subdomínio (`app.`) e não o domínio raiz: a raiz exigiria registro A e validação
-HTTP.
-
-### 8.3 Deploy contínuo (GitHub Actions)
-
-Um workflow em `.github/workflows/deploy.yml`, disparado por push no ramo de deploy:
-
-1. `azure/login` com OIDC (credencial federada numa *app registration*, papel
-   `Contributor` no grupo de recursos e `AcrPush` no registro). Sem segredo de longa
-   duração no GitHub.
-2. `docker build --target runner` e push para o ACR com a tag do commit.
-3. `az containerapp job update -n sdr-migrate --image …:$TAG`, depois `job start`, e
-   espera a execução terminar em `Succeeded`. Se falhar, o workflow para aqui, e a
-   aplicação continua na versão anterior.
-4. `az containerapp update -n sdr-app --image …:$TAG` e
-   `az containerapp job update -n sdr-sweep --image …:$TAG`.
-
-Uma armadilha de ordem: uma migration que remove coluna quebra a versão anterior,
-que ainda está no ar entre os passos 3 e 4. Para duas imobiliárias sem SLA, alguns
-segundos de erro são aceitáveis. Vale saber que existem.
-
-### 8.4 Desligar para não gastar crédito
-
-| Situação | Ação | Fica pagando |
-|---|---|---|
-| Ninguém usando | Nada: a aplicação escala a zero sozinha | Postgres + ACR, ~US$ 21 |
-| Pausa de semanas | `az postgres flexible-server stop`. O job de varredura falha a cada 15 min sem custo relevante. A Azure religa o Postgres em 7 dias | ~US$ 9 |
-| Encerrar | `pg_dump` e `az group delete -n $RG` | nada |
+- **`sslmode=verify-full`, explícito:** o `pg` 8.23 já trata `require` como
+  `verify-full`, mas emite um aviso de segurança.
+- **Domínio:** um CNAME `app.<domínio>` para o FQDN do app, e um TXT
+  `asuid.app.<domínio>` com o `customDomainVerificationId` do ambiente. Depois
+  `az containerapp hostname add` e `bind --validation-method CNAME` emitem o
+  certificado gerenciado, que é gratuito.
+- **Deploy contínuo:** GitHub Actions com `azure/login` por OIDC → build e push para o
+  ACR → atualizar e disparar `sdr-migrate`, e esperar `Succeeded` → atualizar
+  `sdr-app` e `sdr-sweep`.
+- **Orçamento com alerta** (Cost Management → Budgets): é o freio contra a aba esquecida.
 
 ---
 
-## 9. O que pode exigir rodar a aplicação localmente
+## 5. VPS abaixo de R$ 50/mês
 
-Nada bloqueia a decisão: o encanamento foi exercitado aqui (§2). Antes da primeira
-implantação, vale fazer na máquina local, com chaves reais:
+### 5.1 O que roda
 
-1. Subir a imagem `runner` (com `--platform linux/amd64` se for medir a imagem que
-   vai para a Azure) com `MODEL_PROFILE=azure_nano` e uma conversa completa, para
-   confirmar que o build de produção se comporta como o `npm run dev` com o modelo
-   de verdade.
-2. Rodar `npm run test:integration` e `npm run eval` antes do primeiro deploy, como
-   já exige o fluxo de merge.
+[`deploy/vps/`](../../deploy/vps/) traz o `compose.yml`, o `Caddyfile` e um README com
+a preparação do servidor, o deploy, o backup e o monitoramento. São os mesmos serviços
+do desenvolvimento, todos da imagem `runner`: `db`, `migrate`, `app`, `worker`, mais o
+`caddy` para o HTTPS.
 
-E, na primeira implantação, os três pontos que só a Azure responde: tempo de
-partida a frio, o corte de 240 s sobre o SSE (§4.3) e a conexão TLS ao Postgres (§6).
+**Exercitado localmente** com `DOMAIN=localhost` (certificado interno do Caddy). Os
+quatro serviços subiram saudáveis, na ordem certa. Por HTTPS, através do Caddy, o SSE
+chegou sem buffer: o `chunk` 3,7 s depois do `POST` (debounce de 3 s mais o turno) e um
+`pulse` a cada 15 s. **A pilha inteira usa ~150 MiB em repouso** (Caddy 13, app 60,
+worker 42, Postgres 38).
+
+Consequências:
+- **1 GB de RAM basta** para rodar. O build fica no CI, porque o `next build` não cabe
+  com folga numa máquina dessas;
+- **2 GB ou mais** dão espaço para o Postgres crescer, e para o Langfuse self-hosted
+  numa máquina de 4 GB ou mais: ele mediu 2,5 GiB no perfil `observability`. Com 1–2 GB,
+  usar o Langfuse Cloud;
+- **nenhuma mudança de código:** o worker continua sendo o processo de hoje, com o
+  timer e o *health check*.
+
+### 5.2 Opções
+
+Preços consultados em 11/10/2026 nas páginas dos provedores ou em comparativos,
+conferir antes de contratar. Câmbio usado: US$ 1 ≈ R$ 5,15 e € 1 ≈ R$ 6,00.
+
+| Provedor | Plano | Onde | Preço/mês | Observação |
+|---|---|---|---|---|
+| Hostinger | KVM 1: 1 vCPU, 4 GB, 50 GB NVMe | **São Paulo** disponível | R$ 29,99 promocional | Preço de contrato longo, pago adiantado; **renova a R$ 59,99**, acima do teto. O KVM 2 (2 vCPU, 8 GB) sai a R$ 43,99 promocional e renova a R$ 77,99 |
+| Serverspace | 1 vCPU, 2 GB, 25 GB | São Paulo (Equinix SP3) | ~R$ 24 | Preço de comparativo, não da página do provedor |
+| Vultr | 1 vCPU, 1 GB | **São Paulo** | a partir de US$ 5–6 (~R$ 26–31) | Por hora, sem contrato. O de 2 GB passa do teto |
+| Hetzner | 2 vCPU, 4 GB (linha *cost-optimized*) | EUA (Ashburn) e Europa | ~€ 4,50 + IPv4 (~R$ 30) | Melhor RAM por real, mas longe (~120 ms até SP). Subiu de preço duas vezes em 2026, e a página mostrava os planos compartilhados como indisponíveis |
+| Oracle Cloud Always Free | Ampere A1, até 2 OCPU / 12 GB (ARM) | São Paulo e Vinhedo | R$ 0 | Limite cortado em jun/2026. Capacidade difícil de conseguir, instância ociosa pode ser recolhida na conta gratuita, e exige imagem `linux/arm64` (`docker buildx --platform`) |
+| Magalu Cloud | VM x86 | São Paulo | não obtido | Cobra em reais; a página de preços não carregou |
+
+**Recomendação:** **Hostinger KVM 1 em São Paulo** se pagar o período longo
+adiantado. Ele cabe folgado (4 GB), fica perto dos leads e custa ~R$ 30/mês enquanto
+durar o contrato. Para pagar mês a mês sem compromisso, **Vultr São Paulo** com 1 GB,
+ou Serverspace com 2 GB. A Oracle só serve para experimentar; o risco de a instância
+sumir não combina com cliente.
+
+### 5.3 O que a VPS cobra em operação
+
+Nada disso existe na Azure gerenciada:
+- **Backup:** `pg_dump` diário por cron, com cópia fora do servidor e uma restauração
+  de teste (roteiro no README de `deploy/vps/`). É o item que não pode ser esquecido;
+- **Atualizações:** `unattended-upgrades` para o sistema, `docker compose pull` para as
+  imagens;
+- **Segurança:** SSH só por chave, `ufw` com 22, 80 e 443, e o Postgres sem porta
+  publicada;
+- **Disco:** os logs do Docker com teto (`max-size` no `daemon.json`), que por padrão
+  crescem sem limite;
+- **Sem redundância:** se o servidor cair, o sistema cai. Sem SLA, é aceitável. O
+  backup externo é o que garante voltar.
+
+---
+
+## 6. O que falta no código
+
+**Para a Azure com job agendado: o worker em modo "uma varredura e sai".** O
+`src/worker/index.ts` só sabe rodar para sempre (`setInterval`). A mudança tem cerca de
+20 linhas e não toca nenhum consumidor:
+- extrair `sweep()` para uma função exportada;
+- criar um segundo ponto de entrada, `src/worker/once.ts`, que varre uma vez, faz o
+  *flush* do Langfuse, fecha o pool e sai com código 0;
+- acrescentá-lo ao `build:jobs`.
+
+Sem isso, a alternativa é rodar o worker como um segundo Container App, `min = max = 1`,
+0,25 vCPU / 0,5 GiB, por ~US$ 6/mês. **Para a VPS, nada falta.**
+
+**Pequenos pontos:**
+- `login` procura o usuário só pelo e-mail (`services/auth.ts`), mas a unicidade é por
+  agência e e-mail. Com duas agências, basta não repetir e-mails;
+- não existe CI. O workflow de deploy, em qualquer dos destinos, vira o primeiro, e o
+  `next build` dele passa a ser a checagem de tipos que hoje roda à mão.
 
 ---
 
 ## Fontes
 
-- Preços: API de varejo da Azure, `https://prices.azure.com/api/retail/prices`,
-  consultada em 10/10/2026 (East US 2 e Brazil South).
+- Preços da Azure: API de varejo, `https://prices.azure.com/api/retail/prices`
+  (10/10/2026, East US 2 e Brazil South).
 - [Ingress no Azure Container Apps](https://learn.microsoft.com/azure/container-apps/ingress-overview):
-  timeout de 240 s, HTTP/2, afinidade de sessão.
+  timeout de 240 s.
 - [Preços do Azure Container Apps](https://azure.microsoft.com/pricing/details/container-apps/):
-  cota gratuita mensal, escala a zero sem cobrança, tarifa ociosa e seus limiares
-  (0,01 vCPU, 1.000 bytes/s), jobs cobrados só durante a execução.
-- [Jobs do Azure Container Apps](https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/container-apps/jobs.md):
-  gatilhos manual e agendado, `replicaTimeout`, `parallelism`.
-- [Postgres Flexible Server na conta gratuita](https://learn.microsoft.com/azure/postgresql/flexible-server/how-to-deploy-on-azure-free-account):
-  750 h de B1ms, 32 GB por 12 meses.
+  cota gratuita, escala a zero, tarifa ociosa, jobs cobrados só durante a execução.
+- [Jobs do Azure Container Apps](https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/container-apps/jobs.md).
+- [Postgres Flexible Server na conta gratuita](https://learn.microsoft.com/azure/postgresql/flexible-server/how-to-deploy-on-azure-free-account).
 - [Opções de computação do Flexible Server](https://learn.microsoft.com/azure/postgresql/compute-storage/concepts-compute):
-  parar e iniciar, religamento automático em 7 dias.
+  parar e iniciar.
+- [Hostinger VPS](https://www.hostinger.com/br/servidor-vps) e
+  [data center no Brasil](https://www.hostinger.com/vps/servers/brazil).
+- [Comparativo de VPS no Brasil, 2026](https://guiadohost.com/2026/05/12/vps-barato-no-brasil-2026-compare-6-planos-de-entrada-e-descubra-o-melhor-custo-beneficio/)
+  (Serverspace, Vultr São Paulo).
+- [Reajuste da Hetzner em 2026](https://agentdeals.dev/hetzner-pricing-2026).
+- [Corte do Always Free da Oracle](https://infoq.com/news/2026/07/oracle-cloud-free-tier-limits/).
+- [Magalu Cloud: data centers em São Paulo e Fortaleza](https://www.baguete.com.br/noticias/magalu-cloud-levanta-r-300-milhoes-com-bndes).

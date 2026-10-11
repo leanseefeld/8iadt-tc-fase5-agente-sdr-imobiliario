@@ -158,6 +158,18 @@
   color: var(--muted);
 }
 
+/* Spec 017: the lead opted out, so no reminder goes — said, not hidden. */
+.optedOut {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
 .side {
   display: flex;
   flex-direction: column;

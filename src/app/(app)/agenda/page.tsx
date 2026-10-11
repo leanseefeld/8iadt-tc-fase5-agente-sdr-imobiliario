@@ -109,6 +109,7 @@ export default async function AgendaPage({
                     neighborhood: row.neighborhood,
                     status: row.status,
                     brokerName: manager ? row.brokerName : null,
+                    leadOptedOut: row.leadOptedOut,
                   }}
                 />
               ))}

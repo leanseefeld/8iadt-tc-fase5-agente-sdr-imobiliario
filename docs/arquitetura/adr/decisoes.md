@@ -31,7 +31,7 @@ paper (see its note).
 | 12 | Hand-rolled signed session cookie | Accepted |
 | 13 | Langfuse self-hosted under a memory cap | Accepted |
 | 14 | Native tool calling under a deterministic slot machine | Accepted, extended by 22 (the tool loop) |
-| 15 | Follow-up constants and the demo trigger | Accepted |
+| 15 | Follow-up constants and the demo trigger | Accepted. The fixed window superseded by 25; the drawer trigger now goes through 25's *Enviar agora* |
 | 16 | Local e4b for development, Azure OpenAI for the demo | Accepted. Variable list superseded by 23 |
 | 17 | Backlog regrouped into five specs | Accepted (specs 002 to 006, all built) |
 | 18 | User experience discipline as a constitution principle | Accepted |
@@ -41,6 +41,7 @@ paper (see its note).
 | 22 | Revisable qualification state, and actions as tool calls | Accepted; implemented by spec 007. Amends constitution principle V |
 | 23 | Model profiles in YAML | Accepted. Supersedes the env-variable half of 8 and 16; amends principle VI |
 | 24 | Specifications offered, not required | Accepted (2026-10-08). Relaxes 7; amends the constitution's Development Workflow (1.6.0) |
+| 25 | The follow-up window on the agency row, and reminders in the same queue | Accepted (2026-10-10). Supersedes 15's fixed window |
 
 > These decisions stand on their own. None of them exists to "override"
 > `reference/`, which is non-normative ideation and was never a competing
@@ -709,3 +710,34 @@ came from the clarify and analyze steps, not the template. Dropping specs entire
 **Consequences.** `specs/` holds two generations: full Spec Kit folders (001–007)
 and one-page specs (009, 015, 016). The README says so.
 
+## 25. The follow-up window on the agency row, and reminders in the same queue
+
+*2026-10-10. Spec 017.*
+
+**Context.** ADR 15 fixed the sending window at 09:00–20:00 for the POC, in
+`.env`. Changing it meant editing the environment and restarting the worker,
+which is not something a sales manager can do: recording the demo on a Saturday
+evening showed it. Three needs arrived together: a manager-owned window (backlog
+37), a screen showing what is about to go out with a way to send or cancel it
+(backlog 23), and a written reminder before each confirmed visit or call.
+
+**Decision.** The window (start, end, weekdays), a reminders switch and the
+reminder lead time are columns of `agencies`, edited on a sales-manager-only
+`/configuracoes` and read at send time. `FOLLOWUP_TIMEZONE` stays in env, since
+visits, the agenda and the chat read it too. Reminders are `followup_jobs` rows
+with `kind = 'reminder'` and an `appointment_id`, so the claim, the queue screen
+and its actions are shared; `transitionAppointment`, the only place appointment
+statuses change, keeps each meeting's reminder in step. A reminder is code-written
+(no model call), bypasses every time rule but its own switch, and respects
+opt-out. *Enviar agora* sets `bypass_window` and rings the worker on a
+`followup_due` channel (`LISTEN/NOTIFY`), with the sweep interval as fallback.
+
+**Alternatives considered.** Reminders derived from `appointments` with a
+`reminder_sent_at` column — less state, but a second sweep, a second queue view
+and no natural place to cancel one reminder. A per-day hour range — not asked for;
+toggles with one range cover the motivating case.
+
+**Consequences.** `FOLLOWUP_WINDOW_START` and `FOLLOWUP_WINDOW_END` are gone. The
+follow-up switch moved from the leads dashboard to `/configuracoes`. A lead's
+message cancels follow-ups only, never a reminder. Migration `0004` queues the
+reminder of every meeting already confirmed.

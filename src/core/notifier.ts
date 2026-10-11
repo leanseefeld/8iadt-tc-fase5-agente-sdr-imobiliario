@@ -57,6 +57,13 @@ export const CHUNK_CHANNEL = "conversation_chunk";
  */
 export const STATE_CHANNEL = "conversation_state";
 
+/**
+ * Spec 017: *Enviar agora* made a job due. The worker listens and sweeps at
+ * once instead of at its next tick — the interval stays as the fallback, so a
+ * lost notification costs one interval, not the message.
+ */
+export const FOLLOWUP_DUE_CHANNEL = "followup_due";
+
 export interface MessageNotification {
   kind: "message";
   conversationId: string;

@@ -278,7 +278,9 @@ export async function run(turn: LoadedTurn, context: RunContext): Promise<TurnRe
     proposalOpen: turn.proposalOpen,
     booked,
     offerOutstanding: offerOutstanding(turn),
-    closedBefore: waiting.closing === true,
+    // A reminder (spec 017) already said what is booked: a thank-you after it
+    // is courtesy only, like a second close.
+    closedBefore: waiting.closing === true || waiting.reminder === true,
     leadText,
     timezone,
   });

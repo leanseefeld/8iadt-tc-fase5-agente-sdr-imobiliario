@@ -16,6 +16,7 @@ import {
   type SlotRules,
 } from "../domain/scheduling.ts";
 import type { Intent } from "../domain/slots.ts";
+import { syncReminder } from "./reminder.ts";
 
 /**
  * Proposing and booking meetings (spec 006).
@@ -59,6 +60,10 @@ const ALLOWED: Record<AppointmentStatus, readonly AppointmentStatus[]> = {
  * Move one appointment from `from` to `to`, optionally setting its instant.
  * Conditional on the row still being in `from`, so two writers racing on the
  * same row cannot both win; returns whether this one did.
+ *
+ * Spec 017: being the one place statuses and instants change, it is also where
+ * the meeting's reminder follows them — queued or moved on `confirmed`,
+ * cancelled on anything else, in the caller's transaction.
  */
 export async function transitionAppointment(
   runner: Runner,
@@ -75,7 +80,9 @@ export async function transitionAppointment(
     .set({ status: to, ...patch })
     .where(and(eq(appointments.id, appointmentId), eq(appointments.status, from)))
     .returning({ id: appointments.id });
-  return rows.length === 1;
+  if (rows.length !== 1) return false;
+  await syncReminder(runner, appointmentId);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -423,6 +430,8 @@ export interface AgendaRow {
   status: "confirmed" | "done" | "cancelled";
   /** The manager's view names who attends; a broker's own agenda does not need to. */
   brokerName: string;
+  /** Spec 017: the lead asked for no more messages — no reminder will reach them. */
+  leadOptedOut: boolean;
 }
 
 export interface AgendaGroup {
@@ -482,6 +491,7 @@ export async function listAppointments(
       propertyCode: properties.code,
       neighborhood: properties.neighborhood,
       brokerName: users.name,
+      leadOptedOut: leads.doNotContact,
     })
     .from(appointments)
     .innerJoin(leads, eq(leads.id, appointments.leadId))
@@ -518,6 +528,7 @@ export async function listAppointments(
       neighborhood: row.neighborhood,
       status: row.status as AgendaRow["status"],
       brokerName: row.brokerName,
+      leadOptedOut: row.leadOptedOut,
     });
   }
   return groups;

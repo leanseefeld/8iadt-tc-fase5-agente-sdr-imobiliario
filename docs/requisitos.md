@@ -97,5 +97,5 @@ Conversa real: [Follow-up](exemplos/conversas.md#3-follow-up) ([tela](imagens/ch
 | README | [`README.md`](../README.md) |
 | Arquitetura da solução | [`docs/arquitetura/visao-geral.md`](arquitetura/visao-geral.md), [`turno-do-agente.md`](arquitetura/turno-do-agente.md), [`modelo-de-dados.md`](arquitetura/modelo-de-dados.md), [`adr/decisoes.md`](arquitetura/adr/decisoes.md) |
 | Explicação da IA utilizada | README, seção **A IA utilizada**, e [`docs/arquitetura/turno-do-agente.md`](arquitetura/turno-do-agente.md) |
-| Demonstração funcional | apresentada ao vivo pelo autor |
-| Pitch técnico | apresentado pelo autor |
+| Demonstração funcional | [vídeo, a partir de 2:14](https://youtu.be/R2YOyFP1BQY?t=134): os três cenários do desafio, remarcação, fora do roteiro, passagem para humano, tentativa de manipulação e o painel |
+| Pitch técnico | [vídeo](https://youtu.be/R2YOyFP1BQY): pitch de negócio (0:00–2:14) e por dentro: arquitetura, turno, worker, eventos, Langfuse e qualidade (a partir de 5:20) |

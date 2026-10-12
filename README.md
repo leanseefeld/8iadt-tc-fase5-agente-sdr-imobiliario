@@ -8,6 +8,9 @@ com uma pergunta por vez, mostra imóveis reais do catálogo e marca visita ou l
 Se o lead some, ela volta a falar com ele sem perder o contexto. O corretor acompanha tudo num painel com
 resumo, score e agenda.
 
+**▶ [Vídeo de pitch e demonstração (9 min)](https://youtu.be/R2YOyFP1BQY):** [pitch](https://youtu.be/R2YOyFP1BQY)
+(0:00) · [demonstração](https://youtu.be/R2YOyFP1BQY?t=134) (2:14) · [por dentro](https://youtu.be/R2YOyFP1BQY?t=320) (5:20).
+
 > **Estado da entrega:** funcional, rodando localmente com Docker Compose. O canal é um chat web (sem
 > WhatsApp) e o modelo pode ser local (Gemma 4 via oMLX) ou hospedado (Azure OpenAI), escolhido por
 > configuração.
@@ -16,6 +19,7 @@ resumo, score e agenda.
 
 | Pergunta | Onde está a resposta |
 |---|---|
+| Como funciona, em poucos minutos? | [Vídeo de pitch e demonstração](https://youtu.be/R2YOyFP1BQY) (9 min; o pitch são os 2 primeiros) |
 | Quais requisitos do desafio foram atendidos, e como? | [Requisitos × entrega](docs/requisitos.md): matriz completa com código, testes e conversas |
 | Qual é a arquitetura? | [Arquitetura](#arquitetura), abaixo, e [`docs/arquitetura/`](docs/arquitetura/visao-geral.md) |
 | Que IA é usada, e para quê? | [A IA utilizada](#a-ia-utilizada) |
@@ -29,10 +33,11 @@ resumo, score e agenda.
 
 ## O problema
 
-Imobiliárias pagam caro por cada lead (de R$ 30 a R$ 150, dependendo do canal) e perdem boa parte deles por
-motivos banais:
+Imobiliárias pagam por cada lead e perdem boa parte deles por motivos banais:
 
-- **Tempo de resposta.** O lead que chega às 22h de sábado fala com o concorrente antes de falar com você.
+- **Tempo de resposta.** Num levantamento com 1.500 imobiliárias, a resposta a um pedido de aluguel levou em
+  média 6 horas, e 1 em cada 5 clientes nunca foi respondido ([Plaza, 2025](https://paraibabusiness.com.br/imobiliarias-brasileiras-demoram-mais-seis/)).
+  Em vendas B2B, só 12% das empresas respondem em menos de 10 minutos ([Ramper](https://olhardigital.com.br/2022/04/18/pro/empresas-respondem-primeiro-contato-cliente/)).
 - **Falta de follow-up.** Quem não responde à primeira mensagem é abandonado.
 - **Falta de priorização.** O corretor trata igual quem quer comprar em 30 dias e quem está só olhando.
 - **Sobrecarga.** O corretor faz triagem em vez de vender.
@@ -155,7 +160,7 @@ e a resposta veio do worker quando a pilha voltou.
 - [Visão geral](docs/arquitetura/visao-geral.md): componentes, fluxos, segurança e caminho de escala
 - [Turno do agente](docs/arquitetura/turno-do-agente.md): o que o modelo lê, o que o código decide e quais ferramentas existem em cada turno
 - [Modelo de dados](docs/arquitetura/modelo-de-dados.md): tabelas, roteiro de qualificação e score
-- [Decisões de arquitetura (ADRs)](docs/arquitetura/adr/decisoes.md): 24 decisões, com contexto e consequências
+- [Decisões de arquitetura (ADRs)](docs/arquitetura/adr/decisoes.md): 26 decisões, com contexto e consequências
 - [Restrições de implantação](docs/arquitetura/restricoes-de-implantacao.md) e [configurações](docs/arquitetura/configuracoes.md)
 
 ---

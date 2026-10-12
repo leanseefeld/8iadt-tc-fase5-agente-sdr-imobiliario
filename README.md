@@ -141,6 +141,15 @@ separado. Mais réplicas do app e do worker funcionam sem mudança de código: o
 `SKIP LOCKED`, e dois workers produzem um único resumo por conversa (testado). O caminho de escala, e o que
 ainda não foi feito (deploy em nuvem), está na visão geral.
 
+**Nenhuma mensagem fica sem resposta se a aplicação cair.** A mensagem do lead é gravada antes de o turno
+começar; o turno roda depois, fora da requisição. Se a aplicação morrer no meio do caminho (deploy, erro,
+máquina reiniciada), o worker encontra a conversa sem resposta e refaz o turno a partir do banco. Ele varre
+ao iniciar, a cada `WORKER_SWEEP_INTERVAL_MS` (15 min por padrão) e quando um follow-up vence. Um turno que
+outro processo ainda está rodando não é refeito, e dois workers juntos produzem uma resposta só.
+O teste está em `tests/integration/turn-persistence.test.ts`, e isso aconteceu de verdade numa das
+[conversas de exemplo](docs/exemplos/conversas.md#1-compra): a máquina reiniciou com uma mensagem pendente,
+e a resposta veio do worker quando a pilha voltou.
+
 **Documentos de arquitetura:**
 
 - [Visão geral](docs/arquitetura/visao-geral.md): componentes, fluxos, segurança e caminho de escala
@@ -314,6 +323,7 @@ da spec 017 (11/10): evals 65/65 e suíte 453/453, no e4b.
 | Passagem para humano: pedido explícito, duas mensagens não entendidas; corretor assume e devolve | `tests/handoff.test.ts`, `tests/integration/handoff.test.ts`, `tests/integration/handback.test.ts` |
 | Dados pessoais mascarados nos *traces* e nos logs | `tests/masking.test.ts`, `tests/span-mask.test.ts` |
 | Escopo: o corretor só vê os próprios leads; a gerente vê a imobiliária | `tests/integration/leads-scope.test.ts`, `tests/agenda-scope.test.ts` |
+| Queda da aplicação no meio de um turno: o worker refaz o turno a partir do banco, e o claim é liberado | `tests/integration/turn-persistence.test.ts` |
 | Queda do modelo: o lead recebe uma resposta honesta, e o worker responde depois | `tests/provider-failure.test.ts`, `tests/integration/provider-outage.test.ts` |
 
 As falhas encontradas pelo caminho, inclusive as que ficaram abertas, estão registradas com dono em

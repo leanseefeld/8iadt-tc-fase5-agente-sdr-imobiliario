@@ -129,8 +129,16 @@ Passos que valem nota:
 - O `POST` **grava e responde 202**; nunca roda o turno dentro da requisição. A
   resposta chega pelo SSE, que é outra conexão — por isso sobrevive à aba fechada.
 - O debounce (`scheduleTurn`) vive na memória do processo; é só agendamento. Se
-  o processo morrer com um timer pendente, a mensagem já está no banco e o worker
-  (`jobs/unanswered-turns.ts`) refaz exatamente o mesmo turno.
+  o processo morrer com um timer pendente, ou no meio do turno (deploy, erro), a
+  mensagem já está no banco e o worker (`jobs/unanswered-turns.ts`, FR-046) refaz
+  exatamente o mesmo turno. **Quando:** o worker varre ao iniciar, a cada
+  `WORKER_SWEEP_INTERVAL_MS` (15 min por padrão) e a cada aviso de follow-up vencido
+  (spec 017). **O quê:** conversa ativa com mensagem do lead mais velha que o
+  debounce e sem resposta depois dela (`findUnansweredConversations`). **Sem turno
+  duplo:** um turno com claim mais novo que `MODEL_TIMEOUT_MS × 2` está vivo e fica
+  de fora, e o `claimTurn` recusa uma segunda execução. Testado em
+  `tests/integration/turn-persistence.test.ts`; aconteceu numa das conversas de
+  exemplo (`docs/exemplos/conversas.md`, compra, resposta das 20:52).
 - Os nós do pipeline estão em `agent/turn/run.ts`, na ordem de precedência: quem
   responde o lead encerra o turno. O mapa de quem é modelo e quem é código está em
   [`turno-do-agente.md`](turno-do-agente.md).

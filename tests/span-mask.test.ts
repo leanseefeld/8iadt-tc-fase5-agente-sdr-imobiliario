@@ -27,6 +27,20 @@ describe("the span mask", () => {
     assert.ok(masked.includes("C*** D***"), masked);
   });
 
+  it("masks an event payload that names the slot instead of keying the value (ADR 26)", () => {
+    // `events` keeps `{ slot, value }` unmasked for the CRM; a trace never does.
+    const masked = maskSpanData(
+      JSON.stringify([
+        { type: "slot.filled", payload: { slot: "name", value: "Camila Duarte" } },
+        { type: "slot.filled", payload: { slot: "contact", value: "(11) 98765-4321" } },
+      ]),
+    ) as string;
+
+    assert.ok(!masked.includes("Camila"), masked);
+    assert.ok(!masked.includes("98765"), masked);
+    assert.ok(masked.includes("C*** D***"), masked);
+  });
+
   it("leaves a payload that is not JSON as free text, phones still masked", () => {
     const masked = maskSpanData("me liga no (11) 98765-4321") as string;
 

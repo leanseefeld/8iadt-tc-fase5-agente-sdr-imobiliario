@@ -165,7 +165,7 @@ como processo separado desde o primeiro dia** (ADR 2).
   em `src/agent/turn/` (a refatoração `refactor-turn` quebrou um orquestrador de
   cerca de 2000 linhas); `services/conversation.ts` é uma fachada sobre um módulo
   por tarefa em `services/conversation/`.
-- Decisões registradas: 23 ADRs em [`adr/decisoes.md`](adr/decisoes.md), uma
+- Decisões registradas: 26 ADRs em [`adr/decisoes.md`](adr/decisoes.md), uma
   constituição em `.specify/memory/constitution.md` e specs em `specs/`.
 - Três níveis de teste: unitários e de turno com **modelo roteirizado**
   (`tests/support/scripted-model.ts`, determinísticos), integração contra Postgres
@@ -282,7 +282,9 @@ Sem Redis na aplicação. O Postgres é fila e outbox (ADR 4):
 - `followup_jobs` — tentativas de reengajamento agendadas
 - `events` — trilha append-only: auditoria, fonte das métricas do painel, linha do
   tempo da ficha do lead e outbox do resumo (`processed_at` fica nulo até o worker
-  resumir a linha)
+  resumir a linha). É também o contrato de um futuro conector de CRM, por isso o
+  payload guarda nome e contato sem máscara; logs e traces continuam mascarados
+  (ADR 26)
 
 O worker (`src/worker/index.ts`) acorda a cada `WORKER_SWEEP_INTERVAL_MS` e roda,
 em ordem, os consumidores de `jobs/consumers.ts`, cada um num `try/catch`: um que

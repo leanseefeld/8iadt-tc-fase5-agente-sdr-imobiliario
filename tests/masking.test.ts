@@ -192,3 +192,35 @@ test("a phone next to an id is still masked", () => {
   const out = maskText("ligar 11987654321 sobre c78868825597c737c04f00a4172b9105");
   assert.equal(out, "ligar (11) *****-**21 sobre c78868825597c737c04f00a4172b9105");
 });
+
+// ADR 26: `events` stores a `slot.filled` payload unmasked, so the copy that
+// reaches a log line or a span must be masked by its shape — the key above the
+// name is `value`, and only the `slot` beside it says what it holds.
+test("maskPII masks a slot.filled payload carrying the lead's name", () => {
+  assert.deepEqual(maskPII({ slot: "name", value: "Camila Duarte" }), { slot: "name", value: "C*** D***" });
+});
+
+test("maskPII masks a slot.filled payload carrying a phone or an e-mail", () => {
+  assert.deepEqual(maskPII({ slot: "contact", value: "(11) 98765-4321" }), {
+    slot: "contact",
+    value: "(11) *****-**21",
+  });
+  assert.deepEqual(maskPII({ slot: "contact", value: "joao.silva@gmail.com" }), {
+    slot: "contact",
+    value: "j***@gmail.com",
+  });
+});
+
+test("maskPII leaves a slot.filled payload that carries no PII as it is", () => {
+  assert.deepEqual(maskPII({ slot: "urgency", value: "immediate" }), { slot: "urgency", value: "immediate" });
+  assert.deepEqual(maskPII({ slot: "priceMax", value: 900_000 }), { slot: "priceMax", value: 900_000 });
+  assert.deepEqual(maskPII({ slot: "neighborhoods", value: ["Moema"] }), { slot: "neighborhoods", value: ["Moema"] });
+});
+
+test("maskPII masks a slot.filled payload nested in a log record", () => {
+  const record = { msg: "event", event: { type: "slot.filled", payload: { slot: "name", value: "Camila" } } };
+  assert.deepEqual(maskPII(record), {
+    msg: "event",
+    event: { type: "slot.filled", payload: { slot: "name", value: "C***" } },
+  });
+});

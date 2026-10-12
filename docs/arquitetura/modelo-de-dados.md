@@ -42,7 +42,7 @@ Chaves primárias são `uuid` geradas no banco. Toda tabela de negócio carrega 
 | Coluna | Tipo | Notas |
 |---|---|---|
 | id, agencyId | uuid | |
-| name, phone, email | text, nulos | pedidos tarde no roteiro; o slot `contact` vira `phone` ou `email` na gravação do turno; PII mascarada em logs, traces e eventos |
+| name, phone, email | text, nulos | pedidos tarde no roteiro; o slot `contact` vira `phone` ou `email` na gravação do turno; PII mascarada em logs e traces; nos eventos vai como o lead escreveu ([ADR 26](adr/decisoes.md#26-event-payloads-carry-real-pii-traces-and-logs-stay-masked)) |
 | channel | enum `web` · `telegram` | |
 | externalId | text | identidade no canal (sessão do widget); único por (agência, canal, externalId) |
 | intent | enum `purchase` · `rental` · `investment` · `undefined` | |
@@ -127,7 +127,7 @@ A **temperatura** (`cold` · `warm` · `hot`) não é coluna: deriva do score em
 | actorType | enum `lead` · `user` · `agent` · `worker` · `system` | quem fez |
 | actorUserId | uuid, nulo → users | preenchido quando `actorType = user` |
 | traceId | text, nulo | id do trace no Langfuse quando `agent`/`worker` chamou o modelo; a linha do tempo linka para ele |
-| payload | jsonb | |
+| payload | jsonb | sem máscara: é o contrato de integração (um conector de CRM precisa do nome e do telefone de verdade). Logs e traces continuam mascarados, mesmo quando levam um payload de evento (ADR 26) |
 | createdAt | timestamptz | |
 | processedAt | timestamptz, nulo | **outbox**: nulo até um consumidor do worker tratar |
 
@@ -260,7 +260,7 @@ Só aparece aqui o que o código grava. `append-only`; `processedAt` nulo é a f
 | `lead.created` | `{ channel }` | `services/conversation/inbound.ts` |
 | `lead.consented` | `{}` | idem |
 | `intent.identified` | `{ intent }` | `commitTurn` |
-| `slot.filled` | `{ slot, value }` (PII mascarada) — primeiro preenchimento e revisão | `commitTurn` |
+| `slot.filled` | `{ slot, value }` — primeiro preenchimento e revisão; `name` e `contact` sem máscara, como o lead escreveu (ADR 26) | `commitTurn` |
 | `conversation.turn` | `{ messageId }` | `commitTurn` — consumido pelo resumidor |
 | `properties.suggested` | `{ propertyIds }` | `commitTurn` |
 | `handoff.requested` | `{ reason: 'asked' · 'fallback' }` — sem `score`: quente com contato propõe reunião (ADR 19) | `commitTurn` |

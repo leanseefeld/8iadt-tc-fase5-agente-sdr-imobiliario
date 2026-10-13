@@ -16,6 +16,7 @@ import {
   type SlotRules,
 } from "../domain/scheduling.ts";
 import type { Intent } from "../domain/slots.ts";
+import { syncReminder } from "./reminder.ts";
 
 /**
  * Proposing and booking meetings (spec 006).
@@ -59,6 +60,10 @@ const ALLOWED: Record<AppointmentStatus, readonly AppointmentStatus[]> = {
  * Move one appointment from `from` to `to`, optionally setting its instant.
  * Conditional on the row still being in `from`, so two writers racing on the
  * same row cannot both win; returns whether this one did.
+ *
+ * Spec 017: being the one place statuses and instants change, it is also where
+ * the meeting's reminder follows them — queued or moved on `confirmed`,
+ * cancelled on anything else, in the caller's transaction.
  */
 export async function transitionAppointment(
   runner: Runner,
@@ -75,7 +80,9 @@ export async function transitionAppointment(
     .set({ status: to, ...patch })
     .where(and(eq(appointments.id, appointmentId), eq(appointments.status, from)))
     .returning({ id: appointments.id });
-  return rows.length === 1;
+  if (rows.length !== 1) return false;
+  await syncReminder(runner, appointmentId);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +271,21 @@ export async function proposeAppointment(
   return { ok: true, ...recorded };
 }
 
+/**
+ * Whether the broker assigned to the lead lists `intent` among their
+ * specializations. `chooseBroker` prefers a specialist but falls back to anyone,
+ * and a lead keeps the broker of an earlier intent — so a sentence that says
+ * "especialista" asks this instead of assuming it.
+ */
+export async function assignedBrokerSpecializes(leadId: string, intent: Intent, runner: Runner = getDb()): Promise<boolean> {
+  const [row] = await runner
+    .select({ specializations: users.specializations })
+    .from(leads)
+    .innerJoin(users, eq(users.id, leads.assignedBrokerId))
+    .where(eq(leads.id, leadId));
+  return row?.specializations.includes(intent) ?? false;
+}
+
 /** FR-005a: close the open proposal. False when there was none to close. */
 export async function declineProposal(conversationId: string): Promise<boolean> {
   return getDb().transaction(async (tx) => {
@@ -408,6 +430,8 @@ export interface AgendaRow {
   status: "confirmed" | "done" | "cancelled";
   /** The manager's view names who attends; a broker's own agenda does not need to. */
   brokerName: string;
+  /** Spec 017: the lead asked for no more messages — no reminder will reach them. */
+  leadOptedOut: boolean;
 }
 
 export interface AgendaGroup {
@@ -467,6 +491,7 @@ export async function listAppointments(
       propertyCode: properties.code,
       neighborhood: properties.neighborhood,
       brokerName: users.name,
+      leadOptedOut: leads.doNotContact,
     })
     .from(appointments)
     .innerJoin(leads, eq(leads.id, appointments.leadId))
@@ -503,6 +528,7 @@ export async function listAppointments(
       neighborhood: row.neighborhood,
       status: row.status as AgendaRow["status"],
       brokerName: row.brokerName,
+      leadOptedOut: row.leadOptedOut,
     });
   }
   return groups;

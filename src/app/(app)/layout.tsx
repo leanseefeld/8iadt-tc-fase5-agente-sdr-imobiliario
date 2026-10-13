@@ -12,7 +12,8 @@ const ROLE_LABEL: Record<"broker" | "salesManager", string> = {
 };
 
 /**
- * Shell for every authenticated route (`/leads`, `/agenda`, `/catalogo`).
+ * Shell for every authenticated route (`/leads`, `/followups`, `/agenda`, `/catalogo`,
+ * and `/configuracoes` for a sales manager).
  * Constitution X: the person here is mid-task, moving between sections —
  * they need to know where they are (`Nav`'s `aria-current`) and who they are
  * signed in as (name + role badge, together) at a glance. "sair" is a
@@ -34,7 +35,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     <div className={styles.shell}>
       <header className={styles.topBar}>
         <span className={styles.brand}>SDR Imobiliário</span>
-        <Nav />
+        <Nav manager={user.role === "salesManager"} />
         <div className={styles.identity}>
           <span className={styles.userName}>{user.name}</span>
           <span className={styles.roleBadge}>{ROLE_LABEL[user.role]}</span>

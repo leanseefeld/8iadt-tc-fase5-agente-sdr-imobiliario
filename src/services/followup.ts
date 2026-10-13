@@ -2,9 +2,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { getConfig } from "../core/config.ts";
 import { getDb } from "../db/client.ts";
 import { agencies, conversations, events, followupJobs, leads } from "../db/schema.ts";
-import { isWithinWindow, nextWindowOpening } from "../domain/scheduling.ts";
+import { isWithinWindow, nextWindowOpening, type Weekday, type WindowRules } from "../domain/scheduling.ts";
 import { EMPTY_SLOTS, nextQuestion, slotsSchema, type Intent, type Slots } from "../domain/slots.ts";
-import type { LeadScope } from "./auth.ts";
 
 /**
  * Follow-up: reopening a conversation that went quiet (spec 006 US2).
@@ -80,7 +79,7 @@ export async function scheduleFollowup(
 
   const moved = await tx.execute(sql`
     update followup_jobs set scheduled_for = ${due}
-     where conversation_id = ${conversationId} and status = 'pending' and ${eligible}
+     where conversation_id = ${conversationId} and kind = 'followup' and status = 'pending' and ${eligible}
     returning id`);
   if (moved.rows.length === 0) {
     const inserted = await tx.execute(sql`
@@ -111,7 +110,8 @@ export async function scheduleFollowup(
 }
 
 /**
- * FR-010. The lead wrote: every pending attempt goes, the count and the state
+ * FR-010. The lead wrote: every pending attempt goes — follow-ups only; a
+ * meeting's reminder stays, since writing does not undo the meeting (spec 017) — the count and the state
  * go back to zero and `none` — which is also what takes the lead out of *Sem
  * resposta*, a view of `followupState`. When a follow-up had already been sent,
  * the lead came back because of it: `followup.recovered`, **once**, because the
@@ -121,7 +121,13 @@ export async function cancelFollowup(tx: Runner, conversationId: string, now: Da
   await tx
     .update(followupJobs)
     .set({ status: "cancelled" })
-    .where(and(eq(followupJobs.conversationId, conversationId), eq(followupJobs.status, "pending")));
+    .where(
+      and(
+        eq(followupJobs.conversationId, conversationId),
+        eq(followupJobs.kind, "followup"),
+        eq(followupJobs.status, "pending"),
+      ),
+    );
 
   const reset = await tx.execute<{ before: number; agency_id: string; lead_id: string }>(sql`
     with before as (
@@ -168,6 +174,8 @@ export interface FollowupContext {
   leadName: string | null;
   attempts: number;
   followupState: "none" | "pending" | "exhausted";
+  /** The agency's sending window (spec 017), read from its row at send time. */
+  window: WindowRules;
 }
 
 /**
@@ -180,6 +188,8 @@ export async function followupEligibility(
   runner: Runner,
   conversationId: string,
   now: Date,
+  /** Spec 017's *Enviar agora*: the window, and only the window, does not apply. */
+  options: { bypassWindow?: boolean } = {},
 ): Promise<{ ok: true; context: FollowupContext } | { ok: false; reason: Ineligibility; context?: FollowupContext }> {
   const config = getConfig();
   const [row] = await runner
@@ -198,6 +208,9 @@ export async function followupEligibility(
       leadName: leads.name,
       doNotContact: leads.doNotContact,
       followupEnabled: agencies.followupEnabled,
+      windowStart: agencies.followupWindowStart,
+      windowEnd: agencies.followupWindowEnd,
+      windowDays: agencies.followupWindowDays,
     })
     .from(conversations)
     .innerJoin(leads, eq(leads.id, conversations.leadId))
@@ -218,6 +231,7 @@ export async function followupEligibility(
     leadName: row.leadName ?? (typeof row.slots.name === "string" ? row.slots.name : null),
     attempts: row.attempts,
     followupState: row.followupState,
+    window: agencyWindow(row),
   };
   const no = (reason: Ineligibility) => ({ ok: false as const, reason, context });
 
@@ -229,22 +243,73 @@ export async function followupEligibility(
     select 1 from appointments
      where lead_id = ${row.leadId} and status = 'confirmed' and scheduled_at >= ${now} limit 1`);
   if (booked.rows.length > 0) return no("booked");
-  if (!isWithinWindow(now, windowRules())) return no("outside_window");
+  if (options.bypassWindow !== true && !isWithinWindow(now, context.window)) return no("outside_window");
   return { ok: true, context };
 }
 
-export function windowRules() {
-  const config = getConfig();
+/** Spec 017: the window as the agency row stores it, in the agency's time zone. */
+export function agencyWindow(row: { windowStart: string; windowEnd: string; windowDays: string[] }): WindowRules {
   return {
-    windowStart: config.FOLLOWUP_WINDOW_START,
-    windowEnd: config.FOLLOWUP_WINDOW_END,
-    timezone: config.FOLLOWUP_TIMEZONE,
+    windowStart: row.windowStart,
+    windowEnd: row.windowEnd,
+    days: row.windowDays as Weekday[],
+    timezone: getConfig().FOLLOWUP_TIMEZONE,
   };
 }
 
-/** FR-013: the next instant this attempt may go out, when the window is closed. */
-export function nextSendingTime(now: Date): Date {
-  return nextWindowOpening(now, windowRules());
+/** FR-013: the next instant an attempt may go out, when the window is closed. */
+export function nextSendingTime(now: Date, window: WindowRules): Date {
+  return nextWindowOpening(now, window);
+}
+
+/**
+ * FR-016: count the attempt, queue the next one at the backed-off interval, or
+ * give up as *Sem resposta*. The worker calls it after the agent's follow-up;
+ * spec 017's *Eu escrevo* after the broker's own — same count, same chain.
+ */
+export async function recordFollowupSent(
+  runner: Runner,
+  input: {
+    jobId: string;
+    context: Pick<FollowupContext, "agencyId" | "leadId" | "conversationId" | "attempts">;
+    sentAt: Date;
+    traceId: string | null;
+    payload: Record<string, unknown>;
+    actor: { type: "worker" } | { type: "user"; userId: string };
+  },
+): Promise<number> {
+  const config = getConfig();
+  const { context, sentAt } = input;
+  const attempt = context.attempts + 1;
+  const exhausted = attempt >= config.FOLLOWUP_MAX_ATTEMPTS;
+  const write = async (tx: Parameters<Parameters<Runner["transaction"]>[0]>[0]) => {
+    await tx.update(followupJobs).set({ status: "sent", sentAt }).where(eq(followupJobs.id, input.jobId));
+    await tx
+      .update(conversations)
+      .set({ followupAttempts: attempt, followupState: exhausted ? "exhausted" : "pending" })
+      .where(eq(conversations.id, context.conversationId));
+    if (!exhausted) {
+      await tx.insert(followupJobs).values({
+        agencyId: context.agencyId,
+        conversationId: context.conversationId,
+        attempt: attempt + 1,
+        scheduledFor: new Date(sentAt.getTime() + followupDelayMinutes(attempt + 1) * MINUTE),
+      });
+    }
+    await tx.insert(events).values({
+      agencyId: context.agencyId,
+      leadId: context.leadId,
+      conversationId: context.conversationId,
+      type: "followup.sent",
+      actorType: input.actor.type,
+      actorUserId: input.actor.type === "user" ? input.actor.userId : null,
+      traceId: input.traceId,
+      payload: { attempt, exhausted, ...input.payload },
+      createdAt: sentAt,
+    });
+  };
+  await runner.transaction(write);
+  return attempt;
 }
 
 /**
@@ -257,7 +322,9 @@ export async function cancelIneligibleAttempt(runner: Runner, jobId: string, con
   await runner.execute(sql`
     update conversations set followup_state = 'none'
      where id = ${conversationId} and followup_state = 'pending'
-       and not exists (select 1 from followup_jobs where conversation_id = ${conversationId} and status = 'pending')`);
+       and not exists (
+         select 1 from followup_jobs
+          where conversation_id = ${conversationId} and kind = 'followup' and status = 'pending')`);
 }
 
 /**
@@ -288,67 +355,10 @@ export async function restartAfterHandback(
 }
 
 // ---------------------------------------------------------------------------
-// The lead drawer and the dashboard switch (FR-017, FR-019)
+// The dashboard's status line (FR-019). The switch itself moved to the
+// settings screen (spec 017, services/agency-settings.ts); *Enviar agora* to
+// the queue (services/followup-queue.ts).
 // ---------------------------------------------------------------------------
-
-const NOTHING_PENDING = "Não há follow-up pendente para este lead.";
-const SWITCHED_OFF = "O follow-up automático está desligado nesta imobiliária.";
-
-/** Why the drawer's "Enviar follow-up agora" is unavailable, or `null` when it is. */
-export async function triggerNowBlocker(scope: LeadScope, leadId: string): Promise<string | null> {
-  const [row] = await getDb()
-    .select({ enabled: agencies.followupEnabled, pending: sql<number>`count(${followupJobs.id})` })
-    .from(leads)
-    .innerJoin(agencies, eq(agencies.id, leads.agencyId))
-    .innerJoin(conversations, eq(conversations.leadId, leads.id))
-    .leftJoin(
-      followupJobs,
-      and(eq(followupJobs.conversationId, conversations.id), eq(followupJobs.status, "pending")),
-    )
-    .where(and(eq(leads.id, leadId), eq(leads.agencyId, scope.agencyId)))
-    .groupBy(agencies.followupEnabled);
-  if (row === undefined) return "Lead não encontrado.";
-  if (!row.enabled) return SWITCHED_OFF;
-  if (Number(row.pending) === 0) return NOTHING_PENDING;
-  return null;
-}
-
-/**
- * FR-017: the demo button. Makes the pending attempt due now — the same job,
- * the same sweep, the same send path. Nothing is sent from here.
- */
-export async function triggerNow(scope: LeadScope, leadId: string, now: Date = new Date()): Promise<Result> {
-  const blocker = await triggerNowBlocker(scope, leadId);
-  if (blocker !== null) return { ok: false, message: blocker };
-  const moved = await getDb().execute(sql`
-    update followup_jobs j set scheduled_for = ${now}
-      from conversations c
-     where j.conversation_id = c.id and j.status = 'pending'
-       and c.lead_id = ${leadId} and c.agency_id = ${scope.agencyId}
-    returning j.id`);
-  return moved.rows.length > 0 ? { ok: true } : { ok: false, message: NOTHING_PENDING };
-}
-
-/** FR-019: the agency-wide switch. A sales manager's alone; a broker only sees it. */
-export async function setFollowupEnabled(
-  scope: LeadScope,
-  role: "broker" | "salesManager",
-  userId: string,
-  enabled: boolean,
-): Promise<Result> {
-  if (role !== "salesManager") return { ok: false, message: "Só a gerência pode mudar o follow-up automático." };
-  await getDb().transaction(async (tx) => {
-    await tx.update(agencies).set({ followupEnabled: enabled }).where(eq(agencies.id, scope.agencyId));
-    await tx.insert(events).values({
-      agencyId: scope.agencyId,
-      type: enabled ? "followup.enabled" : "followup.disabled",
-      actorType: "user",
-      actorUserId: userId,
-      payload: {},
-    });
-  });
-  return { ok: true };
-}
 
 export async function isFollowupEnabled(agencyId: string): Promise<boolean> {
   const [row] = await getDb()

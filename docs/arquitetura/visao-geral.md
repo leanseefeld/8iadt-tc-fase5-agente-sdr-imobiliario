@@ -20,7 +20,7 @@ roda uma vez e sai) e o que fica de fora dele.
 ```mermaid
 flowchart LR
     lead(["Lead<br/>widget de chat<br/>/chat/demo"])
-    broker(["Corretor<br/>painel /leads · /agenda · /catalogo"])
+    broker(["Corretor e gerente<br/>painel /leads · /followups · /agenda<br/>/catalogo · /configuracoes (gerente)"])
 
     subgraph compose["docker compose up"]
         subgraph app["app — Next.js, stateless (mesma imagem do worker)"]
@@ -31,7 +31,7 @@ flowchart LR
             svc["<b>services/</b><br/>única porta para o banco"]
             notif["core/notifier.ts<br/><b>Notifier</b> (LISTEN)"]
         end
-        worker["<b>worker</b> — processo separado<br/>varredura: turnos sem resposta,<br/>resumos, follow-up"]
+        worker["<b>worker</b> — processo separado<br/>varredura: turnos sem resposta,<br/>resumos, follow-up e lembretes"]
         pg[("<b>PostgreSQL</b><br/>agencies · users · leads · conversations<br/>messages · properties · appointments<br/>events · followup_jobs")]
         migrate["migrate<br/>(roda e sai)"]
     end
@@ -56,6 +56,7 @@ flowchart LR
     svc --> pg
     pg -. "NOTIFY" .-> notif
     notif -.-> routes
+    pg -. "NOTIFY followup_due<br/>(Enviar agora)" .-> worker
     worker --> svc
     worker --> pg
     migrate --> pg
@@ -75,7 +76,11 @@ Leitura do diagrama:
 - **O modelo faz três coisas no turno** — `extract`, `act` e `phrase` — e duas
   fora dele, no worker: resumo para o corretor e mensagem de follow-up. Quem decide
   o que perguntar, quando propor visita e quando passar para um corretor é código.
-- **Langfuse é opcional.** Só sobe com `docker compose --profile observability up`.
+  O lembrete antes de um compromisso (spec 017) também sai do worker, mas é uma
+  frase escrita pelo código, sem modelo.
+- **Langfuse é opcional.** Só sobe com `docker compose --profile observability up`. Uma chamada ao modelo que falha fica
+  marcada como `ERROR` (a geração, se a chamada lançou erro; um evento `<nome>.failed`, se a resposta veio mas
+  não serviu), então um nó que tentou duas vezes aparece com a tentativa falha ao lado da que valeu.
   Redis, ClickHouse e MinIO existem **só para ele**; a aplicação não usa Redis. Sem
   as chaves `LANGFUSE_*`, o app e o worker rodam idênticos, sem traces.
 - **Um único canal implementado: o widget web.** O tipo `Channel` reserva o valor
@@ -124,8 +129,16 @@ Passos que valem nota:
 - O `POST` **grava e responde 202**; nunca roda o turno dentro da requisição. A
   resposta chega pelo SSE, que é outra conexão — por isso sobrevive à aba fechada.
 - O debounce (`scheduleTurn`) vive na memória do processo; é só agendamento. Se
-  o processo morrer com um timer pendente, a mensagem já está no banco e o worker
-  (`jobs/unanswered-turns.ts`) refaz exatamente o mesmo turno.
+  o processo morrer com um timer pendente, ou no meio do turno (deploy, erro), a
+  mensagem já está no banco e o worker (`jobs/unanswered-turns.ts`, FR-046) refaz
+  exatamente o mesmo turno. **Quando:** o worker varre ao iniciar, a cada
+  `WORKER_SWEEP_INTERVAL_MS` (15 min por padrão) e a cada aviso de follow-up vencido
+  (spec 017). **O quê:** conversa ativa com mensagem do lead mais velha que o
+  debounce e sem resposta depois dela (`findUnansweredConversations`). **Sem turno
+  duplo:** um turno com claim mais novo que `MODEL_TIMEOUT_MS × 2` está vivo e fica
+  de fora, e o `claimTurn` recusa uma segunda execução. Testado em
+  `tests/integration/turn-persistence.test.ts`; aconteceu numa das conversas de
+  exemplo (`docs/exemplos/conversas.md`, compra, resposta das 20:52).
 - Os nós do pipeline estão em `agent/turn/run.ts`, na ordem de precedência: quem
   responde o lead encerra o turno. O mapa de quem é modelo e quem é código está em
   [`turno-do-agente.md`](turno-do-agente.md).
@@ -152,7 +165,7 @@ como processo separado desde o primeiro dia** (ADR 2).
   em `src/agent/turn/` (a refatoração `refactor-turn` quebrou um orquestrador de
   cerca de 2000 linhas); `services/conversation.ts` é uma fachada sobre um módulo
   por tarefa em `services/conversation/`.
-- Decisões registradas: 23 ADRs em [`adr/decisoes.md`](adr/decisoes.md), uma
+- Decisões registradas: 26 ADRs em [`adr/decisoes.md`](adr/decisoes.md), uma
   constituição em `.specify/memory/constitution.md` e specs em `specs/`.
 - Três níveis de teste: unitários e de turno com **modelo roteirizado**
   (`tests/support/scripted-model.ts`, determinísticos), integração contra Postgres
@@ -175,9 +188,16 @@ como processo separado desde o primeiro dia** (ADR 2).
   varreduras de follow-up e de resumo reivindicam linhas com
   `FOR UPDATE SKIP LOCKED`, então mais de um worker não duplica trabalho; um teste
   de integração varre 100 tentativas com dois claimers (`tests/followup-claim.test.ts`).
+  A varredura roda a cada `WORKER_SWEEP_INTERVAL_MS`, e também na hora quando alguém
+  aperta *Enviar agora* na fila: o worker escuta o canal `followup_due`
+  (`worker/wake.ts`, spec 017). Uma notificação perdida custa um intervalo, não a
+  mensagem.
   O turno em si é protegido por `claimTurn`, uma coluna na própria conversa.
 - **Tempo real sem polling**: `LISTEN/NOTIFY` com **uma conexão por réplica**, não
   por cliente (§8).
+- **Custo do modelo por turno**: os prompts são montados para o cache de prefixo do servidor (system prompt
+  constante, o que muda no fim). Nas conversas de exemplo, 68% a 87% dos *tokens* de entrada vieram do cache.
+  Ver [turno do agente §5](turno-do-agente.md#5--o-cache-de-prefixo-o-que-muda-fica-no-fim).
 
 **Não feito**
 
@@ -262,7 +282,9 @@ Sem Redis na aplicação. O Postgres é fila e outbox (ADR 4):
 - `followup_jobs` — tentativas de reengajamento agendadas
 - `events` — trilha append-only: auditoria, fonte das métricas do painel, linha do
   tempo da ficha do lead e outbox do resumo (`processed_at` fica nulo até o worker
-  resumir a linha)
+  resumir a linha). É também o contrato de um futuro conector de CRM, por isso o
+  payload guarda nome e contato sem máscara; logs e traces continuam mascarados
+  (ADR 26)
 
 O worker (`src/worker/index.ts`) acorda a cada `WORKER_SWEEP_INTERVAL_MS` e roda,
 em ordem, os consumidores de `jobs/consumers.ts`, cada um num `try/catch`: um que

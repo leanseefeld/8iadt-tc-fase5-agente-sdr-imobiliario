@@ -8,6 +8,9 @@ com uma pergunta por vez, mostra imóveis reais do catálogo e marca visita ou l
 Se o lead some, ela volta a falar com ele sem perder o contexto. O corretor acompanha tudo num painel com
 resumo, score e agenda.
 
+**▶ [Vídeo de pitch e demonstração (9 min)](https://youtu.be/R2YOyFP1BQY):** [pitch](https://youtu.be/R2YOyFP1BQY)
+(0:00) · [demonstração](https://youtu.be/R2YOyFP1BQY?t=134) (2:14) · [por dentro](https://youtu.be/R2YOyFP1BQY?t=320) (5:20).
+
 > **Estado da entrega:** funcional, rodando localmente com Docker Compose. O canal é um chat web (sem
 > WhatsApp) e o modelo pode ser local (Gemma 4 via oMLX) ou hospedado (Azure OpenAI), escolhido por
 > configuração.
@@ -16,6 +19,7 @@ resumo, score e agenda.
 
 | Pergunta | Onde está a resposta |
 |---|---|
+| Como funciona, em poucos minutos? | [Vídeo de pitch e demonstração](https://youtu.be/R2YOyFP1BQY) (9 min; o pitch são os 2 primeiros) |
 | Quais requisitos do desafio foram atendidos, e como? | [Requisitos × entrega](docs/requisitos.md): matriz completa com código, testes e conversas |
 | Qual é a arquitetura? | [Arquitetura](#arquitetura), abaixo, e [`docs/arquitetura/`](docs/arquitetura/visao-geral.md) |
 | Que IA é usada, e para quê? | [A IA utilizada](#a-ia-utilizada) |
@@ -29,10 +33,11 @@ resumo, score e agenda.
 
 ## O problema
 
-Imobiliárias pagam caro por cada lead (de R$ 30 a R$ 150, dependendo do canal) e perdem boa parte deles por
-motivos banais:
+Imobiliárias pagam por cada lead e perdem boa parte deles por motivos banais:
 
-- **Tempo de resposta.** O lead que chega às 22h de sábado fala com o concorrente antes de falar com você.
+- **Tempo de resposta.** Num levantamento com 1.500 imobiliárias, a resposta a um pedido de aluguel levou em
+  média 6 horas, e 1 em cada 5 clientes nunca foi respondido ([Plaza, 2025](https://paraibabusiness.com.br/imobiliarias-brasileiras-demoram-mais-seis/)).
+  Em vendas B2B, só 12% das empresas respondem em menos de 10 minutos ([Ramper](https://olhardigital.com.br/2022/04/18/pro/empresas-respondem-primeiro-contato-cliente/)).
 - **Falta de follow-up.** Quem não responde à primeira mensagem é abandonado.
 - **Falta de priorização.** O corretor trata igual quem quer comprar em 30 dias e quem está só olhando.
 - **Sobrecarga.** O corretor faz triagem em vez de vender.
@@ -49,12 +54,17 @@ Um **SDR digital** que atende 24 horas por dia em conversa natural:
 4. **Agenda** visita ou ligação em horários reais da agenda do corretor. Também remarca e cancela.
 5. **Calcula um score** de 0 a 100 (frio, morno ou quente), visível no painel.
 6. **Resume a conversa** para o corretor.
-7. **Faz follow-up** sozinho quando o lead some, retomando do ponto em que parou.
+7. **Faz follow-up** sozinho quando o lead some, retomando do ponto em que parou, e **lembra o lead** antes de
+   cada visita ou ligação. A gerente decide quando essas mensagens podem sair; o corretor vê a fila e pode
+   enviar na hora, escrever a mensagem ele mesmo ou cancelar.
 8. **Passa para um humano** quando o lead pede, ou quando não consegue entender.
 
 **A IA não fecha venda.** Ela protege o tempo do corretor e evita que o lead esfrie.
 
 ## Em imagens
+
+<!-- Capturas da aplicação real. O que cada uma mostra, e que mudança obriga a refazê-la, está em
+     docs/imagens/README.md; scripts/screenshots/ refaz todas com o mesmo enquadramento. -->
 
 | Chat do lead (compra) | Painel do corretor |
 |---|---|
@@ -66,7 +76,9 @@ Mais telas: [chat de investimento](docs/imagens/chat-investimento.png) ·
 [follow-up](docs/imagens/chat-followup.png) · [guardrails](docs/imagens/chat-guardrails.png) ·
 [cartões de imóveis](docs/imagens/chat-compra-cartoes.png) ·
 [painel do lead investidor](docs/imagens/painel-lead-investimento.png) ·
-[catálogo](docs/imagens/catalogo.jpg) · [*trace* de um turno no Langfuse](docs/imagens/langfuse-trace.png).
+[catálogo](docs/imagens/catalogo.jpg) · [fila de follow-ups](docs/imagens/followups.png) ·
+[configurações da gerente](docs/imagens/configuracoes.png) ·
+[*trace* de um turno no Langfuse](docs/imagens/langfuse-trace.png).
 
 ---
 
@@ -134,12 +146,21 @@ separado. Mais réplicas do app e do worker funcionam sem mudança de código: o
 `SKIP LOCKED`, e dois workers produzem um único resumo por conversa (testado). O caminho de escala, e o que
 ainda não foi feito (deploy em nuvem), está na visão geral.
 
+**Nenhuma mensagem fica sem resposta se a aplicação cair.** A mensagem do lead é gravada antes de o turno
+começar; o turno roda depois, fora da requisição. Se a aplicação morrer no meio do caminho (deploy, erro,
+máquina reiniciada), o worker encontra a conversa sem resposta e refaz o turno a partir do banco. Ele varre
+ao iniciar, a cada `WORKER_SWEEP_INTERVAL_MS` (15 min por padrão) e quando um follow-up vence. Um turno que
+outro processo ainda está rodando não é refeito, e dois workers juntos produzem uma resposta só.
+O teste está em `tests/integration/turn-persistence.test.ts`, e isso aconteceu de verdade numa das
+[conversas de exemplo](docs/exemplos/conversas.md#1-compra): a máquina reiniciou com uma mensagem pendente,
+e a resposta veio do worker quando a pilha voltou.
+
 **Documentos de arquitetura:**
 
 - [Visão geral](docs/arquitetura/visao-geral.md): componentes, fluxos, segurança e caminho de escala
 - [Turno do agente](docs/arquitetura/turno-do-agente.md): o que o modelo lê, o que o código decide e quais ferramentas existem em cada turno
 - [Modelo de dados](docs/arquitetura/modelo-de-dados.md): tabelas, roteiro de qualificação e score
-- [Decisões de arquitetura (ADRs)](docs/arquitetura/adr/decisoes.md): 24 decisões, com contexto e consequências
+- [Decisões de arquitetura (ADRs)](docs/arquitetura/adr/decisoes.md): 26 decisões, com contexto e consequências
 - [Restrições de implantação](docs/arquitetura/restricoes-de-implantacao.md) e [configurações](docs/arquitetura/configuracoes.md)
 
 ---
@@ -158,7 +179,7 @@ Resumo abaixo; a matriz completa, com arquivo e teste para cada item, está em
 | Qualificação de leads | Roteiro por intenção, score de 0 a 100 e temperatura, recalculados a cada turno |
 | Agendamento de reuniões | Horários reais por corretor e especialização; propor, confirmar, remarcar e cancelar |
 | Resumo inteligente | O worker resume cada conversa para o corretor, com uma linha de prévia na lista |
-| Dashboard mínimo | Leads ao vivo, indicadores do funil, painel do lead (assumir, devolver, transferir), agenda e catálogo |
+| Dashboard mínimo | Leads ao vivo, indicadores do funil, painel do lead (assumir, devolver, transferir), fila de follow-ups e lembretes, agenda, catálogo e as configurações da gerente |
 
 **Os três cenários do enunciado**, com as mensagens do próprio enunciado, rodando de verdade (trechos; a
 íntegra está em [`docs/exemplos/conversas.md`](docs/exemplos/conversas.md)):
@@ -188,23 +209,27 @@ Resumo abaixo; a matriz completa, com arquivo e teste para cada item, está em
 >
 > **Sofia:** Pronto! Sua visita ao VMA-0001 está confirmada para sex 09/10 às 10h, com alguém da nossa equipe.
 
-**Exemplo 2: investimento.** Perfil, ticket e retorno, sem catálogo, e uma ligação com o corretor
-especializado em investimento ([conversa completa](docs/exemplos/conversas.md#2-investimento) ·
+**Exemplo 2: investimento.** Perfil, ticket e retorno, sem catálogo, e uma ligação com o especialista em
+investimentos, o corretor do seed com essa especialização ([conversa completa](docs/exemplos/conversas.md#2-investimento) ·
 [tela](docs/imagens/chat-investimento.png)).
 
 > **Lead:** Quero investir em imóveis para renda
 >
-> **Sofia:** Entendi, você busca um investimento focado em renda mensal com aluguel. Essa seria sua primeira aplicação em imóveis ou você já investe no setor?
+> **Sofia:** Entendi perfeitamente, seu foco é garantir uma boa renda mensal com aluguel. Essa seria sua primeira vez investindo em imóveis ou você já atua no setor?
 >
 > **Lead:** Seria o primeiro, hoje só tenho tesouro direto e ações
 >
-> **Sofia:** […] Qual valor você pretende destinar para esse investimento em imóveis?
+> **Sofia:** […] Qual valor você pensa em destinar para esse investimento?
 >
 > **Lead:** Algo em torno de 350 mil
 >
 > *… nome e e-mail …*
 >
-> **Sofia:** Tenho estes horários para uma conversa por telefone com alguém da nossa equipe: 1) sex 09/10 às 10h · 2) sex 09/10 às 14h · 3) sex 09/10 às 16h30. Qual fica melhor?
+> **Sofia:** Tenho estes horários para uma conversa por telefone com nosso especialista em investimentos: 1) seg 12/10 às 10h · 2) seg 12/10 às 14h · 3) seg 12/10 às 16h30. Qual fica melhor?
+>
+> **Lead:** Pode ser a segunda opção
+>
+> **Sofia:** Pronto! Sua conversa por telefone está confirmada para seg 12/10 às 14h, com nosso especialista em investimentos.
 
 **Exemplo 3: follow-up.** O lead parou de responder; o worker retomou com o contexto, e o lead voltou
 ([conversa completa](docs/exemplos/conversas.md#3-follow-up) · [tela](docs/imagens/chat-followup.png)).
@@ -222,10 +247,6 @@ especializado em investimento ([conversa completa](docs/exemplos/conversas.md#2-
 As conversas completas também mostram uma mudança de ideia (de aluguel para compra) e os guardrails: tentativa
 de *prompt injection*, pergunta fora do escopo, pedido de desconto e pedido de corretor. Todas foram geradas
 com o Gemma 4 12B local e estão sem edição, inclusive nos pontos em que o modelo errou, que estão comentados.
-
-**Limitação conhecida (investimento):** a ligação é marcada com um corretor especializado em investimento,
-mas a frase que o lead lê diz "com alguém da nossa equipe", e não "com um especialista em investimentos". O
-encaminhamento acontece; o lead só não fica sabendo dele.
 
 ---
 
@@ -252,7 +273,10 @@ atendimento comercial se não decidir nada que custe caro. Por isso:
 Cada turno faz duas ou três chamadas ao modelo, e cada uma é conferida pelo código:
 
 - **Extração:** o JSON passa por schema, por regras de *merge* e por uma trava de evidência que descarta
-  valores sobre assuntos que o lead nem mencionou.
+  valores sobre assuntos que o lead nem mencionou. Uma resposta que não vem em JSON, ou uma chamada que
+  falha, ganha uma segunda tentativa (o resumo também). Se as duas falharem, o lead recebe uma resposta
+  honesta, e duas falhas seguidas passam a conversa para um humano. Cada tentativa falha aparece como
+  `ERROR` no Langfuse.
 - **Ferramentas:** só as que o código liberou naquele turno; os argumentos que importam (imobiliária,
   intenção) vêm do estado, não do modelo.
 - **Resposta:** sai em *streaming* frase a frase, passando por guardas que retêm sintaxe vazada, outro
@@ -261,6 +285,13 @@ Cada turno faz duas ou três chamadas ao modelo, e cada uma é conferida pelo c�
 Os detalhes estão no [turno do agente](docs/arquitetura/turno-do-agente.md). O que foi medido para chegar a
 esse desenho (formato da chamada, redação do prompt, a trava de evidência) está em
 [`evals/README.md`](evals/README.md).
+
+**Cache de prefixo.** Num modelo local, reler o prompt a cada turno é a maior parte da espera. Os prompts
+foram organizados para o cache do servidor: o system prompt de cada chamada é constante, e o que muda a cada
+turno (estado, tarefa) vai no fim, logo antes da mensagem do lead. Medido no e4b, isso levou o cache de 9% para
+84% numa conversa de três turnos. Nas conversas de exemplo, no 12B, 68% a 87% dos *tokens* de entrada vieram
+do cache, conforme o tipo de chamada. Cada geração no Langfuse mostra quanto veio do cache (`cache_read`).
+Detalhes, e o que ficou de fora de propósito, no [turno do agente §5](docs/arquitetura/turno-do-agente.md#5--o-cache-de-prefixo-o-que-muda-fica-no-fim).
 
 **Por que não LangGraph nem multiagentes autônomos?** O fluxo de um SDR é curto e regrado, e cada decisão
 movida do modelo para o código foi um defeito a menos nos testes com o modelo de 4 bits. O registro está nas
@@ -272,21 +303,23 @@ movida do modelo para o código foi um defeito a menos nos testes com o modelo d
 
 A qualidade foi medida em três níveis, do mais barato ao mais caro:
 
-1. **Suíte determinística** (`npm run test:integration`, cerca de 430 testes em ~1 min): regras puras, banco
+1. **Suíte determinística** (`npm run test:integration`, cerca de 450 testes em ~1 min): regras puras, banco
    real e um **modelo roteirizado** (`tests/support/scripted-model.ts`), de modo que as decisões do turno são
    testadas sem depender da sorte do *sampler*.
-2. **Evals com o modelo real** (`npm run eval`, 58 verificações em [`tests/eval/`](tests/eval/), ~6 min no
+2. **Evals com o modelo real** (`npm run eval`, 65 verificações em [`tests/eval/`](tests/eval/), ~8 min no
    e4b local): os cenários do enunciado ponta a ponta e o comportamento da agenda.
 3. **Eval de extração** ([`evals/`](evals/README.md)): 18 mensagens reais rotuladas, rodadas várias vezes
    cada. Um caso só passa se acerta sempre, porque o lead tem um turno só.
 
-Na última execução antes da entrega, as evals passaram 58/58 no e4b e a suíte determinística 431/431.
+Na última execução antes da entrega, as evals passaram 58/58 no e4b e a suíte determinística 431/431. Depois
+da spec 017 (11/10): evals 65/65 e suíte 453/453, no e4b.
 
 | O que é verificado | Onde |
 |---|---|
 | Cenário 1 (compra) ponta a ponta: roteiro completo, uma pergunta por mensagem, todo imóvel mostrado existe e respeita o filtro, oferta de visita | `tests/eval/scenario-purchase.test.ts` |
 | Cenário 2 (investimento) ponta a ponta: roteiro de investidor, catálogo nunca consultado, ligação | `tests/eval/scenario-investment.test.ts` |
 | Cenário 3 (follow-up): a retomada traz contexto e termina na pergunta pendente | `tests/eval/followup-writer.test.ts`, `tests/integration/followup-send.test.ts` |
+| Resposta ao lembrete (spec 017): agradecer, confirmar, cancelar, remarcar, marcar mais uma conversa e pedir para parar, cada um como um turno normal | `tests/eval/reminder-replies.test.ts` |
 | Agenda: reservar, horário fora do expediente, dois leads no mesmo horário, remarcar, cancelar só com confirmação, limite de três compromissos | `tests/eval/booking.test.ts`, `tests/eval/changes.test.ts` |
 | Saídas de uma oferta: recusa reconhecida uma vez, "só de manhã", mudança de assunto, revisão do pedido | `tests/eval/meeting-escapes.test.ts`, `tests/eval/offer-once.test.ts` |
 | O que a Sofia não sabe resolver (videochamada, escolher corretor por traço pessoal, pedidos fora do escopo): diz que não consegue e oferece a equipe, sem inventar | `tests/eval/meeting-limits.test.ts`, `tests/boundary.test.ts`, `tests/integration/scripted-boundary.test.ts` |
@@ -295,6 +328,7 @@ Na última execução antes da entrega, as evals passaram 58/58 no e4b e a suít
 | Passagem para humano: pedido explícito, duas mensagens não entendidas; corretor assume e devolve | `tests/handoff.test.ts`, `tests/integration/handoff.test.ts`, `tests/integration/handback.test.ts` |
 | Dados pessoais mascarados nos *traces* e nos logs | `tests/masking.test.ts`, `tests/span-mask.test.ts` |
 | Escopo: o corretor só vê os próprios leads; a gerente vê a imobiliária | `tests/integration/leads-scope.test.ts`, `tests/agenda-scope.test.ts` |
+| Queda da aplicação no meio de um turno: o worker refaz o turno a partir do banco, e o claim é liberado | `tests/integration/turn-persistence.test.ts` |
 | Queda do modelo: o lead recebe uma resposta honesta, e o worker responde depois | `tests/provider-failure.test.ts`, `tests/integration/provider-outage.test.ts` |
 
 As falhas encontradas pelo caminho, inclusive as que ficaram abertas, estão registradas com dono em
@@ -307,7 +341,7 @@ As falhas encontradas pelo caminho, inclusive as que ficaram abertas, estão reg
 | Diferencial | Estado | Evidência |
 |---|---|---|
 | Memória conversacional | ✅ | Histórico, qualificação revisável e resumo persistidos por conversa; follow-up e retorno do lead partem desse estado |
-| Observabilidade | ✅ | Langfuse self-hosted com *trace* de cada chamada (perfil e modelo inclusos, dados pessoais mascarados), logs JSON e *health checks* do app e do worker |
+| Observabilidade | ✅ | Langfuse self-hosted com *trace* de cada chamada (perfil e modelo inclusos, dados pessoais mascarados, tentativas que falharam marcadas como `ERROR`), logs JSON e *health checks* do app e do worker |
 | Segurança | ✅ | Login e sessão assinada, escopo por imobiliária e corretor, três camadas contra *prompt injection*, consentimento (LGPD), orçamento de mensagens, mascaramento de PII |
 | Multiagentes | 🟡 | Papéis de modelo separados (leitura, resposta, resumo, follow-up), não agentes autônomos. O agente especialista em investimento foi cortado |
 | Uso de RAG | ❌ | O catálogo é consultado por ferramenta estruturada, o que garante que todo imóvel citado existe. Não há busca semântica |
@@ -350,7 +384,7 @@ semeada.
 
 | E-mail | Papel | O que vê |
 |---|---|---|
-| `carla@demo.com.br` | gerente comercial (Carla Nunes) | todos os leads e a agenda da imobiliária; liga e desliga o follow-up automático |
+| `carla@demo.com.br` | gerente comercial (Carla Nunes) | todos os leads, a fila e a agenda da imobiliária; em **Configurações**, quando o follow-up e os lembretes podem sair |
 | `ana@demo.com.br` | corretora (Ana Ribeiro) · compra e aluguel | *Meus leads* e as próprias visitas |
 | `bruno@demo.com.br` | corretor (Bruno Castro) · investimento e compra | idem |
 
@@ -445,7 +479,7 @@ valioso no começo, quando o modelo de dados e o turno ainda eram incertos.
 **Depois, um processo mais leve.** O Spec Kit gerava mais requisitos inventados do que um desenvolvedor sozinho
 conseguia revisar. A partir da spec 009, cada mudança passou a ter uma **spec de uma página em prosa**: o que
 cobre, o que não cobre e como se verifica (009, [015](specs/015-fronteira/spec.md),
-[016](specs/016-model-provider/spec.md)). Hoje a spec é oferecida, não exigida (ADR 24). O que continua
+[016](specs/016-model-provider/spec.md), [017](specs/017-followup-queue/spec.md)). Hoje a spec é oferecida, não exigida (ADR 24). O que continua
 obrigatório é a suíte determinística passando antes de cada *merge* e o mapa do turno atualizado junto com o
 código do turno.
 
@@ -457,12 +491,13 @@ entrega.
 
 ## Limitações conhecidas
 
-- **Investimento:** o encaminhamento ao especialista não aparece na frase da Sofia (ver acima).
 - **Modelo local pequeno:** o e4b às vezes ignora uma pergunta lateral ("ele tem varanda?") quando o lead
   também escolhe um imóvel. Os casos conhecidos estão em [`docs/cenarios-de-falha.md`](docs/cenarios-de-falha.md).
 - **Latência local:** no 12B, um turno leva dezenas de segundos numa máquina de desenvolvimento; um modelo
   hospedado responde em poucos segundos.
 - **Canal único e sem deploy:** só chat web, só local.
+- **Fuso por instalação:** a janela de follow-up e os lembretes já são por imobiliária, mas o fuso
+  (`FOLLOWUP_TIMEZONE`) ainda vem do `.env`, porque visitas, agenda e chat também o usam.
 
 ## Estrutura do repositório
 
@@ -477,6 +512,7 @@ entrega.
 | `docs/` | arquitetura, requisitos, exemplos, decisões e falhas conhecidas |
 | `specs/` | especificações por funcionalidade |
 | `tests/`, `evals/` | suíte determinística, evals com modelo real e eval de extração |
+| `scripts/` | diagnóstico (`doctor`), [conversas de exemplo](scripts/sample-conversations/README.md) e [capturas de tela](scripts/screenshots/README.md) |
 | `reference/` | ideação inicial, **não normativa** ([`reference/README.md`](reference/README.md)) |
 
 **Convenções:** código, identificadores e commits em inglês; documentação, interface e conversa em pt-BR.

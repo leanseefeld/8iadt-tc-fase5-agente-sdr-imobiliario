@@ -1,0 +1,12 @@
+{
+  "name": "sdr-screenshots",
+  "private": true,
+  "type": "module",
+  "description": "Retakes the screenshots in docs/imagens/ — host-only dev tooling, see README.md",
+  "scripts": {
+    "shoot": "node shoot.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "1.48.2"
+  }
+}

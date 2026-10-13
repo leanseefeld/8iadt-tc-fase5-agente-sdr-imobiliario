@@ -25,7 +25,7 @@ import {
 } from "../prompts/meeting.ts";
 import { actionTools, type SearchOutcome } from "../tools/index.ts";
 import type { Draft } from "./meeting-reply.ts";
-import { offerTimes } from "./offer-times.ts";
+import { meetingHostFor, offerTimes } from "./offer-times.ts";
 import type { SchedulingFacts } from "./read.ts";
 
 /**
@@ -158,7 +158,13 @@ export async function applyActionOutcomes(
 
   const booking = results.booking;
   if (booking?.ok) {
-    next.written = confirmationSentence(booking.scheduledAt, booking.type, booking.propertyCode, timezone);
+    next.written = confirmationSentence(
+      booking.scheduledAt,
+      booking.type,
+      booking.propertyCode,
+      timezone,
+      await meetingHostFor(turn.lead.id, input.intent),
+    );
     next.scheduling = {
       ...next.scheduling,
       booking: {
@@ -189,6 +195,7 @@ export async function applyActionOutcomes(
       type,
       type === "viewing" ? (input.property?.code ?? null) : null,
       timezone,
+      await meetingHostFor(turn.lead.id, input.intent),
     );
     next.offeredType = type;
     next.scheduling = { ...next.scheduling, options: options(results.offeredTimes) };
@@ -199,7 +206,13 @@ export async function applyActionOutcomes(
     const moved = results.move;
     const meeting = input.booked.find((item) => item.id === target.appointmentId);
     if (moved?.ok) {
-      next.written = rescheduledSentence(moved.scheduledAt, moved.type, moved.propertyCode, timezone);
+      next.written = rescheduledSentence(
+        moved.scheduledAt,
+        moved.type,
+        moved.propertyCode,
+        timezone,
+        await meetingHostFor(turn.lead.id, input.intent),
+      );
       next.scheduling = {
         ...next.scheduling,
         booking: {

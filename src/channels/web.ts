@@ -135,6 +135,7 @@ export const webChannel: ChannelAdapter = {
       propertyIds: message.propertyIds,
       paused: message.paused,
       isFollowUp: message.isFollowUp,
+      reminderFor: message.reminderFor,
     });
 
     if (written === null) {

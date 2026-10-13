@@ -4,7 +4,8 @@
 > E o que liga isso neste turno?** Descreve o código depois do `refactor-turn`: o turno é uma sequência de nós
 > tipados em `src/agent/turn/` (a ordem está em `run.ts`). Cobre as specs 004, 005, 007, 006 (propor, reservar,
 > o botão *Interessado* e o follow-up, marcados *(006)*), 009 (cancelar, remarcar, até três compromissos,
-> *(009)*) e 015 (o que a Sofia não resolve: a oferta de verificar com a equipe, *(015)*). Qual modelo responde
+> *(009)*), 015 (o que a Sofia não resolve: a oferta de verificar com a equipe, *(015)*) e 017 (a fila de
+follow-ups, a janela configurável e o lembrete antes do compromisso, *(017)*). Qual modelo responde
 > não é assunto deste mapa: é configuração, um perfil em `config/models/` ([ADR 23](adr/decisoes.md#23-model-profiles-in-yaml)).
 
 ## A regra, em uma frase
@@ -122,7 +123,7 @@ flowchart TD
     ACT --> OUTC["actions.ts — applyActionOutcomes<br/>reservou → confirmação · recusada → motivo e novas opções<br/>escolheu e nada reservou → as mesmas opções"]:::codigo
     OUTC --> ENDING["ending.ts — decideEnding<br/>015: sobrou pedido, pergunta ou informação que nada respondeu → oferta<br/>009: nada pendente, nada perguntado → fechamento"]:::codigo
     ENDING --> AGENDA{"o código já escreveu a resposta?<br/>opções · confirmação · recusa da reserva"}:::codigo
-    AGENDA -- "sim" --> W_MEET["frase escrita pelo código<br/>datas, horários e 'alguém da nossa equipe'"]:::escrita
+    AGENDA -- "sim" --> W_MEET["frase escrita pelo código<br/>datas, horários e quem atende<br/>(equipe ou especialista), sem nome"]:::escrita
     AGENDA -- "não" --> CANT{"speak.ts — tentou algo que não dá<br/>para usar e fez uma pergunta?"}:::codigo
     CANT -- "sim" --> W_CANT["ainda não consigo te ajudar com isso"]:::escrita
     CANT -- "não" --> TASK["speak.ts — briefing e chooseTask()<br/>reconfirmação · último resultado de busca<br/>escolhe UMA instrução por precedência"]:::codigo
@@ -138,7 +139,7 @@ flowchart TD
 Nada vive na memória do processo: um turno carrega tudo no começo (`loadTurn`) e grava tudo no fim
 (`commitTurn`). O que o turno seguinte precisa saber está em linhas — `conversations`, `leads`, `appointments`
 — e nos **metadados da última resposta** (`messages.metadata`: `meetingOptions`, `pendingCancel`, `humanOffer`,
-`closing`… ver [`modelo-de-dados.md`](modelo-de-dados.md) §1).
+`closing`, `reminder`… ver [`modelo-de-dados.md`](modelo-de-dados.md) §1).
 
 ```mermaid
 stateDiagram-v2
@@ -175,15 +176,26 @@ stateDiagram-v2
         ofertada --> semOfertaEquipe: outra coisa (turno normal)
     }
 
-    state "Follow-up (006)" as FU {
+    state "Follow-up (006, 017)" as FU {
         [*] --> none
         none --> pending: turno deixa pergunta ou opções por último
         pending --> none: lead respondeu
         pending --> pending: enviado, próxima tentativa (intervalo × fator)
-        pending --> pending: fora da janela (move para a abertura)
+        pending --> pending: fora da janela da agência (move para a abertura)
+        pending --> pending: Enviar agora ou Eu escrevo, na fila (017)
+        pending --> none: corretor cancela, na fila (017)
         pending --> none: chave desligada, opt-out, pausa ou visita confirmada
         pending --> exhausted: tentativas esgotadas
         exhausted --> none: lead respondeu (followup.recovered)
+    }
+
+    state "Lembrete do compromisso (017)" as LEMBRETE {
+        [*] --> semLembrete
+        semLembrete --> agendado: compromisso confirmado com mais antecedência que a configurada
+        agendado --> agendado: remarcado, ou a gerência muda a antecedência
+        agendado --> semLembrete: cancelado, realizado, ou corretor cancela na fila
+        agendado --> enviado: na hora, ou Enviar agora (frase escrita)
+        agendado --> pulado: lembretes desligados, opt-out ou conversa fechada
     }
 ```
 
@@ -198,17 +210,22 @@ stateDiagram-v2
   Pedido de encontro no escritório, por Meet, Zoom, FaceTime ou outro formato: *"ainda não consigo te ajudar com
   isso"* e o telefone, se nenhum já estiver marcado. Pedido fora do domínio numa visita (carona, reembolso, escolher
   quem atende por uma característica pessoal): só *"ainda não consigo"*. Os dois avançam o streak.
-- **Nenhum nome de corretor chega ao modelo por causa da agenda** (006): opções e confirmação dizem *"alguém da
-  nossa equipe"*, escritas pelo código; depois de uma devolução, o modelo não confirma nem nega quem atende.
-  *Lacuna conhecida, não corrigida:* o corretor de um lead de investimento é escolhido entre os que têm
-  `investment` em `specializations` (`chooseBroker`, `services/scheduling.ts`), mas a frase que o lead lê diz
-  *"alguém da nossa equipe"*, nunca *"especialista"*.
+- **Nenhum nome de corretor chega ao modelo por causa da agenda** (006): opções, confirmação e remarcação são
+  escritas pelo código e dizem *"alguém da nossa equipe"*. A exceção é o investidor cujo corretor tem
+  `investment` em `specializations` (`chooseBroker` o prefere), que ouve *"nosso especialista em investimentos"*
+  (`meetingHostFor` em `turn/offer-times.ts`, que confere o corretor de fato atribuído). Nome, nunca. Depois de
+  uma devolução, o modelo não confirma nem nega quem atende.
 - **Uma proposta aberta não sequestra a conversa**: o lead pode mudar de assunto e voltar a ela depois.
 - **O streak de não compreensão** é um número em `conversations.fallbackStreak`: zera quando o turno aprende
   algo, **mantém** em conversa fiada ou falha técnica, **avança** quando o lead tentou algo inutilizável. Em 2,
   handoff.
 - **Follow-up**: só a chave da agência (006) e a janela de horário decidem se uma tentativa **devida** sai; o
-  agendamento não consulta a chave.
+  agendamento não consulta a chave. **017:** a janela (início, fim e dias da semana) está na linha da agência e é
+  lida na hora do envio; *Enviar agora*, na fila, passa por cima **só** da janela.
+- **Lembrete** *(017)*: não é tentativa de follow-up. Não conta, não muda `followupState`, e a mensagem do lead
+  não o cancela; quem o move ou cancela é o compromisso. Passa por cima da janela, da chave do follow-up e da
+  regra de "já marcado", mas respeita a própria chave e o opt-out. A resposta do lead a ele é um turno normal: um
+  agradecimento logo depois vale como um segundo fechamento (só a despedida, sem repetir o que está marcado).
 
 ## 4 · Quem faz cada verbo, e o que o liga neste turno
 
@@ -219,7 +236,7 @@ Caminhos abaixo relativos a `src/`. *Turno* = `agent/turn/`.
 | botão **Interessado** no card *(006)* | 🟩 widget envia | `app/(public)/chat/[agencySlug]/PropertyCard.tsx` | clique ou toque: posta *"Interessado em VMA-0005"* em nome do lead, como mensagem dele, e um turno normal começa; a resposta depende de onde a conversa está (FR-004d) |
 | debounce · `claimTurn` | 🟦 código | `channels/web.ts` · `jobs/unanswered-turns.ts` · `services/conversation/claim.ts` | toda mensagem; um turno por conversa, depois de `CHAT_DEBOUNCE_MS` de silêncio |
 | `looksLikeInjection` | 🟦 código | `domain/injection.ts`, chamado por `turn/run.ts` | todo turno; três frases fixas de tentativa de manipulação |
-| `extract()` | 🟨 modelo lê | `turn/extract.ts` | todo turno que passou do portão. Devolve slots e os fatos `askedForHuman`, `optOut`, `attemptedAnswer`, `askedAboutCriteria`; **006:** `declinedOffer`, `askedForTimes`, `pickedTime`, `preferredWeekday`, `preferredPeriod`, `propertyPosition`, `propertyCode`, `askedWhoAttends`, **009:** `changeRequest`, `answer`, `meetingKind`, `unsupportedMeeting`, `outOfScopeRequest`; **015:** `askedAboutMeetings`, `messageAct` (agradece, concorda, responde, pede, pergunta, informa, outro) e `uncovered` (a sobra: o que nenhum campo registrou) |
+| `extract()` | 🟨 modelo lê | `turn/extract.ts` | todo turno que passou do portão. Devolve slots e os fatos `askedForHuman`, `optOut`, `attemptedAnswer`, `askedAboutCriteria`; **006:** `declinedOffer`, `askedForTimes`, `pickedTime`, `preferredWeekday`, `preferredPeriod`, `propertyPosition`, `propertyCode`, `askedWhoAttends`, **009:** `changeRequest`, `answer`, `meetingKind`, `unsupportedMeeting`, `outOfScopeRequest`; **015:** `askedAboutMeetings`, `messageAct` (agradece, concorda, responde, pede, pergunta, informa, outro) e `uncovered` (a sobra: o que nenhum campo registrou). **Duas tentativas:** uma chamada que falha ou uma resposta que não é JSON tenta de novo uma vez; na segunda falha, o turno segue sem nada aprendido (resposta honesta, e o streak decide o humano). Cada tentativa falha fica no Langfuse como `ERROR` |
 | `readTurn` — leituras do código *(009, 015)* | 🟦 código | `turn/read.ts` · `agent/lexicon.ts` | o nó que assenta o que a mensagem diz: tudo o que vem depois decide a partir dele, nunca do texto cru. **Um fato que o modelo afirma precisa estar nas palavras**: um código de imóvel que a mensagem não contém, uma recusa sem palavra de recusa ou uma troca de intenção sem palavra de finalidade são descartados (o modelo ecoa o que leu antes). Todo turno, depois da extração: dia e período (`parseWhen`), sim/não a uma pergunta pendente, verbos de remarcar e cancelar, *"já marcamos?"*; uma mensagem que é **só** agradecimento ou concordância (*obrigado, valeu, ok, beleza, 👍*) vale como tal, seja lá o que o modelo leu, e não carrega pedido (recusa, humano, opt-out); *"outros imóveis"* / *"mais opções"* é a pergunta sobre os critérios; com horários na mesa, *"a primeira"*, *"2"*, *"opção 3"* é uma escolha. Vocabulário fechado, como o `parseWhen` |
 | `boundaryOffer` *(015)* | 🟦 código | `turn/boundary.ts` · `turn/ending.ts` | a mensagem pede, pergunta ou informa algo que sobrou, **e** o turno não tem nada melhor a dizer (nenhuma frase escrita, busca, critérios, pergunta sobre o marcado, nada aprendido). O modelo escreve a oferta (reconhece, diz que não consegue confirmar, oferece que alguém da equipe verifique); se esquecer a pergunta, o código a acrescenta (`mustAsk`). A oferta fica pendente (`humanOffer`): **sim** → handoff normal; **não** → fechamento; outra coisa → turno normal. A pergunta do roteiro espera um turno |
 | `recoverSlot()` | 🟨 modelo lê | `agent/recovery.ts`, chamado por `turn/learn.ts` | slot pendente ficou vazio, a extração não disse nada dele (`shouldRecover`), **e** o lead tentou responder |
@@ -232,7 +249,7 @@ Caminhos abaixo relativos a `src/`. *Turno* = `agent/turn/`.
 | `resolvePropertyRef` *(006)* | 🟦 código | `services/conversation/state.ts`, chamado por `turn/run.ts` | a extração trouxe `propertyRef` (*"o segundo"*, *"VMA-0005"*); resolve só contra imóveis **já mostrados nesta conversa**, nunca adivinha |
 | `declineProposal` *(006)* | 🟦 código | `services/scheduling.ts`, chamado por `turn/meeting-reply.ts` | `declinedOffer` **com proposta aberta agora** — uma linha ainda `proposed` (`turn.proposalOpen`), não "já houve oferta" (`appointmentProposed`, que só evita repetir a oferta). Depois de uma reserva, *"não vou mais poder"* não é recusa: é pedido de cancelamento (009) |
 | `parseWhen` *(009)* | 🟦 código | `agent/meeting-change.ts`, chamado por `readTurn` | todo turno: lê do texto os dias da semana, *manhã/tarde* e *hoje/amanhã/depois de amanhã* (relativos à data de hoje) e completa o que o modelo extraiu — o que o código acha vale mais. Com horários na mesa, um dia ou período sozinho (*"nada na quarta?"*) pede outras opções da proposta, a não ser que a mensagem diga para remarcar ou cancelar |
-| fechamento *(009, 015)* | 🟪 modelo, com os fatos do código | `turn/ending.ts` (decide) · `chooseTask` `closing` · `describeMeeting` | nada pendente, nenhuma pergunta, nada aprendido, nenhuma sobra, e já houve oferta ou há compromisso — ou um **não** à oferta de verificar com a equipe. O código passa o que está marcado; o modelo lembra isso e se despede, sem pergunta (a guarda de saída descarta uma). Um segundo fechamento seguido é só a despedida. A mensagem seguinte do lead é uma retomada: o modelo cumprimenta com naturalidade antes de seguir |
+| fechamento *(009, 015)* | 🟪 modelo, com os fatos do código | `turn/ending.ts` (decide) · `chooseTask` `closing` · `describeMeeting` | nada pendente, nenhuma pergunta, nada aprendido, nenhuma sobra, e já houve oferta ou há compromisso — ou um **não** à oferta de verificar com a equipe. O código passa o que está marcado; o modelo lembra isso e se despede, sem pergunta (a guarda de saída descarta uma). Um segundo fechamento seguido é só a despedida, e também o que vem logo depois de um lembrete *(017)*. A mensagem seguinte do lead é uma retomada: o modelo cumprimenta com naturalidade antes de seguir |
 | o que a Sofia pode *(015)* | 🟦 prompt fixo | `agent/prompts/system.ts` `CAPABILITIES` | todo `phrase()`: buscar, marcar/remarcar/cancelar, explicar os critérios; o que **não** consegue garantir (acompanhantes, animais, desconto, financiamento, condomínio…); nunca anunciar uma ação fora da lista. Fica na parte constante do prompt, que o cache guarda. Desconto deixou de ser recusa: vira oferta |
 | `decideChange` *(009)* | 🟦 código | `turn/change.ts` · `agent/meeting-change.ts` | `changeRequest` (cancelar/remarcar), um `answer` sim/não à pergunta anterior, ou a resposta a *"qual delas?"* — lida contra os compromissos listados (`matchAnswer`). Cancelar só depois do sim (`cancelAppointment`); remarcar vai ao `act()` e, sem horário dito, oferece horários daquele compromisso; depois de cancelar, um sim a *"quer marcar outro dia?"* oferece de novo. Até **três** compromissos futuros por lead |
 | `rescheduleMeeting` *(009)* | 🟥 tool | `agent/tools/reschedule-meeting.ts` | dentro do `act()`, quando o lead está remarcando. Move **a mesma linha** e revalida com o mesmo `checkSlot` da marcação, ignorando só o horário do próprio compromisso. O briefing traz os próximos sete dias já calculados, para "segunda" nunca virar uma segunda que passou |
@@ -250,8 +267,46 @@ Caminhos abaixo relativos a `src/`. *Turno* = `agent/turn/`.
 | frases escritas | 🟩 código | `agent/prompts/fallback.ts` · `agent/prompts/meeting.ts` · `services/handoff.ts` | recusa, falha técnica, opt-out, handoff, *"ainda não consigo"*, reentrada (`services/handoff.ts`); **006:** opções, confirmação, motivo de uma reserva recusada, recusa aceita, *"assim que eu tiver seus dados"*, e *"ainda não consigo te dizer o nome de quem vai te atender"* quando há proposta ou visita |
 | card do encontro *(006)* | 🟩 widget | `app/(public)/chat/[agencySlug]/MeetingCard.tsx` | mensagem com `booking` nos metadados: dia, hora, tipo e — numa visita — o código do imóvel; nunca o corretor |
 | `commitTurn` | 🟦 código | `services/conversation/commit.ts`, chamado por `turn/finish.ts` | fim de todo turno; **006:** grava `meetingOptions`, `offerDeclined`, `interestedProperty` e `booking` nos metadados da resposta, e agenda o follow-up (`scheduleFollowup`) se sobrou pergunta do roteiro ou opções |
-| `cancelFollowup` *(006)* | 🟦 código | `services/followup.ts` · chamado por `recordLeadMessage` (`services/conversation/inbound.ts`) | toda mensagem do lead: cancela tentativas pendentes, zera contagem e estado; se um follow-up já tinha saído, `followup.recovered` uma vez |
-| varredura de follow-up *(006)* | 🟦 código + 🟪 modelo escreve | `jobs/followup.ts` · `agent/followup-writer.ts` | worker, a cada varredura; claim com `SKIP LOCKED`; elegibilidade checada duas vezes (depois do claim e antes do envio), incluindo a chave da agência; o modelo escreve só a frase de abertura, conferida (sem pergunta, data, hora ou nome da equipe) e trocada por uma escrita pelo código se reprovar; a pergunta pendente é do código |
+| `cancelFollowup` *(006)* | 🟦 código | `services/followup.ts` · chamado por `recordLeadMessage` (`services/conversation/inbound.ts`) | toda mensagem do lead: cancela tentativas de follow-up pendentes (**017:** nunca um lembrete), zera contagem e estado; se um follow-up já tinha saído, `followup.recovered` uma vez |
+| varredura de follow-up *(006, 017)* | 🟦 código + 🟪 modelo escreve | `jobs/followup.ts` · `agent/followup-writer.ts` | worker, a cada varredura, **e na hora** quando *Enviar agora* toca `followup_due` (`worker/wake.ts`); claim com `SKIP LOCKED`; elegibilidade checada duas vezes (depois do claim e antes do envio), incluindo a chave e a janela da agência (esta pulada com `bypass_window`); o modelo escreve só a frase de abertura, conferida (sem pergunta, data, hora ou nome da equipe) e trocada por uma escrita pelo código se reprovar; a pergunta pendente é do código |
+| `syncReminder` *(017)* | 🟦 código | `services/reminder.ts`, chamado por `transitionAppointment` (`services/scheduling.ts`) | toda mudança de status ou horário de um compromisso: confirmado e mais longe que a antecedência → lembrete em `scheduled_at − antecedência` (criado ou movido); qualquer outra coisa → cancelado |
+| lembrete *(017)* | 🟩 código | `agent/prompts/meeting.ts` `reminderSentence`, enviado por `jobs/followup.ts` | lembrete devido (ou *Enviar agora*), com lembretes ligados, lead sem opt-out, conversa não fechada e o compromisso ainda confirmado e por vir. Informativo, sem pergunta, sem nome de corretor: *"Oi, Ana! Passando pra lembrar: sua visita ao VMA-0001 é hoje às 15h, com alguém da nossa equipe. Pode avisar por aqui mesmo se não puder mais ou precisar remarcar."* Com um corretor na conversa: *"Sofia aqui, interrompendo só pra lembrar: …"*. Grava `reminder` nos metadados |
+| *Eu escrevo* *(017)* | 🟩 corretor escreve | `services/followup-queue.ts` `sendOwnFollowup` | na fila, no lugar do texto da Sofia: sai como mensagem do corretor, conta como a tentativa, e a conversa continua com a Sofia |
+
+## 5 · O cache de prefixo: o que muda fica no fim
+
+Num modelo local, reler o prompt inteiro a cada turno é a maior parte da latência. O servidor (oMLX, e também a
+Azure OpenAI) guarda um **cache de prefixo**: o trecho inicial idêntico ao da chamada anterior não é processado
+de novo. Mas um prefixo é um prefixo: o primeiro byte diferente invalida tudo o que vem depois. Por isso:
+
+- **O system prompt de cada chamada é constante.** `REPLY_SYSTEM_PROMPT` (persona, o que a Sofia pode, regras) e
+  `extractionSystemPrompt()` não recebem nenhum dado do turno (`agent/prompts/system.ts`).
+- **O que muda a cada turno vai no fim.** O estado da qualificação, o que acabou de ser aprendido e a tarefa do
+  turno (`turnBriefing`) entram na última mensagem, cercados e rotulados, logo antes das palavras do lead
+  (`briefed` em `turn/messages.ts`).
+- **A conversa é montada sempre do mesmo jeito** (`toModelMessages`), para que o que já foi dito chegue com os
+  mesmos bytes a cada turno. As passagens de humano para agente e vice-versa entram na própria transcrição, no
+  ponto em que aconteceram, e não num resumo que mudaria a cada chamada. A resposta lê a conversa inteira (até
+  `MODEL_HISTORY_WINDOW`, 12 mensagens), então o prefixo dela cresce com a conversa até lá. A extração lê só as quatro últimas
+  mensagens, uma janela que anda, então o que fica em cache para ela é o system prompt, que é a maior parte da
+  entrada.
+- **Medido, não suposto.** Cada geração no Langfuse carrega `cache_read` (`prompt_tokens_details.cached_tokens`),
+  ligado em `agent/provider.ts` (`includeUsage`) e registrado em `core/langfuse.ts`.
+
+**O que as medições mostraram** (detalhes em `specs/004-conversation/implementation-log.md`, 15/09/2026):
+
+| Medição | Cache |
+|---|---|
+| e4b, três turnos, estado do turno **dentro** do system prompt (desenho antigo) | 0% → 10,2% → 9,4%: o cache ficava preso nos primeiros 512 *tokens* e a taxa **caía** conforme a conversa crescia |
+| e4b, mesmos turnos, system prompt constante e estado no fim (desenho atual) | 11,1% → 81,4% → 84,4%: o cache cresce com a conversa |
+| 12B, conversas de exemplo de 10/10 (média por tipo de chamada, no Langfuse) | extração 75% · resposta 68% · ações 78% · resumo 87% |
+
+**O que ficou de fora, de propósito.** O oMLX guarda um cache por vez, e a extração e a resposta têm system
+prompts diferentes, então uma desaloja a outra dentro do mesmo turno. Por isso, nas conversas de 10/10, o
+trecho em cache fica no tamanho do system prompt e não cresce com a conversa. Um prefixo único para as duas
+chamadas foi medido e levaria a segunda chamada do turno a 88–98% de cache, mas não foi adotado: a resposta
+passaria a carregar as ferramentas e o guia de campos da extração, e o modelo leria ferramentas que não pode
+chamar. Com um modelo hospedado, que guarda vários prefixos, a questão desaparece.
 
 ## Ver também
 

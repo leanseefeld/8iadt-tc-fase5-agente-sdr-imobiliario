@@ -1,6 +1,7 @@
 import {
   boolean,
   index,
+  uniqueIndex,
   integer,
   jsonb,
   pgEnum,
@@ -78,6 +79,9 @@ export const appointmentStatusEnum = pgEnum("appointment_status", [
   "done",
 ]);
 
+// Spec 017: a follow-up reopens a quiet conversation; a reminder announces a confirmed meeting.
+export const followupKindEnum = pgEnum("followup_kind", ["followup", "reminder"]);
+
 export const followupStatusEnum = pgEnum("followup_status", [
   "pending",
   "running",
@@ -97,6 +101,18 @@ export const agencies = pgTable("agencies", {
   // Spec 006 FR-019: automatic follow-up for the whole agency, set by a sales
   // manager. Read when an attempt is about to be sent, never when it is queued.
   followupEnabled: boolean("followup_enabled").notNull().default(true),
+  // Spec 017: when follow-ups may go out, set by a sales manager on
+  // /configuracoes and read at send time — no restart. The time zone is not
+  // here: visits, the agenda and the chat share it (FOLLOWUP_TIMEZONE).
+  followupWindowStart: text("followup_window_start").notNull().default("09:00"),
+  followupWindowEnd: text("followup_window_end").notNull().default("20:00"),
+  followupWindowDays: jsonb("followup_window_days")
+    .$type<string[]>()
+    .notNull()
+    .default(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]),
+  // Spec 017: the written reminder before a confirmed meeting, with its own switch.
+  remindersEnabled: boolean("reminders_enabled").notNull().default(true),
+  reminderLeadMinutes: integer("reminder_lead_minutes").notNull().default(120),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [unique("agencies_slug_unique").on(table.slug)]);
 
@@ -284,9 +300,15 @@ export const followupJobs = pgTable("followup_jobs", {
   conversationId: uuid("conversation_id")
     .notNull()
     .references(() => conversations.id),
+  kind: followupKindEnum("kind").notNull().default("followup"),
+  // Set iff kind = 'reminder': the meeting it announces, and nothing without it.
+  appointmentId: uuid("appointment_id").references(() => appointments.id, { onDelete: "cascade" }),
+  // 0 for a reminder, which is not an attempt.
   attempt: integer("attempt").notNull(),
   scheduledFor: timestamp("scheduled_for", { withTimezone: true }).notNull(),
   status: followupStatusEnum("status").notNull().default("pending"),
+  // Spec 017: "Enviar agora" — this send ignores the agency's window, and only that.
+  bypassWindow: boolean("bypass_window").notNull().default(false),
   lockedAt: timestamp("locked_at", { withTimezone: true }),
   sentAt: timestamp("sent_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -299,4 +321,8 @@ export const followupJobs = pgTable("followup_jobs", {
   index("followup_jobs_claim_idx")
     .on(table.status, table.scheduledFor)
     .where(sql`${table.status} = 'pending'`),
+  // Spec 017: one pending reminder per meeting; a reschedule moves it.
+  uniqueIndex("followup_jobs_pending_reminder_unique")
+    .on(table.appointmentId)
+    .where(sql`${table.status} = 'pending' and ${table.kind} = 'reminder'`),
 ]);

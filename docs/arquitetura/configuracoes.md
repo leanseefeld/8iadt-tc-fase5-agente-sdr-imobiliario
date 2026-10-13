@@ -7,9 +7,10 @@ chave acrescenta a linha aqui no mesmo commit. A fonte de verdade das chaves, do
 tipos e dos padrões é `src/core/config.ts` (schema validado na subida);
 `.env.example` traz os valores de partida.
 
-Hoje **nada disto é por agência de fato**: existe uma agência (`demo`) e todas as
-chaves valem para a instalação inteira. A coluna *Escopo* diz onde cada uma
-moraria num produto com mais de um tenant.
+Hoje **quase nada disto é por agência de fato**: existe uma agência (`demo`) e as
+chaves de ambiente valem para a instalação inteira. A coluna *Escopo* diz onde cada
+uma moraria num produto com mais de um tenant. A exceção, desde a spec 017, é o
+bloco [no painel](#no-painel-spec-017), que já mora na linha da agência.
 
 | Chave | Padrão | Escopo | Spec | O que controla |
 |---|---|---|---|---|
@@ -31,11 +32,23 @@ moraria num produto com mais de um tenant.
 | `SCHEDULING_MIN_NOTICE_MINUTES` | `120` | agência | 006 | antecedência mínima de uma visita |
 | `SCHEDULING_PREFERRED_TIMES` | `10:00,14:00,16:30,09:00,11:00` | agência | 006 | ordem de preferência dos horários propostos |
 | Disponibilidade por corretor | seg–sex 09–18 | usuário | 006 | `users.availability`, editável na agenda |
-| `FOLLOWUP_WINDOW_START/END`, `FOLLOWUP_TIMEZONE` | `09:00`, `20:00`, `America/Sao_Paulo` | agência | 006 | janela de envio |
+| `FOLLOWUP_TIMEZONE` | `America/Sao_Paulo` | agência | 006 | fuso da agência: janela de follow-up, horários de visita, agenda e chat. A janela em si saiu do `.env` (017) |
 | `FOLLOWUP_FIRST_DELAY_MINUTES`, `FOLLOWUP_MAX_ATTEMPTS`, `FOLLOWUP_BACKOFF_FACTOR` | `240`, `3`, `3` | agência | 006 | cadência das tentativas (demo: `5`) |
 | `FOLLOWUP_BATCH_SIZE` | `20` | global | 006 | tentativas vencidas que uma varredura reivindica no máximo |
 | `WORKER_SWEEP_INTERVAL_MS` | `900000` | global | 001 | frequência do worker (demo: `15000`) |
 | `AUTH_SECRET` | — | global | 003 | assinatura dos cookies de sessão (painel e widget) |
+
+## No painel (spec 017)
+
+Já fora do `.env`: ficam na linha `agencies`, a gerente comercial muda em **Configurações** (`/configuracoes`) e o
+worker lê na hora do envio, sem reiniciar. Os valores de partida vêm da seed.
+
+| Configuração | Padrão | Coluna | O que controla |
+|---|---|---|---|
+| Follow-up automático | ligado | `followupEnabled` | a chave da agência (006 FR-019), que saiu do painel de leads |
+| Janela de envio | 09:00–20:00, todos os dias | `followupWindowStart`, `followupWindowEnd`, `followupWindowDays` | quando um follow-up pode sair; fora dela espera, a não ser que alguém use *Enviar agora* na fila |
+| Lembretes | ligados | `remindersEnabled` | o lembrete antes de cada visita ou conversa confirmada |
+| Antecedência do lembrete | 2 horas | `reminderLeadMinutes` | 30 min, 1, 2, 3, 4 ou 24 h antes do compromisso |
 
 ## Infraestrutura
 

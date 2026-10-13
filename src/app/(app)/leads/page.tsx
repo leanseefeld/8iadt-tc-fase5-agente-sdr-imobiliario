@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/core/auth";
 import { getConfig } from "@/core/config";
 import { scopeForUser } from "@/services/auth";
-import { isFollowupEnabled, triggerNowBlocker } from "@/services/followup";
+import { isFollowupEnabled } from "@/services/followup";
+import { triggerNowBlocker } from "@/services/followup-queue";
 import { getFunnelMetrics } from "@/services/metrics";
 import {
   getLeadDetail,
@@ -20,7 +21,7 @@ import { LeadRow } from "./_components/LeadRow";
 import { LiveLeads } from "./_components/LiveLeads";
 import { LeadDrawer } from "./_components/LeadDrawer";
 import { LeadPanel } from "./_components/LeadPanel";
-import { FollowupSwitch } from "./_components/FollowupSwitch";
+import { FollowupStatus } from "./_components/FollowupStatus";
 import { buildHref, first, type SearchParamsRecord } from "./_components/query";
 import styles from "./leads.module.css";
 
@@ -74,7 +75,7 @@ export default async function LeadsPage({
       <header className={styles.header}>
         <div className={styles.titleRow}>
           <h1 className={styles.title}>Leads</h1>
-          <FollowupSwitch enabled={followupEnabled} role={session.role} />
+          <FollowupStatus enabled={followupEnabled} role={session.role} />
         </div>
         <MetricTiles metrics={metrics} />
       </header>

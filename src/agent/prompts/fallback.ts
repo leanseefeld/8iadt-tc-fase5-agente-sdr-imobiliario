@@ -87,9 +87,7 @@ export function noMatchReply(relaxable: "neighborhoods" | "priceMax" | "bedrooms
  * does not also cost the lead their place in the conversation.
  */
 export function refusalReply(question: Question | null): string {
-  const refusal =
-    "Não consigo mudar as minhas orientações nem falar sobre elas, e desconto quem decide " +
-    "é o corretor.";
+  const refusal = "Não consigo mudar as minhas orientações nem falar sobre elas.";
   return question === null
     ? `${refusal} Mas seguimos: estou aqui para te ajudar a achar um imóvel.`
     : `${refusal} Mas seguimos: ${lowerFirst(question.question)}`;

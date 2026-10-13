@@ -1,5 +1,5 @@
 import { generateText } from "ai";
-import { modelTelemetry, rememberLeadName } from "../core/langfuse.ts";
+import { modelTelemetry, recordModelFailure, rememberLeadName } from "../core/langfuse.ts";
 import { createLogger } from "../core/logging.ts";
 import { modelCall } from "./provider.ts";
 
@@ -18,6 +18,9 @@ import { modelCall } from "./provider.ts";
  */
 
 const log = createLogger("worker", { module: "agent/summarizer" });
+
+/** One retry, for a call that throws or an answer that does not parse. */
+const SUMMARY_ATTEMPTS = 2;
 
 /** FR-012. The preview line's limit is enforced in code, below, not trusted. */
 export const PREVIEW_LINE_MAX_CHARS = 90;
@@ -105,7 +108,7 @@ function transcript(input: SummaryInput): string {
 }
 
 /**
- * Throws on a failed call. The caller (`jobs/summarize.ts`) decides what that
+ * Throws when both attempts fail. The caller (`jobs/summarize.ts`) decides what that
  * means — and its answer is to keep the summary it already had, because a stale
  * summary is never load-bearing and a poison pill would cost a model call every
  * sweep forever.
@@ -120,15 +123,32 @@ export async function summarizeConversation(input: SummaryInput): Promise<Summar
       ? "Ainda não há resumo anterior."
       : `Resumo anterior:\n${input.previousSummary}`;
 
-  const result = await generateText({
-    ...modelCall(),
-    ...modelTelemetry("summary.generate"),
-    system: SYSTEM,
-    prompt: `${previous}\n\nMensagens novas:\n${transcript(input)}`,
-  });
-
-  const parsed = parseSummary(result.text);
-  const rawSummary = typeof parsed?.summary === "string" ? parsed.summary.trim() : "";
+  // One retry, as the extraction does: an answer that does not parse is the
+  // sampler's fault and usually does not repeat. A second failure throws, and
+  // the consumer's existing path takes over (FR-016).
+  let rawSummary = "";
+  let parsed: ReturnType<typeof parseSummary> = null;
+  for (let attempt = 1; attempt <= SUMMARY_ATTEMPTS && rawSummary === ""; attempt++) {
+    let text: string;
+    try {
+      ({ text } = await generateText({
+        ...modelCall(),
+        ...modelTelemetry("summary.generate"),
+        system: SYSTEM,
+        prompt: `${previous}\n\nMensagens novas:\n${transcript(input)}`,
+      }));
+    } catch (error) {
+      log.warn({ err: (error as Error).message, attempt }, "summary call failed");
+      if (attempt === SUMMARY_ATTEMPTS) throw error;
+      continue;
+    }
+    parsed = parseSummary(text);
+    rawSummary = typeof parsed?.summary === "string" ? parsed.summary.trim() : "";
+    if (rawSummary === "") {
+      log.warn({ attempt }, "summary did not parse");
+      recordModelFailure("summary.generate", `attempt ${attempt}: no summary in the answer`);
+    }
+  }
   if (rawSummary === "") {
     throw new Error("the model returned no summary");
   }

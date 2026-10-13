@@ -74,7 +74,10 @@ export function lastOfferedType(turn: LoadedTurn): "viewing" | "call" | null {
  * over from further back.
  */
 /** What the last reply left waiting for the lead's answer. */
-export type PendingChange = Pick<SchedulingRecord, "pendingCancel" | "pendingChoice" | "rebook" | "closing" | "humanOffer">;
+export type PendingChange = Pick<SchedulingRecord, "pendingCancel" | "pendingChoice" | "rebook" | "closing" | "humanOffer"> & {
+  /** Spec 017: the last agent message was a meeting reminder, which already said what is booked. */
+  reminder?: true;
+};
 
 export function pendingChange(turn: LoadedTurn): PendingChange {
   const last = [...turn.history].reverse().find((message) => message.role === "agent");
@@ -91,6 +94,7 @@ export function pendingChange(turn: LoadedTurn): PendingChange {
       : {}),
     ...(rebook !== undefined && (rebook.type === "viewing" || rebook.type === "call") ? { rebook } : {}),
     ...(metadata.closing === true ? { closing: true as const } : {}),
+    ...(typeof metadata.reminder === "object" && metadata.reminder !== null ? { reminder: true as const } : {}),
     ...(offer !== undefined && typeof offer.about === "string" ? { humanOffer: { about: offer.about } } : {}),
   };
 }

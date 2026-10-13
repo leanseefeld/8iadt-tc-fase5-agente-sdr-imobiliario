@@ -11,7 +11,7 @@ import {
   setLeadStatus,
   type Result,
 } from "@/services/handoff";
-import { setFollowupEnabled, triggerNow } from "@/services/followup";
+import { triggerNow } from "@/services/followup-queue";
 
 /**
  * The five actions of the lead panel.
@@ -99,20 +99,10 @@ export async function reassignLeadAction(leadId: string, brokerId: string): Prom
   });
 }
 
-/** Spec 006 FR-017: the demo button — the pending attempt, due now. The sweep sends it. */
-export async function triggerFollowupAction(leadId: string): Promise<Result> {
-  return withScope("followup-now", leadId, ({ scope }) => triggerNow(scope, leadId));
-}
-
 /**
- * Spec 006 FR-019: the agency's follow-up switch. Not about one lead, so it
- * reads the session itself; the role check is in the service, not here.
+ * Spec 006 FR-017, through spec 017's *Enviar agora*: the lead's pending
+ * follow-up, due now and past the window. The worker sends it.
  */
-export async function setFollowupEnabledAction(enabled: boolean): Promise<Result> {
-  const session = await getSession();
-  if (session === null) return UNAUTHENTICATED;
-  const result = await setFollowupEnabled(scopeForUser(session), session.role, session.userId, enabled);
-  logger().info({ action: "followup-switch", enabled, userId: session.userId, ok: result.ok }, "agency action");
-  revalidatePath("/leads");
-  return result;
+export async function triggerFollowupAction(leadId: string): Promise<Result> {
+  return withScope("followup-now", leadId, ({ scope, userId }) => triggerNow(scope, userId, leadId));
 }

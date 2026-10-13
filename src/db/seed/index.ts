@@ -17,6 +17,8 @@ import {
 } from "../schema.ts";
 import { propertyEntrySchema, validateDataset, type PropertyEntry } from "./properties.schema.ts";
 
+const SEED_REMINDER_LEAD_MINUTES = 120;
+
 /**
  * `npm run db:seed` — idempotent per FR-008. Natural-key upserts for
  * agency/users/properties (a rerun is a no-op or a refresh, never a
@@ -42,7 +44,20 @@ const WORK_WEEK = {
 };
 
 async function seedAgency(): Promise<string> {
-  await db.insert(agencies).values({ name: "Imobiliária Demo", slug: "demo" }).onConflictDoNothing({
+  // Spec 017: the settings screen's starting values, written out rather than
+  // left to the column defaults, so the seed is where a demo changes them.
+  await db
+    .insert(agencies)
+    .values({
+      name: "Imobiliária Demo",
+      slug: "demo",
+      followupWindowStart: "09:00",
+      followupWindowEnd: "20:00",
+      followupWindowDays: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+      remindersEnabled: true,
+      reminderLeadMinutes: SEED_REMINDER_LEAD_MINUTES,
+    })
+    .onConflictDoNothing({
     target: agencies.slug,
   });
   const [agency] = await db.select({ id: agencies.id }).from(agencies).where(eq(agencies.slug, "demo"));
@@ -480,15 +495,32 @@ async function seedLeads(agencyId: string, brokers: { ana: string; bruno: string
     }
 
     if (demo.appointment) {
-      await db.insert(appointments).values({
-        agencyId,
-        leadId: lead.id,
-        conversationId: conversation.id,
-        brokerId: brokers[demo.owner],
-        scheduledAt: minutesFromNow(demo.appointment.minutesFromNow),
-        type: "viewing",
-        status: "confirmed",
-      });
+      const scheduledAt = minutesFromNow(demo.appointment.minutesFromNow);
+      const [appointment] = await db
+        .insert(appointments)
+        .values({
+          agencyId,
+          leadId: lead.id,
+          conversationId: conversation.id,
+          brokerId: brokers[demo.owner],
+          scheduledAt,
+          type: "viewing",
+          status: "confirmed",
+        })
+        .returning({ id: appointments.id });
+      // Spec 017: a confirmed meeting has its reminder queued, as booking does,
+      // so the queue screen shows one on first boot.
+      const remindAt = new Date(scheduledAt.getTime() - SEED_REMINDER_LEAD_MINUTES * 60_000);
+      if (remindAt > new Date()) {
+        await db.insert(followupJobs).values({
+          agencyId,
+          conversationId: conversation.id,
+          kind: "reminder",
+          appointmentId: appointment.id,
+          attempt: 0,
+          scheduledFor: remindAt,
+        });
+      }
     }
 
     // Spec 006 SC-009: the stale lead's attempt is already due, so the first

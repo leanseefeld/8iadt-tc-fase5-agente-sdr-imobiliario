@@ -1,6 +1,6 @@
 import { generateText } from "ai";
 import { getConfig } from "../../core/config.ts";
-import { modelTelemetry } from "../../core/langfuse.ts";
+import { modelTelemetry, recordModelFailure } from "../../core/langfuse.ts";
 import { createLogger } from "../../core/logging.ts";
 import { hasEvidence, type Askable, type Intent, type SlotExtraction, type SlotKey } from "../../domain/slots.ts";
 import type { CommittedToolCall, LoadedTurn } from "../../services/conversation.ts";
@@ -158,6 +158,7 @@ export async function extract(turn: LoadedTurn, pending: Askable | null): Promis
       const object = parseExtraction(text);
       if (object === null) {
         log.warn({ attempt }, "extraction did not come back as an object");
+        recordModelFailure("model.extract", `attempt ${attempt}: the answer was not a JSON object`);
         continue;
       }
 

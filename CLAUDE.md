@@ -25,3 +25,7 @@ flow (`/speckit-specify` → … → `/speckit-implement`) is used only when ask
 - When a question is listed as undecided in `docs/decisoes-pendentes.md`, stop and
   ask rather than picking a plausible answer.
 - `npm`, not pnpm or yarn.
+- **A change isn't done until the docs and screenshots match it.** Run AGENTS.md's
+  "Keeping the docs true" checklist before reporting back. In particular, read
+  `docs/imagens/README.md`: it says which screenshot shows what and when it must be
+  retaken (`scripts/screenshots/`). Don't wait to be asked.

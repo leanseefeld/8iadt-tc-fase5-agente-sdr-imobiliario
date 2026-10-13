@@ -206,7 +206,7 @@ test("zonedInstant survives a DST change, which São Paulo no longer has but ano
 });
 
 test("the follow-up window: inside stays, before opens today, after opens tomorrow", () => {
-  const window = { windowStart: "09:00", windowEnd: "20:00", timezone: TZ };
+  const window = { windowStart: "09:00", windowEnd: "20:00", timezone: TZ, days: WEEK };
   const inside = new Date("2026-10-05T15:00:00Z"); // 12:00 local
   assert.ok(isWithinWindow(inside, window));
   assert.equal(nextWindowOpening(inside, window).toISOString(), inside.toISOString());
@@ -217,4 +217,19 @@ test("the follow-up window: inside stays, before opens today, after opens tomorr
 
   const late = new Date("2026-10-05T23:30:00Z"); // 20:30 local
   assert.equal(nextWindowOpening(late, window).toISOString(), "2026-10-06T12:00:00.000Z");
+});
+
+test("spec 017: a closed weekday is outside the window and is skipped to the next open day", () => {
+  const noSunday = { windowStart: "09:00", windowEnd: "20:00", timezone: TZ, days: WEEK.filter((d) => d !== "sun") };
+  const sundayMorning = new Date("2026-10-11T13:00:00Z"); // Sunday 10:00 local
+  assert.equal(isWithinWindow(sundayMorning, noSunday), false);
+  assert.equal(nextWindowOpening(sundayMorning, noSunday).toISOString(), "2026-10-12T12:00:00.000Z", "Monday 09:00");
+
+  const saturdayNight = new Date("2026-10-11T01:30:00Z"); // Saturday 22:30 local
+  assert.equal(nextWindowOpening(saturdayNight, noSunday).toISOString(), "2026-10-12T12:00:00.000Z");
+
+  const weekendsOnly = { ...noSunday, days: ["sat" as const] };
+  const monday = new Date("2026-10-12T15:00:00Z");
+  assert.equal(nextWindowOpening(monday, weekendsOnly).toISOString(), "2026-10-17T12:00:00.000Z", "next Saturday");
+  assert.throws(() => nextWindowOpening(monday, { ...noSunday, days: [] }));
 });

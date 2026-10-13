@@ -13,7 +13,8 @@ import type { TurnMessage } from "@/services/conversation";
  *
  * `booking` is lifted the same way (spec 006 FR-006): the time, the kind and the
  * property code the confirmation card shows. The appointment id and the broker
- * stay behind — the lead was told "alguém da nossa equipe" (FR-005e).
+ * stay behind — the lead was told "alguém da nossa equipe", or "nosso especialista
+ * em investimentos", never a name (FR-005e).
  */
 export interface WireBooking {
   scheduledAt: string;

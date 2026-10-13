@@ -576,7 +576,40 @@ function aiSdkIntegration(tracing: LangfuseTracing): Telemetry {
           .end();
       });
     },
+
+    // A call that threw (a timeout, a provider error, a body the SDK could not
+    // parse). Without this the generation was never ended, so a failed attempt
+    // either vanished from the trace or looked like one still running.
+    onError(event) {
+      safely("model call error", () => {
+        const { callId, error } = (event ?? {}) as { callId?: string; error?: unknown };
+        const started = callId === undefined ? undefined : open.get(callId);
+        if (callId === undefined || started === undefined) return;
+        open.delete(callId);
+        started.generation
+          .update({
+            level: "ERROR",
+            statusMessage: error instanceof Error ? error.message : String(error),
+            metadata: { "latency.ms": Date.now() - started.startedAt },
+          })
+          .end();
+      });
+    },
   };
+}
+
+/**
+ * A model call that came back but could not be used: an extraction or a summary
+ * that did not parse. Its generation ended normally, so this event beside it is
+ * what marks the attempt as failed — a retried node then reads, in the trace, as
+ * a failed attempt followed by the one that counted.
+ */
+export function recordModelFailure(name: string, reason: string): void {
+  const active = state().registration;
+  if (active === null) return;
+  safely("model failure event", () => {
+    active.tracing.startObservation(`${name}.failed`, { level: "ERROR", statusMessage: reason }, { asType: "event" });
+  });
 }
 
 // ---------------------------------------------------------------------------

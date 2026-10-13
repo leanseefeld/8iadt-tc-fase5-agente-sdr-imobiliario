@@ -3,7 +3,11 @@
 # One image, two processes. `app` and `worker` differ only by the command they
 # are started with — see docker-compose.yml.
 
-FROM node:24-alpine AS base
+# Install and build run on the builder's own platform ($BUILDPLATFORM) even when
+# the target is another one: what they produce is plain JavaScript (no native
+# modules reach the runner), so an arm64 image is an amd64 build copied onto
+# the arm64 Node base, with no emulated `npm ci` or `next build`.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS base
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 

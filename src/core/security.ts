@@ -3,9 +3,14 @@
  * masked in log records and in Langfuse traces by a single shared definition,
  * not a rule re-implemented per sink. `src/core/logging.ts` (T012) and the
  * Langfuse span exporter both call `maskPII` on whatever they are about to
- * write; the event payloads described in `docs/arquitetura/modelo-de-dados.md`
- * do the same before they hit `events`. This file is the only place any of
- * them may define what "masked" means.
+ * write. This file is the only place either of them may define what "masked"
+ * means.
+ *
+ * The `events` table is deliberately **not** a sink: it is the outbox a CRM
+ * connector reads, so its payloads carry the lead's real name and contact
+ * (ADR 26). What keeps that from leaking is the other direction — an event
+ * payload that reaches a log line or a span is still masked here, including
+ * the `{ slot: "name", value }` shape whose key alone says nothing.
  *
  * The PII surface is small and known: `leads.name`, `leads.phone`,
  * `leads.email`, and the slot values `name` and `contact` (a phone OR an
@@ -14,8 +19,8 @@
  *
  * Two entry points. `maskText` handles a single string — used directly, and
  * as the fallback for any string `maskPII` does not recognise as sensitive.
- * `maskPII` walks an arbitrary structure (a log record, a span payload, an
- * event payload) key-aware, so a `leadName` field is masked as a name even
+ * `maskPII` walks an arbitrary structure (a log record, a span payload)
+ * key-aware, so a `leadName` field is masked as a name even
  * though its content alone would not say so.
  *
  * Never throws. Telemetry must never break the caller that is trying to log
@@ -251,6 +256,17 @@ function maskEntry(key: string, value: unknown, depth: number, ancestors: Set<ob
   return maskValue(value, depth + 1, ancestors);
 }
 
+/**
+ * A `slot.filled` payload is `{ slot: "name", value: "Camila" }`: the key that
+ * says "this is a name" is a *value* one level up, so the key rule alone sees a
+ * bare `value` and leaves `Camila` whole. Events store it unmasked on purpose
+ * (ADR 26); this is what keeps that payload masked if it is ever logged or
+ * traced.
+ */
+function slotValueKind(record: Record<string, unknown>): SensitiveKind | null {
+  return typeof record.slot === "string" ? sensitiveKeyKind(record.slot) : null;
+}
+
 function maskValue(value: unknown, depth: number, ancestors: Set<object>): unknown {
   if (value === null || value === undefined) return value;
   if (typeof value === "string") return maskText(value);
@@ -268,9 +284,14 @@ function maskValue(value: unknown, depth: number, ancestors: Set<object>): unkno
     if (Array.isArray(value)) {
       return value.map((item) => maskValue(item, depth + 1, ancestors));
     }
+    const record = value as Record<string, unknown>;
+    const slotKind = slotValueKind(record);
     const result: Record<string, unknown> = {};
-    for (const [key, entryValue] of Object.entries(value as Record<string, unknown>)) {
-      result[key] = maskEntry(key, entryValue, depth, ancestors);
+    for (const [key, entryValue] of Object.entries(record)) {
+      result[key] =
+        slotKind !== null && key === "value" && typeof entryValue === "string"
+          ? maskSensitiveString(slotKind, entryValue)
+          : maskEntry(key, entryValue, depth, ancestors);
     }
     return result;
   } finally {
@@ -279,8 +300,8 @@ function maskValue(value: unknown, depth: number, ancestors: Set<object>): unkno
 }
 
 /**
- * Recursive, key-aware masking for arbitrary structures — a log record, a
- * span payload, an event payload. Returns a value of the same shape.
+ * Recursive, key-aware masking for arbitrary structures — a log record or a
+ * span payload. Returns a value of the same shape.
  */
 export function maskPII<T>(value: T): T {
   try {

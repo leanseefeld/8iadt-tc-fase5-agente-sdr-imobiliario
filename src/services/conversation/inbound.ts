@@ -3,7 +3,6 @@ import { getDb } from "../../db/client.ts";
 import { agencies, conversations, events as events_, leads, messages } from "../../db/schema.ts";
 import { getConfig } from "../../core/config.ts";
 import { cancelFollowup } from "../followup.ts";
-import { maskPII } from "../../core/security.ts";
 import type { Channel, ConversationStatus } from "./types.ts";
 import { loadTurn } from "./load.ts";
 import type { PendingEvent } from "./commit.ts";
@@ -194,7 +193,7 @@ export async function recordLeadMessage(inbound: InboundLeadMessage): Promise<In
           actorType: "agent" as const,
           actorUserId: null,
           traceId: null,
-          payload: maskPII(event.payload),
+          payload: event.payload,
           createdAt: now,
         })),
       );

@@ -42,6 +42,7 @@ paper (see its note).
 | 23 | Model profiles in YAML | Accepted. Supersedes the env-variable half of 8 and 16; amends principle VI |
 | 24 | Specifications offered, not required | Accepted (2026-10-08). Relaxes 7; amends the constitution's Development Workflow (1.6.0) |
 | 25 | The follow-up window on the agency row, and reminders in the same queue | Accepted (2026-10-10). Supersedes 15's fixed window |
+| 26 | Event payloads carry real PII; traces and logs stay masked | Accepted (2026-10-12). Narrows where principle VIII's masking applies: not to `events` |
 
 > These decisions stand on their own. None of them exists to "override"
 > `reference/`, which is non-normative ideation and was never a competing
@@ -741,3 +742,34 @@ toggles with one range cover the motivating case.
 follow-up switch moved from the leads dashboard to `/configuracoes`. A lead's
 message cancels follow-ups only, never a reminder. Migration `0004` queues the
 reminder of every meeting already confirmed.
+
+## 26. Event payloads carry real PII; traces and logs stay masked
+
+*2026-10-12.*
+
+**Context.** `events` is the outbox (ADR 4) and the contract a future CRM
+connector reads. `commitTurn` passed every payload through `maskPII` before the
+insert, so a `slot.filled` row read `{"slot":"contact","value":"(11) *****-**56"}`.
+A connector that receives a masked name and phone cannot create a contact, and
+the masking protected nothing: the same values sit unmasked in `leads.name`,
+`leads.phone` and `leads.email` in the same database, read by the broker's panel.
+
+**Decision.** Event payloads are stored as written, name and contact included
+(`commitTurn`, `services/conversation/inbound.ts`). Constitution principle VIII is
+unchanged: application logs and Langfuse traces stay masked by the one rule in
+`core/security.ts`. Since an event payload may now reach a log line or a span
+unmasked, `maskPII` also recognises the `{ slot, value }` shape, where the key
+that says "name" is a value one level up. The tool-call copy in
+`messages.metadata.toolCalls` stays masked: it is a debugging aid, not part of
+the integration contract.
+
+**Alternatives considered.** Keeping events masked and having the connector join
+`leads` for the real values — every consumer would need database access and the
+event would no longer describe what happened. Encrypting PII inside the payload —
+key management for a POC with no connector yet.
+
+**Consequences.** Anonymising a lead (principle VIII) now also means rewriting
+`name`/`contact` in that lead's `slot.filled` payloads, keeping the rows. Rows
+written before this change keep their masked values; nothing rewrites them.
+`tests/integration/event-payload.test.ts` pins the unmasked events;
+`masking.test.ts` and `span-mask.test.ts` pin the masked copies.

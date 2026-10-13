@@ -14,7 +14,7 @@ rodando de verdade, com o Gemma 4 12B local, e copiadas sem edição.
 
 | Objetivo | Estado | Onde está | Como se verifica |
 |---|---|---|---|
-| Atender leads automaticamente | ✅ | Chat web em `/chat/demo`; cada mensagem dispara um turno do agente (`src/app/api/chat/route.ts` → `src/agent/turn/run.ts`). Se o turno falhar, o worker responde o que ficou sem resposta. | `tests/integration/chat-post.test.ts`, `tests/eval/turn.test.ts` |
+| Atender leads automaticamente | ✅ | Chat web em `/chat/demo`; cada mensagem dispara um turno do agente (`src/app/api/chat/route.ts` → `src/agent/turn/run.ts`). Se a aplicação cair antes de responder (deploy, erro), a mensagem já está gravada e o worker refaz o turno (`src/jobs/unanswered-turns.ts`, FR-046): na partida, a cada varredura e quando um follow-up vence. Visto de verdade na [conversa de compra](exemplos/conversas.md#1-compra). | `tests/integration/turn-persistence.test.ts` (turno abandonado no meio é refeito), `tests/integration/chat-post.test.ts`, `tests/eval/turn.test.ts` |
 | Conversa humanizada | ✅ | A Sofia tem persona e tom definidos em `src/agent/prompts/system.ts`: uma pergunta por mensagem, reconhece o que o lead disse antes de perguntar e se apresenta como assistente virtual (ADR 21). | `tests/reply-guards.test.ts`, `tests/conversational.test.ts`; [exemplos](exemplos/conversas.md) |
 | Qualificar clientes | ✅ | Roteiro determinístico por intenção (`src/domain/slots.ts`) e score de 0 a 100 com temperatura (`src/domain/score.ts`). | `tests/slots.test.ts`, `tests/score.test.ts`, `tests/eval/scenario-*.test.ts` |
 | Identificar compra, aluguel ou investimento | ✅ | Campo `intent` extraído pelo modelo e checado por evidência no texto (`src/agent/turn/extract.ts`, `EVIDENCE_WORDS` em `slots.ts`). A intenção é revisável no meio da conversa (ADR 22). | `evals/extraction.mjs` (18 casos rotulados), `tests/revision.test.ts` |
@@ -97,5 +97,5 @@ Conversa real: [Follow-up](exemplos/conversas.md#3-follow-up) ([tela](imagens/ch
 | README | [`README.md`](../README.md) |
 | Arquitetura da solução | [`docs/arquitetura/visao-geral.md`](arquitetura/visao-geral.md), [`turno-do-agente.md`](arquitetura/turno-do-agente.md), [`modelo-de-dados.md`](arquitetura/modelo-de-dados.md), [`adr/decisoes.md`](arquitetura/adr/decisoes.md) |
 | Explicação da IA utilizada | README, seção **A IA utilizada**, e [`docs/arquitetura/turno-do-agente.md`](arquitetura/turno-do-agente.md) |
-| Demonstração funcional | apresentada ao vivo pelo autor |
-| Pitch técnico | apresentado pelo autor |
+| Demonstração funcional | [vídeo, a partir de 2:14](https://youtu.be/R2YOyFP1BQY?t=134): os três cenários do desafio, remarcação, fora do roteiro, passagem para humano, tentativa de manipulação e o painel |
+| Pitch técnico | [vídeo](https://youtu.be/R2YOyFP1BQY): pitch de negócio (0:00–2:14) e por dentro: arquitetura, turno, worker, eventos, Langfuse e qualidade (a partir de 5:20) |

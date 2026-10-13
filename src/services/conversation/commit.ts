@@ -144,16 +144,11 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
     const value = input.slots[slot];
     events.push({
       type: "slot.filled",
-      payload: {
-        slot,
-        // Through `maskPII` under the slot's own key, not `maskText`: the rule is
-        // key-aware, and a bare `Camila` is not free text with a phone in it —
-        // `maskText` left it whole and the name went to `events` unmasked.
-        value:
-          slot === "name" || slot === "contact"
-            ? (maskPII({ [slot]: value }) as Record<string, unknown>)[slot]
-            : value,
-      },
+      // The value as the lead gave it, `name` and `contact` included: `events`
+      // is the outbox a CRM connector reads, and a masked phone is useless to
+      // it. Traces and logs stay masked — `maskPII` recognises this
+      // `{ slot, value }` shape if the payload ever reaches one of them.
+      payload: { slot, value },
     });
   }
   if (input.propertyIds !== undefined && input.propertyIds.length > 0) {
@@ -265,7 +260,8 @@ export async function commitTurn(input: CommitTurnInput): Promise<CommitTurnResu
         actorType: "agent" as const,
         actorUserId: null,
         traceId: input.traceId ?? null,
-        payload: maskPII(event.payload),
+        // Unmasked on purpose (ADR 26): the integration contract carries real data.
+        payload: event.payload,
         createdAt: now,
       })),
     );

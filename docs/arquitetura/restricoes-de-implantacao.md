@@ -146,7 +146,8 @@ desenvolvimento.
 
 **Consequência para a entrega:** o `docker compose up` sobe a aplicação e o worker
 com o alvo `dev` do `Dockerfile` (`npm run dev`, código por bind mount). É o que
-roda hoje, inclusive na demonstração. O alvo `runner` (`next build` + `next start`)
+roda hoje, inclusive na demonstração. O alvo `runner` (servidor *standalone* do
+Next mais o worker, as migrations e o seed empacotados com esbuild em `dist/`)
 existe, mas o Compose não o usa; ver §7.
 
 ---
@@ -248,14 +249,23 @@ reescrita. É um argumento de desenho, não de funcionalidade entregue.
 
 **Status:** *não feita.*
 
-O sistema roda localmente, em `docker compose up`, e só. Não há ambiente na nuvem,
-pipeline de CI/CD nem imagem publicada. O caminho previsto é levar os mesmos
+O sistema roda localmente, em `docker compose up`, e só. Não há ambiente na nuvem
+nem pipeline de deploy. A imagem de produção é construída em todo PR e publicada no GHCR a partir do `main` (`.github/workflows/image.yml`), mas nenhum ambiente a consome. O caminho previsto é levar os mesmos
 contêineres (`app` e `worker`, uma imagem, dois comandos) a um runtime gerenciado
 com Postgres gerenciado, usando o alvo `runner` do `Dockerfile`; o provedor de
 modelo já é hospedado por configuração. Esse caminho **nunca foi exercitado**: o
 alvo `runner` existe para que a afirmação "os mesmos contêineres rodam na nuvem"
 seja testável, mas não foi implantado em lugar algum. Detalhes de escala em
 [`visao-geral.md`](visao-geral.md) §4 e §7.
+
+**Exploração de 10 e 11/10/2026:** [`../exploracoes/hospedagem.md`](../exploracoes/hospedagem.md)
+compara a Azure (app no Container Apps escalando a zero, worker sempre ligado, Postgres
+Flexible Server) com uma VM na Azure e uma VPS abaixo de R$ 50/mês, as duas com a pilha de `deploy/vps/`. A imagem `runner` foi reduzida de
+479 MB para 68 MB (comprimida) e exercitada: migrations, seed, login, uma conversa por
+SSE e a varredura do worker. [`deploy/vps/`](../../deploy/vps/) traz um Compose de
+produção com Caddy, testado localmente e não numa VPS real. Continua sem implantação.
+O widget incorporado num site de outro domínio não funciona hoje, por causa do cookie
+`SameSite=Lax` do chat: ver [`../exploracoes/widget-embutido.md`](../exploracoes/widget-embutido.md).
 
 ---
 

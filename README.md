@@ -460,6 +460,11 @@ docker compose exec app npm run db:reset
 docker build --target runner -t sdr-imobiliario .
 ```
 
+A imagem leva só o que roda: o servidor *standalone* do Next e o worker, as migrations e o seed
+empacotados em `dist/` (cerca de 68 MB comprimida). Os comandos são `node dist/worker/index.js`,
+`node dist/db/migrate.js` e `node dist/db/seed/index.js`; o padrão sobe a aplicação. Sai em amd64 e arm64:
+o GitHub Actions (`.github/workflows/image.yml`) a constrói em todo PR e publica no GHCR a partir do `main`.
+
 **Testar no celular** (mesma rede): abra `http://<nome-do-mac>.local:3100/chat/demo`. Pelo IP, inclua-o em
 `DEV_ALLOWED_ORIGINS` no `.env` e recrie o app.
 
@@ -509,6 +514,7 @@ entrega.
 | `src/app/` | rotas Next.js: chat público, painel, API |
 | `src/jobs/`, `src/worker/` | follow-up, resumos e turnos sem resposta, no worker |
 | `config/models/` | perfis de modelo |
+| `deploy/vps/` | Compose de produção para um servidor só (VPS ou VM na Azure), com Caddy (testado localmente, não implantado) |
 | `docs/` | arquitetura, requisitos, exemplos, decisões e falhas conhecidas |
 | `specs/` | especificações por funcionalidade |
 | `tests/`, `evals/` | suíte determinística, evals com modelo real e eval de extração |

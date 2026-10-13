@@ -1,0 +1,97 @@
+# Production on a single server (a VPS or an Azure VM) — see README.md next to this file.
+#
+# The same services as the development Compose file, from the `runner` image
+# instead of the `dev` target: no bind mounts, no build on the server. Caddy is
+# the only published port and gets the TLS certificate on its own.
+#
+#   docker compose up -d          # everything; migrate runs once, then app and worker
+#   docker compose run --rm seed  # demo data, only when asked for
+
+x-app: &app
+  image: ${IMAGE:?set IMAGE in .env, e.g. ghcr.io/leanseefeld/8iadt-tc-fase5-agente-sdr-imobiliario:sha-<commit>}
+  env_file: [.env]
+  restart: unless-stopped
+  depends_on:
+    db:
+      condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
+
+services:
+  db:
+    # pgvector/pgvector:pg17 is a drop-in replacement the day RAG needs it.
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sdr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: sdr
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sdr -d sdr"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    # Not published: only the containers on this network reach it. Backups and
+    # psql go through `docker compose exec db …`.
+
+  migrate:
+    image: ${IMAGE}
+    env_file: [.env]
+    command: ["node", "dist/db/migrate.js"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    <<: *app
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:$${APP_PORT:-3100}/api/health/ready > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  worker:
+    <<: *app
+    command: ["node", "dist/worker/index.js"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:$${WORKER_HEALTH_PORT:-3101}/health/ready > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  seed:
+    image: ${IMAGE}
+    env_file: [.env]
+    command: ["node", "dist/db/seed/index.js"]
+    profiles: ["seed"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env, e.g. sofia.nomadmacaw.com}
+      APP_PORT: ${APP_PORT:-3100}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

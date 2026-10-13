@@ -1,0 +1,8 @@
+# HTTPS for $DOMAIN, certificate from Let's Encrypt, renewed by Caddy.
+#
+# No `encode` on purpose: compressing the SSE streams would buffer them.
+# reverse_proxy flushes text/event-stream immediately and has no timeout on a
+# long-lived response, so the chat and the dashboard streams stay open.
+{$DOMAIN} {
+	reverse_proxy app:{$APP_PORT}
+}

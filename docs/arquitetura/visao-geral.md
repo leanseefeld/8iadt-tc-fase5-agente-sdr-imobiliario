@@ -171,7 +171,7 @@ como processo separado desde o primeiro dia** (ADR 2).
   (`tests/support/scripted-model.ts`, determinísticos), integração contra Postgres
   real (`npm run test:integration`) e checagens com modelo real (`npm run eval`).
 
-**Não feito:** não há CI; o `next build` e o lint rodam à mão.
+**Em parte:** o único CI é `.github/workflows/image.yml`, que constrói a imagem de produção (amd64 e arm64) em todo PR, com o `next build` como checagem de tipos, e a publica no GHCR a partir do `main`. Lint e testes ainda rodam à mão.
 
 ### Escalabilidade
 
@@ -261,6 +261,7 @@ src/
 ├── proxy.ts          # guarda de sessão do painel (/leads, /agenda, /catalogo)
 └── instrumentation*.ts
 config/models/        # um YAML por perfil de modelo
+deploy/vps/           # Compose de produção para VPS ou VM (imagem runner + Caddy), não implantado
 ```
 
 **Regra de dependência:** `app → channels → agent → services → db`, e `domain` não

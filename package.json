@@ -11,6 +11,7 @@
     "build": "NODE_ENV=production next build",
     "start": "next start -H 0.0.0.0 -p ${APP_PORT:-3000}",
     "start:worker": "node src/worker/index.ts",
+    "build:jobs": "esbuild src/worker/index.ts src/db/migrate.ts src/db/seed/index.ts --bundle --platform=node --format=esm --target=node24 --outdir=dist --external:pg-native --external:next --log-level=warning \"--banner:js=import{createRequire as __cr}from'node:module';const require=__cr(import.meta.url);\"",
     "doctor": "node scripts/doctor.ts",
     "lint": "eslint .",
     "test": "node --test tests/*.test.ts",
@@ -45,6 +46,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "drizzle-kit": "0.31.10",
+    "esbuild": "0.25.12",
     "eslint": "^9.17.0",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.19.0"

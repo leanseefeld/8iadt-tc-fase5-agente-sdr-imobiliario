@@ -25,7 +25,8 @@ COPY . .
 EXPOSE 3100 3101
 CMD ["npm", "run", "dev"]
 
-# `next build` is also the only type-checking gate in a project with no CI.
+# `next build` is also the type-checking gate; .github/workflows/image.yml runs
+# it on every pull request.
 # `.next/cache` is a cache mount, so incremental builds reuse it without it
 # ever reaching an image layer.
 FROM deps AS build

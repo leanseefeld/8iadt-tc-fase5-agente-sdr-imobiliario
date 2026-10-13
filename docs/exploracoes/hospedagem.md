@@ -1,8 +1,8 @@
 # Exploração: hospedagem (Azure ou VPS)
 
-> **Status (11/10/2026): exploração, nada implantado.** Nenhum recurso foi criado na
+> **Status (13/10/2026): exploração, nada implantado.** Nenhum recurso foi criado na
 > Azure nem numa VPS. O que mudou no código foi a imagem de produção (§3), que ficou
-> menor. O registro de
+> menor e passou a sair em amd64 e arm64, construída pelo GitHub Actions. O registro de
 > [`restricoes-de-implantacao.md`](../arquitetura/restricoes-de-implantacao.md) §7
 > continua verdadeiro: não há ambiente na nuvem.
 
@@ -25,25 +25,31 @@ cliente. Incorporar o widget no site da imobiliária tem a sua própria explora�
 
 ## 1. Resposta curta
 
-As duas opções são viáveis sem mudar a arquitetura. A imagem de produção foi
-reconstruída para levar só o que roda (§3) e exercitada nos dois formatos:
+As três opções são viáveis sem mudar a arquitetura. A imagem de produção foi
+reconstruída para levar só o que roda, em amd64 e arm64 (§3), e exercitada nos dois
+formatos de implantação. O endereço será `https://sofia.nomadmacaw.com`, num domínio
+que já está no Route 53.
 
-| | Azure (Container Apps) | VPS (Docker Compose) |
-|---|---|---|
-| Custo por mês | ~US$ 27–33, pago com crédito (§4.4) | R$ 30–45, pago em reais (§5.2) |
-| Parada quando ninguém usa | o app escala a zero; worker e banco ficam ligados | não, e não precisa |
-| Partida a frio | sim, segundos (imagem de 68 MB) | não |
-| SSE | corte a cada 240 s, reconexão invisível (§4.3) | sem corte |
-| Worker | Container App sempre ligado, o processo de hoje (§4.1) | o processo de hoje |
-| Banco | gerenciado, com backup | nosso, backup por cron (`deploy/vps/README.md`) |
-| Mudança de código para subir | nenhuma | nenhuma |
-| Pronto em `deploy/` | não, roteiro em §4.5 | `deploy/vps/` (Compose + Caddy), testado localmente |
+| | Azure Container Apps | VM na Azure (Docker Compose) | VPS no Brasil (Docker Compose) |
+|---|---|---|---|
+| Custo por mês | ~US$ 27–33, pago com crédito (§4.4) | **~US$ 12–13**, pago com crédito (§6); ~US$ 6 na conta gratuita | R$ 30–45, pago em reais (§5.2) |
+| Parada quando ninguém usa | o app escala a zero; worker e banco ficam ligados | não; `deallocate` para de cobrar a VM | não, e não precisa |
+| Partida a frio | sim, segundos (imagem de 68 MB) | não | não |
+| SSE | corte a cada 240 s, reconexão invisível (§4.3) | sem corte | sem corte |
+| Worker | Container App sempre ligado (§4.1) | o processo de hoje | o processo de hoje |
+| Banco | gerenciado, com backup | nosso, backup por cron | nosso, backup por cron |
+| Mudança de código para subir | nenhuma | nenhuma | nenhuma |
+| Pronto no repositório | não, roteiro em §4.5 | `deploy/vps/` (Compose + Caddy + roteiro `az vm`) | `deploy/vps/` |
 
-**Recomendação:** para o primeiro cliente, **a VPS**. É o mesmo `docker compose up`
-que o projeto já exige (constituição), fica sempre quente, não tem o corte de 240 s, e
-o Compose de produção já está pronto e testado. A Azure faz sentido enquanto os
-créditos durarem e não houver cliente usando o widget, ou quando um contrato pedir
-banco gerenciado.
+**Recomendação:**
+- **Primeiro mês, com os créditos: a VM na Azure.** É a pilha de `deploy/vps/`
+  numa B2pts v2 (arm64) ou B2ats v2 (amd64). Custa menos da metade do Container Apps,
+  fica sempre quente e não tem o corte de 240 s.
+- **Depois dos créditos, ou para um cliente pagando em reais: a VPS no Brasil.**
+  Mesma pilha, mesmo `.env`. A mudança é um `pg_dump`, o IP no Route 53 e um
+  `docker compose up`.
+- **O Container Apps** só se justifica se um contrato pedir banco gerenciado, ou
+  muitas réplicas.
 
 ---
 
@@ -128,6 +134,21 @@ migrations) para a que mais muda (o código compilado).
 worker é `node dist/worker/index.js`, o migrate `node dist/db/migrate.js` e o seed
 `node dist/db/seed/index.js`. O alvo `dev` e o Compose de desenvolvimento não mudaram
 de comportamento.
+
+**amd64 e arm64 (13/10/2026).** O `npm ci` e o build rodam na plataforma de quem
+constrói (`FROM --platform=$BUILDPLATFORM`), e só o estágio final usa a `node:24-alpine`
+da arquitetura de destino. Isso funciona porque o que vai para a imagem é JavaScript
+puro: nenhum `.node` ou `.so` em `/app`, verificado. A imagem arm64 é o build amd64
+copiado sobre o Node arm64, sem `npm ci` nem `next build` emulados. Construída aqui em
+23 s com o cache quente, com o mesmo tamanho (68 MB), e exercitada sob QEMU na pilha
+de `deploy/vps/`: migrate, seed, login, conversa por SSE e a campainha do worker.
+
+**No GitHub Actions:** `.github/workflows/image.yml` constrói as duas arquiteturas num
+runner amd64 comum, em todo PR (sem publicar) e a cada push no `main` (publicando
+`ghcr.io/leanseefeld/8iadt-tc-fase5-agente-sdr-imobiliario:latest` e `:sha-<curto>`). O
+repositório é público, então os minutos do Actions e o pacote público no GHCR não
+custam nada. Os runners arm64 nativos (`ubuntu-24.04-arm`) também são gratuitos para
+repositórios públicos, mas não são necessários com esse Dockerfile.
 
 ---
 
@@ -278,8 +299,8 @@ az containerapp create -g $RG -n sdr-worker --environment $ENV $IMG \
 
 - **`sslmode=verify-full`, explícito:** o `pg` 8.23 já trata `require` como
   `verify-full`, mas emite um aviso de segurança.
-- **Domínio:** um CNAME `app.<domínio>` para o FQDN do app, e um TXT
-  `asuid.app.<domínio>` com o `customDomainVerificationId` do ambiente. Depois
+- **Domínio:** no Route 53, um CNAME `sofia.nomadmacaw.com` para o FQDN do app, e um
+  TXT `asuid.sofia.nomadmacaw.com` com o `customDomainVerificationId` do ambiente. Depois
   `az containerapp hostname add` e `bind --validation-method CNAME` emitem o
   certificado gerenciado, que é gratuito.
 - **Deploy contínuo:** GitHub Actions com `azure/login` por OIDC → build e push para o
@@ -349,7 +370,47 @@ Nada disso existe na Azure gerenciada:
 
 ---
 
-## 6. O que falta no código
+## 6. VM na Azure (a pilha de `deploy/vps/`)
+
+A mesma pilha da VPS, numa máquina virtual paga com os créditos da Azure. O roteiro
+(`az vm create`, NSG, swap, Route 53) está em [`deploy/vps/README.md`](../../deploy/vps/README.md).
+
+**O menor tamanho que comporta:** 1 GiB e 2 vCPUs, mais 2 GB de swap. A pilha usa
+~150 MiB em repouso (§5.1). O B1ls (0,5 GiB) é mais barato, mas não comporta Docker,
+Postgres e Node com folga.
+
+Um mês (730 h), Linux, preços da API de varejo da Azure em 13/10/2026:
+
+| Item | East US 2, arm64 (B2pts v2) | East US 2, amd64 (B2ats v2) | Brazil South, amd64 (B2ats v2) |
+|---|---|---|---|
+| VM | 6,13 | 6,86 | 11,02 |
+| Disco do sistema, Standard SSD 32 GiB (E4) | 2,40 | 2,40 | 4,48 |
+| IPv4 público estático (Standard) | 3,65 | 3,65 | 3,65 |
+| Tráfego de saída (100 GB/mês gratuitos) | ~0 | ~0 | ~0 |
+| **Total** | **~US$ 12,20 (≈ R$ 63)** | **~US$ 12,90 (≈ R$ 66)** | **~US$ 19,15 (≈ R$ 99)** |
+
+- **arm64 é a opção mais barata** e funciona sem mudança: a imagem é multi-arquitetura
+  (§3), e o Postgres e o Caddy oficiais também têm variante arm64. O B2pts v2 não tem
+  preço no Brazil South; fica no East US 2 ou noutra região que o ofereça.
+- **Conta gratuita:** as 750 h/mês da conta gratuita (12 meses) cobrem B1s, B2pts v2 e
+  B2ats v2. Sobram o disco e o IP, ~US$ 6. Não confirmei se o IP público entra em alguma
+  franquia.
+- **Fora da conta:** Langfuse Cloud (o plano Hobby é gratuito) e os tokens do Azure
+  OpenAI, que custam o mesmo em qualquer destino. O backup em Blob Storage custa
+  centavos.
+- **Parar de pagar:** `az vm deallocate` para a cobrança da VM, mas o disco e o IP
+  continuam (~US$ 6). `az group delete` apaga tudo; antes, faça o `pg_dump`.
+- **Comparado com o Container Apps** (§4.4, US$ 27–33): menos da metade, porque não há
+  Postgres gerenciado (US$ 16) nem ACR (US$ 5). O preço disso é o backup e as
+  atualizações por nossa conta (§5.3), como na VPS.
+
+**Domínio:** registro `A` de `sofia.nomadmacaw.com` para o IP estático da VM, no
+Route 53. A porta 80 aberta no NSG, para a validação do Let's Encrypt, e o `.env` com
+`DOMAIN=sofia.nomadmacaw.com`.
+
+---
+
+## 7. O que falta no código
 
 **Para subir, nada, em nenhum dos destinos.** A primeira versão desta exploração
 pedia um modo "uma varredura e sai" no worker, para rodá-lo como job agendado na Azure.
@@ -364,8 +425,9 @@ ser um processo sempre ligado nos dois destinos, exatamente como no Compose.
 **Pequenos pontos:**
 - `login` procura o usuário só pelo e-mail (`services/auth.ts`), mas a unicidade é por
   agência e e-mail. Com duas agências, basta não repetir e-mails;
-- não existe CI. O workflow de deploy, em qualquer dos destinos, vira o primeiro, e o
-  `next build` dele passa a ser a checagem de tipos que hoje roda à mão.
+- o CI só constrói a imagem (`.github/workflows/image.yml`); lint e testes ainda rodam
+  à mão, e o deploy é manual (`docker compose pull && up -d` no servidor). Um passo de
+  deploy por SSH no mesmo workflow é o próximo passo natural, quando houver servidor.
 
 ---
 
@@ -387,4 +449,8 @@ ser um processo sempre ligado nos dois destinos, exatamente como no Compose.
   (Serverspace, Vultr São Paulo).
 - [Reajuste da Hetzner em 2026](https://agentdeals.dev/hetzner-pricing-2026).
 - [Corte do Always Free da Oracle](https://infoq.com/news/2026/07/oracle-cloud-free-tier-limits/).
+- [Máquinas virtuais na conta gratuita da Azure](https://azure.microsoft.com/en-us/free/virtual-machines):
+  750 h de B1s, B2pts v2 e B2ats v2 por 12 meses.
+- [Runners arm64 do GitHub Actions](https://github.blog/changelog/2025-08-07-arm64-hosted-runners-for-public-repositories-are-now-generally-available/):
+  gratuitos em repositórios públicos.
 - [Magalu Cloud: data centers em São Paulo e Fortaleza](https://www.baguete.com.br/noticias/magalu-cloud-levanta-r-300-milhoes-com-bndes).

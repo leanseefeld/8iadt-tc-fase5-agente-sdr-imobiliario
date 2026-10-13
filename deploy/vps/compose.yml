@@ -1,4 +1,4 @@
-# Production on a single VPS — see README.md next to this file.
+# Production on a single server (a VPS or an Azure VM) — see README.md next to this file.
 #
 # The same services as the development Compose file, from the `runner` image
 # instead of the `dev` target: no bind mounts, no build on the server. Caddy is
@@ -8,7 +8,7 @@
 #   docker compose run --rm seed  # demo data, only when asked for
 
 x-app: &app
-  image: ${IMAGE:?set IMAGE in .env, e.g. ghcr.io/<owner>/sdr-imobiliario:<tag>}
+  image: ${IMAGE:?set IMAGE in .env, e.g. ghcr.io/leanseefeld/8iadt-tc-fase5-agente-sdr-imobiliario:sha-<commit>}
   env_file: [.env]
   restart: unless-stopped
   depends_on:
@@ -81,7 +81,7 @@ services:
       - "443:443"
       - "443:443/udp"
     environment:
-      DOMAIN: ${DOMAIN:?set DOMAIN in .env, e.g. app.example.com.br}
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env, e.g. sofia.nomadmacaw.com}
       APP_PORT: ${APP_PORT:-3100}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
